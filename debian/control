@@ -14,7 +14,8 @@ Build-Depends: debhelper (>= 9),
                iptables-dev,
                wpasupplicant,
                libbluetooth-dev,
-               dh-systemd
+               dh-systemd,
+               dh-autoreconf
 Standards-Version: 3.9.4
 Vcs-Bzr: https://code.launchpad.net/~connman-maintainers/connman/debian
 Vcs-Browser: https://code.launchpad.net/~connman-maintainers/connman/debian

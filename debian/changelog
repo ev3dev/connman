@@ -1,3 +1,12 @@
+connman (1.16-1) unstable; urgency=low
+
+  * New upstream release
+  * Build from upstream git
+     - Use dh-autoreconf
+  * Use dh-systemd to start daemon on install when using systemd
+
+ -- Shawn Landden <shawnlandden@gmail.com>  Fri, 16 Aug 2013 08:02:35 -0700
+
 connman (1.15-0ubuntu2) saucy; urgency=low
 
   * Adding 02-test-pbkdf2-sha1-maximum-salt-len-should-be-32-instead.patch:
