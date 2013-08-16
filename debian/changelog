@@ -1,6 +1,6 @@
-connman (1.16-1) unstable; urgency=low
+connman (1.17~20130815-1) unstable; urgency=low
 
-  * New upstream release
+  * New upstream release (1.16)
   * Build from upstream git
      - Use dh-autoreconf
   * Use dh-systemd to start daemon on install when using systemd
