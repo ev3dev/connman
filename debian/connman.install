@@ -1,0 +1,13 @@
+etc/dbus-1/system.d
+lib/systemd/system
+usr/share/man
+usr/share/dbus-1/system-services
+usr/share/polkit-1/actions
+usr/lib/*/connman/plugins-vpn/*.so
+usr/lib/*/connman/scripts/openconnect-script
+usr/lib/*/connman/scripts/openvpn-script
+client/connmanctl /usr/sbin
+usr/sbin/connmand
+usr/sbin/connman-vpnd
+debian/source_connman.py /usr/share/apport/package-hooks/
+debian/connman-crashdb.conf /etc/apport/crashdb.conf.d/

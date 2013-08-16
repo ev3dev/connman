@@ -1,0 +1,71 @@
+Source: connman
+Section: net
+Priority: optional
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Alexander Sack <asac@debian.org>
+Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>
+Homepage: http://www.connman.net
+Build-Depends: debhelper (>= 9),
+               libudev-dev,
+               libglib2.0-dev,
+               libdbus-1-dev,
+               gtk-doc-tools,
+               libgnutls-dev,
+               libreadline-dev,
+               iptables-dev,
+               wpasupplicant,
+               libbluetooth-dev
+Standards-Version: 3.9.3
+Vcs-Bzr: https://code.launchpad.net/~connman-maintainers/connman/debian
+Vcs-Browser: https://code.launchpad.net/~connman-maintainers/connman/debian
+
+Package: connman
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, dbus, lsb-base
+Recommends: bluez, wpasupplicant
+Suggests: indicator-network
+Conflicts: network-manager, wicd
+Description: Intel Connection Manager daemon
+ The Linux Connection Manager project provides a daemon for managing
+ Internet connections within embedded devices running the Linux
+ operating system. The Connection Manager is designed to be slim and to
+ use as few resources as possible, so it can be easily integrated in
+ other Moblin-based embedded systems. It is fully modular system that
+ can be extended through plug-ins, to support all kinds of wired or
+ wireless technologies. Also, configuration methods like DHCP and
+ domain name resolving are implemented using plug-ins. The plug-in
+ approach allows for easy adaption and modification for various use cases.
+ .
+ This package contains the connman daemon and its plugins.
+
+Package: connman-dev
+Section: devel
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libglib2.0-dev, libdbus-1-dev
+Description: Development files for connman
+ The Linux Connection Manager project provides a daemon for managing
+ Internet connections within embedded devices running the Linux
+ operating system. The Connection Manager is designed to be slim and to
+ use as few resources as possible, so it can be easily integrated in
+ other Moblin-based embedded systems. It is fully modular system that
+ can be extended through plug-ins, to support all kinds of wired or
+ wireless technologies. Also, configuration methods like DHCP and
+ domain name resolving are implemented using plug-ins. The plug-in
+ approach allows for easy adaption and modification for various use cases.
+ .
+ This package contains headers, pkg-config support mainly useful for
+ developing connman plugins.
+
+Package: connman-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: connman-dev
+Description: ConnMan documentation
+ The Linux Connection Manager project provides a daemon for managing
+ Internet connections within embedded devices running the Linux
+ operating system.
+ .
+ This package contains the connman API documentation.
+ .
+ See the connman description for more information regarding connman.
