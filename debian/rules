@@ -30,3 +30,7 @@ override_dh_auto_clean:
 	rm -f debian/connman.init
 	rm -f plugins/net.connman.policy
 	dh_auto_clean
+
+override_dh_clean:
+	dh_clean aclocal.m4 config.h.in configure ltmain.sh
+
