@@ -2,8 +2,8 @@ Source: connman
 Section: net
 Priority: optional
 Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawnlandden@gmail.com>
-Homepage: http://www.connman.net
+Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawn@churchofgit.com>
+Homepage: https://www.connman.net
 Build-Depends: debhelper (>= 9),
                libudev-dev,
                libglib2.0-dev,
@@ -17,8 +17,8 @@ Build-Depends: debhelper (>= 9),
                dh-systemd,
                dh-autoreconf
 Standards-Version: 3.9.4
-Vcs-Bzr: https://code.launchpad.net/~connman-maintainers/connman/debian
-Vcs-Browser: https://code.launchpad.net/~connman-maintainers/connman/debian
+Vcs-Browser: http://git.debian.org/?p=collab-maint/connman.git
+Vcs-Git: git://git.debian.org/collab-maint/connman.git
 
 Package: connman
 Architecture: any
@@ -30,14 +30,47 @@ Description: Intel Connection Manager daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
  operating system. The Connection Manager is designed to be slim and to
- use as few resources as possible, so it can be easily integrated in
- other Moblin-based embedded systems. It is fully modular system that
- can be extended through plug-ins, to support all kinds of wired or
- wireless technologies. Also, configuration methods like DHCP and
- domain name resolving are implemented using plug-ins. The plug-in
- approach allows for easy adaption and modification for various use cases.
+ use as few resources as possible. It is fully modular system that
+ can be extended through plug-ins. The plug-in approach allows for
+ easy adaption and modification for various use cases.
+ .
+ ConnMan provies IPv4 and IPv6 connectivity via:
+  * ethernet
+  * WiFi, using wpasupplicant
+  * Cellular, using oFono
+  * Bluetooth, using bluez
+ .
+ ConnMan implements DNS resolving and caching, DHCP clients for both IPv4 and
+ IPv6, link-local IPv4 address handling and tethering (IP connection sharing)
+ to clients via USB, ethernet, WiFi, cellular and Bluetooth.
  .
  This package contains the connman daemon and its plugins.
+
+Package: connman-vpn
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: connman (=${Source-Version})
+Description: Intel Connection Manager daemon
+ The Linux Connection Manager project provides a daemon for managing
+ Internet connections within embedded devices running the Linux
+ operating system. The Connection Manager is designed to be slim and to
+ use as few resources as possible. It is fully modular system that
+ can be extended through plug-ins. The plug-in approach allows for
+ easy adaption and modification for various use cases.
+ .
+ ConnMan provies IPv4 and IPv6 connectivity via:
+  * ethernet
+  * WiFi, using wpasupplicant
+  * Cellular, using oFono
+  * Bluetooth, using bluez
+ .
+ ConnMan implements DNS resolving and caching, DHCP clients for both IPv4 and
+ IPv6, link-local IPv4 address handling and tethering (IP connection sharing)
+ to clients via USB, ethernet, WiFi, cellular and Bluetooth.
+ .
+ This package contains the connman VPN daemon. ConnMan VPN daemon manages
+ VPNs on behalf of connmand and start and stops various VPN client
+ applications. The VPN daemon can also be run standalone without connmand.
 
 Package: connman-dev
 Section: devel
@@ -47,12 +80,19 @@ Description: Development files for connman
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
  operating system. The Connection Manager is designed to be slim and to
- use as few resources as possible, so it can be easily integrated in
- other Moblin-based embedded systems. It is fully modular system that
- can be extended through plug-ins, to support all kinds of wired or
- wireless technologies. Also, configuration methods like DHCP and
- domain name resolving are implemented using plug-ins. The plug-in
- approach allows for easy adaption and modification for various use cases.
+ use as few resources as possible. It is fully modular system that
+ can be extended through plug-ins. The plug-in approach allows for
+ easy adaption and modification for various use cases.
+ .
+ ConnMan provies IPv4 and IPv6 connectivity via:
+  * ethernet
+  * WiFi, using wpasupplicant
+  * Cellular, using oFono
+  * Bluetooth, using bluez
+ .
+ ConnMan implements DNS resolving and caching, DHCP clients for both IPv4 and
+ IPv6, link-local IPv4 address handling and tethering (IP connection sharing)
+ to clients via USB, ethernet, WiFi, cellular and Bluetooth.
  .
  This package contains headers, pkg-config support mainly useful for
  developing connman plugins.
