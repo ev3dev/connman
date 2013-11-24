@@ -6,6 +6,8 @@ connman (1.20~20131115-1) unstable; urgency=low
   * Use init-system-helpers/dh-systemd
   * Split off connman-vpn
   * Rework descriptions (From Patrik Flykt <patrik.flykt@linux.intel.com>)
+  * Use readline5 (via libreadline-gplv2-dev) instead of readline6,
+      as gplv3 is incompatible with connman
 
  -- Shawn Landden <shawn@churchofgit.com>  Sat, 23 Nov 2013 19:27:47 -0800
 
