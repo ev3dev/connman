@@ -17,13 +17,13 @@ Build-Depends: debhelper (>= 9),
                dh-systemd,
                dh-autoreconf
 Standards-Version: 3.9.4
-Vcs-Browser: http://git.debian.org/?p=collab-maint/connman.git
-Vcs-Git: git://git.debian.org/collab-maint/connman.git
+Vcs-Browser:  http://anonscm.debian.org/gitweb/?p=collab-maint/connman.git
+Vcs-Git: git://anonscm.debian.org/collab-maint/connman.git
 
 Package: connman
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, dbus, lsb-base
-Recommends: bluez, wpasupplicant
+Recommends: bluez, wpasupplicant, ofono
 Suggests: indicator-network
 Conflicts: network-manager, wicd
 Description: Intel Connection Manager daemon
@@ -49,8 +49,8 @@ Description: Intel Connection Manager daemon
 Package: connman-vpn
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: connman (=${Source-Version})
-Description: Intel Connection Manager daemon
+Recommends: connman (=${source:Version})
+Description: Intel Connection Manager daemon - VPN daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
  operating system. The Connection Manager is designed to be slim and to
