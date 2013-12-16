@@ -37,7 +37,7 @@ static GHashTable *session_hash;
 static struct connman_session *ecall_session;
 static GSList *policy_list;
 static uint32_t session_mark = 256;
-static struct firewall_context *global_firewall;
+static struct firewall_context *global_firewall = NULL;
 
 enum connman_session_trigger {
 	CONNMAN_SESSION_TRIGGER_UNKNOWN		= 0,
@@ -236,6 +236,9 @@ static int init_firewall(void)
 	struct firewall_context *fw;
 	int err;
 
+	if (global_firewall)
+		return 0;
+
 	fw = __connman_firewall_create();
 
 	err = __connman_firewall_add_rule(fw, "mangle", "INPUT",
@@ -271,6 +274,25 @@ static void cleanup_firewall(void)
 	__connman_firewall_destroy(global_firewall);
 }
 
+static int enable_nfacct(struct firewall_context *fw, uint32_t mark)
+{
+	int err;
+
+	err = __connman_firewall_add_rule(fw, "filter", "INPUT",
+			"-m mark --mark %d -m nfacct "
+			"--nfacct-name session-input-%d",
+			mark, mark);
+	if (err < 0)
+		return err;
+
+	err = __connman_firewall_add_rule(fw, "filter", "OUTPUT",
+			"-m mark --mark %d -m nfacct "
+			"--nfacct-name session-output-%d",
+			mark, mark);
+
+	return err;
+}
+
 static int init_firewall_session(struct connman_session *session)
 {
 	struct firewall_context *fw;
@@ -280,6 +302,10 @@ static int init_firewall_session(struct connman_session *session)
 		return 0;
 
 	DBG("");
+
+	err = init_firewall();
+	if (err < 0)
+		return err;
 
 	fw = __connman_firewall_create();
 	if (!fw)
@@ -308,19 +334,9 @@ static int init_firewall_session(struct connman_session *session)
 
 	session->id_type = session->policy_config->id_type;
 
-	err = __connman_firewall_add_rule(fw, "filter", "INPUT",
-		"-m mark --mark %d -m nfacct --nfacct-name session-input-%d",
-		session->mark,
-		session->mark);
+	err = enable_nfacct(fw, session->mark);
 	if (err < 0)
-		goto err;
-
-	err = __connman_firewall_add_rule(fw, "filter", "OUTPUT",
-		"-m mark --mark %d -m nfacct --nfacct-name session-output-%d",
-		session->mark,
-		session->mark);
-	if (err < 0)
-		goto err;
+		connman_warn_once("Support for nfacct missing");
 
 	err = __connman_firewall_enable(fw);
 	if (err)
@@ -2212,10 +2228,6 @@ int __connman_session_init(void)
 
 	DBG("");
 
-	err = init_firewall();
-	if (err < 0)
-		return err;
-
 	connection = connman_dbus_get_connection();
 	if (!connection)
 		return -1;
@@ -2223,14 +2235,18 @@ int __connman_session_init(void)
 	err = connman_notifier_register(&session_notifier);
 	if (err < 0) {
 		dbus_connection_unref(connection);
-		cleanup_firewall();
 		return err;
 	}
 
 	session_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
 						NULL, cleanup_session);
 
-	__connman_nfacct_flush(session_nfacct_flush_cb, NULL);
+	if (__connman_firewall_is_up()) {
+		err = init_firewall();
+		if (err < 0)
+			return err;
+		__connman_nfacct_flush(session_nfacct_flush_cb, NULL);
+	}
 
 	return 0;
 }

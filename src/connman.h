@@ -951,6 +951,7 @@ int __connman_firewall_add_rule(struct firewall_context *ctx,
 				const char *rule_fmt, ...);
 int __connman_firewall_enable(struct firewall_context *ctx);
 int __connman_firewall_disable(struct firewall_context *ctx);
+bool __connman_firewall_is_up(void);
 
 int __connman_firewall_init(void);
 void __connman_firewall_cleanup(void);
@@ -985,6 +986,4 @@ int __connman_nfacct_disable(struct nfacct_context *ctx,
 				connman_nfacct_disable_cb_t cb,
 				void *user_data);
 
-
-int __connman_nfacct_init(void);
 void __connman_nfacct_cleanup(void);
