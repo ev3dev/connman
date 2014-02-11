@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -71,6 +71,7 @@ struct hidden_params {
 	unsigned int ssid_len;
 	char *identity;
 	char *passphrase;
+	char *security;
 	GSupplicantScanParams *scan_params;
 	gpointer user_data;
 };
@@ -586,6 +587,7 @@ static void hidden_free(struct hidden_params *hidden)
 		g_supplicant_free_scan_params(hidden->scan_params);
 	g_free(hidden->identity);
 	g_free(hidden->passphrase);
+	g_free(hidden->security);
 	g_free(hidden);
 }
 
@@ -1047,7 +1049,7 @@ static int wifi_scan_simple(struct connman_device *device)
 static int wifi_scan(struct connman_device *device,
 		const char *ssid, unsigned int ssid_len,
 		const char *identity, const char* passphrase,
-		gpointer user_data)
+		const char *security, void *user_data)
 {
 	struct wifi_data *wifi = connman_device_get_data(device);
 	GSupplicantScanParams *scan_params = NULL;
@@ -1118,6 +1120,7 @@ static int wifi_scan(struct connman_device *device,
 		hidden->ssid_len = ssid_len;
 		hidden->identity = g_strdup(identity);
 		hidden->passphrase = g_strdup(passphrase);
+		hidden->security = g_strdup(security);
 		hidden->user_data = user_data;
 		wifi->hidden = hidden;
 
@@ -1277,7 +1280,7 @@ static GSupplicantSecurity network_security(const char *security)
 
 static void ssid_init(GSupplicantSSID *ssid, struct connman_network *network)
 {
-	const char *security, *passphrase, *agent_passphrase;
+	const char *security;
 
 	memset(ssid, 0, sizeof(*ssid));
 	ssid->mode = G_SUPPLICANT_MODE_INFRA;
@@ -1286,20 +1289,8 @@ static void ssid_init(GSupplicantSSID *ssid, struct connman_network *network)
 	ssid->scan_ssid = 1;
 	security = connman_network_get_string(network, "WiFi.Security");
 	ssid->security = network_security(security);
-	passphrase = connman_network_get_string(network,
+	ssid->passphrase = connman_network_get_string(network,
 						"WiFi.Passphrase");
-	if (!passphrase || strlen(passphrase) == 0) {
-
-		/* Use agent provided passphrase as a fallback */
-		agent_passphrase = connman_network_get_string(network,
-						"WiFi.AgentPassphrase");
-
-		if (!agent_passphrase || strlen(agent_passphrase) == 0)
-			ssid->passphrase = NULL;
-		else
-			ssid->passphrase = agent_passphrase;
-	} else
-		ssid->passphrase = passphrase;
 
 	ssid->eap = connman_network_get_string(network, "WiFi.EAP");
 
@@ -1860,9 +1851,9 @@ static void network_added(GSupplicantNetwork *supplicant_network)
 		connman_network_set_group(network, group);
 
 	if (wifi->hidden && ssid) {
-		if (wifi->hidden->ssid_len == ssid_len &&
-				memcmp(wifi->hidden->ssid, ssid,
-						ssid_len) == 0) {
+		if (!g_strcmp0(wifi->hidden->security, security) &&
+				wifi->hidden->ssid_len == ssid_len &&
+				!memcmp(wifi->hidden->ssid, ssid, ssid_len)) {
 			connman_network_connect_hidden(network,
 					wifi->hidden->identity,
 					wifi->hidden->passphrase,

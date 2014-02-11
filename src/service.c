@@ -84,7 +84,6 @@ struct connman_service {
 	unsigned int order;
 	char *name;
 	char *passphrase;
-	char *agent_passphrase;
 	bool roaming;
 	struct connman_ipconfig *ipconfig_ipv4;
 	struct connman_ipconfig *ipconfig_ipv6;
@@ -2809,20 +2808,6 @@ const char *__connman_service_get_passphrase(struct connman_service *service)
 	return service->passphrase;
 }
 
-void __connman_service_set_agent_passphrase(struct connman_service *service,
-						const char *agent_passphrase)
-{
-	if (service->hidden)
-		return;
-	g_free(service->agent_passphrase);
-	service->agent_passphrase = g_strdup(agent_passphrase);
-
-	if (service->network)
-		connman_network_set_string(service->network,
-					"WiFi.AgentPassphrase",
-					service->agent_passphrase);
-}
-
 static DBusMessage *get_properties(DBusConnection *conn,
 					DBusMessage *msg, void *user_data)
 {
@@ -3982,9 +3967,6 @@ bool __connman_service_remove(struct connman_service *service)
 	g_free(service->passphrase);
 	service->passphrase = NULL;
 
-	g_free(service->agent_passphrase);
-	service->agent_passphrase = NULL;
-
 	g_free(service->identity);
 	service->identity = NULL;
 
@@ -4435,7 +4417,6 @@ static void service_free(gpointer user_data)
 	g_free(service->pac);
 	g_free(service->name);
 	g_free(service->passphrase);
-	g_free(service->agent_passphrase);
 	g_free(service->identifier);
 	g_free(service->eap);
 	g_free(service->identity);
@@ -5004,12 +4985,10 @@ int __connman_service_add_passphrase(struct connman_service *service,
 	switch (service->security) {
 	case CONNMAN_SERVICE_SECURITY_WEP:
 	case CONNMAN_SERVICE_SECURITY_PSK:
+	case CONNMAN_SERVICE_SECURITY_8021X:
 		err = __connman_service_set_passphrase(service, passphrase);
 		break;
-	case CONNMAN_SERVICE_SECURITY_8021X:
-		__connman_service_set_agent_passphrase(service,
-						passphrase);
-		break;
+
 	case CONNMAN_SERVICE_SECURITY_UNKNOWN:
 	case CONNMAN_SERVICE_SECURITY_NONE:
 	case CONNMAN_SERVICE_SECURITY_WPA:
@@ -5063,6 +5042,7 @@ static void request_input_cb(struct connman_service *service,
 			const char *error, void *user_data)
 {
 	struct connman_device *device;
+	const char *security;
 	int err = 0;
 
 	DBG("RequestInput return, %p", service);
@@ -5087,10 +5067,12 @@ static void request_input_cb(struct connman_service *service,
 
 	if (service->hidden && name_len > 0 && name_len <= 32) {
 		device = connman_network_get_device(service->network);
+		security = connman_network_get_string(service->network,
+							"WiFi.Security");
 		err = __connman_device_request_hidden_scan(device,
 						name, name_len,
 						identity, passphrase,
-						user_data);
+						security, user_data);
 		if (err < 0)
 			__connman_service_return_error(service,	-err,
 							user_data);
@@ -5424,15 +5406,15 @@ int __connman_service_indicate_error(struct connman_service *service,
 
 	set_error(service, error);
 
-	if (service->error == CONNMAN_SERVICE_ERROR_INVALID_KEY)
-		__connman_service_set_passphrase(service, NULL);
-
 	/*
 	 * Supplicant does not always return invalid key error for
 	 * WPA-EAP so clear the credentials always.
 	 */
+	if (service->error == CONNMAN_SERVICE_ERROR_INVALID_KEY ||
+			service->security == CONNMAN_SERVICE_SECURITY_8021X)
+		__connman_service_set_passphrase(service, NULL);
+
 	__connman_service_set_agent_identity(service, NULL);
-	__connman_service_set_agent_passphrase(service, NULL);
 
 	__connman_service_ipconfig_indicate_state(service,
 						CONNMAN_SERVICE_STATE_FAILURE,
@@ -5844,8 +5826,7 @@ static int service_connect(struct connman_service *service)
 			 */
 			if ((!service->identity &&
 					!service->agent_identity) ||
-					(!service->passphrase &&
-					!service->agent_passphrase))
+					!service->passphrase)
 				return -ENOKEY;
 
 			break;

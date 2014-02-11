@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -534,7 +534,7 @@ int __connman_device_request_scan(enum connman_service_type type);
 int __connman_device_request_hidden_scan(struct connman_device *device,
 				const char *ssid, unsigned int ssid_len,
 				const char *identity, const char *passphrase,
-				gpointer user_data);
+				const char *security, void *user_data);
 
 bool __connman_device_isfiltered(const char *devname);
 
@@ -756,8 +756,6 @@ void __connman_service_set_agent_identity(struct connman_service *service,
 int __connman_service_set_passphrase(struct connman_service *service,
 					const char *passphrase);
 const char *__connman_service_get_passphrase(struct connman_service *service);
-void __connman_service_set_agent_passphrase(struct connman_service *service,
-						const char *agent_passphrase);
 int __connman_service_reset_ipconfig(struct connman_service *service,
 		enum connman_ipconfig_type type, DBusMessageIter *array,
 		enum connman_service_state *new_state);
