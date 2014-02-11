@@ -1,13 +1,13 @@
-connman (1.20-20131211-1) unstable; urgency=low
+connman (1.21-1) unstable; urgency=low
 
-  * New upstream release (1.20)
+  * New upstream release (1.21)
   * Build from upstream git
      - Use dh-autoreconf
   * Use init-system-helpers/dh-systemd
   * Split off connman-vpn
   * Rework descriptions (From Patrik Flykt <patrik.flykt@linux.intel.com>)
 
- -- Shawn Landden <shawn@churchofgit.com>  Mon, 16 Dec 2013 15:43:14 -0800
+ -- Shawn Landden <shawn@churchofgit.com>  Mon, 10 Feb 2014 19:40:38 -0800
 
 connman (1.15-0ubuntu2) saucy; urgency=low
 
