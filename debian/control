@@ -16,7 +16,7 @@ Build-Depends: debhelper (>= 9),
                libbluetooth-dev,
                dh-systemd,
                dh-autoreconf
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/connman.git
 Vcs-Git: git://anonscm.debian.org/collab-maint/connman.git
 

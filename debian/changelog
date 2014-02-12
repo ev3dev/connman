@@ -1,6 +1,7 @@
 connman (1.21-1) unstable; urgency=low
 
   * New upstream release (1.21)
+  * Bump Standards Version to 3.9.5.0 (no changes required)
   * Build from upstream git
      - Use dh-autoreconf
   * Use init-system-helpers/dh-systemd
