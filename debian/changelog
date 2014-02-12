@@ -1,9 +1,9 @@
 connman (1.21-1) unstable; urgency=low
 
-  * New upstream release (1.21)
-  * Bump Standards Version to 3.9.5.0 (no changes required)
+  * New upstream release.
+  * Bump Standards Version to 3.9.5 (no changes required)
   * Build from upstream git
-     - Use dh-autoreconf
+    - Use dh-autoreconf
   * Use init-system-helpers/dh-systemd
   * Split off connman-vpn
   * Rework descriptions (From Patrik Flykt <patrik.flykt@linux.intel.com>)
@@ -61,11 +61,11 @@ connman (1.0-1.1) unstable; urgency=low
 connman (1.0-1) unstable; urgency=high
 
   [ Andrew Brouwers ]
-  * New upstream release (closes: #583925, #672989)
-  * Add debian/watch (closes: #583928)
+  * New upstream release (Closes: #583925, #672989)
+  * Add debian/watch (Closes: #583928)
   * Update to compat 8 + standards version 3.9.3
     - Remove debian/tmp from install files
-  * debian/control: 
+  * debian/control:
     - Remove obsolete deps (cdbs, quilt, dpkg-dev, ppp-dev, dhcp3-client)
       (use source format 3.0, too)
     - Add missing deps: iptables-dev, gnutls-dev
@@ -133,7 +133,7 @@ connman (0.48+dfsg-2) unstable; urgency=low
 
 connman (0.48+dfsg-1) unstable; urgency=low
 
-  * New upstream release 0.48
+  * New upstream release.
   * Drop PolicyKit support for now (Closes: #549497)
     - update debian/connman.install
     - update debian/control
@@ -167,9 +167,8 @@ connman (0.48+dfsg-1) unstable; urgency=low
 
 connman (0.45+dfsg-0ubuntu1) lucid; urgency=low
 
-  * new upstream release 0.45
-
-  * ship development parts in a connman-dev package (Closes: 546616)
+  * New upstream release.
+  * Ship development parts in a connman-dev package (Closes: 546616)
     - add debian/connman-dev.install
     - update debian/control
 
@@ -177,7 +176,7 @@ connman (0.45+dfsg-0ubuntu1) lucid; urgency=low
 
 connman (0.42+dfsg-1) unstable; urgency=low
 
-  * new upstream release 0.42 with FFe (LP: #444172)
+  * new upstream release. (LP: #444172)
 
   [ Alexander Sack <asac@ubuntu.com> ]
   * LP: #402998 - homepage used in package is outdated; updated to
@@ -190,24 +189,24 @@ connman (0.42+dfsg-1) unstable; urgency=low
     dbus interface; ship a /etc/default/connman which enables NM
     compatibility mode; also include example how to enable debugging
     - add debian/connman.default
-  * explicitly install init script
+  * Explicitly install init script
     - debian/connnman.install
-  * set --only-scripts parameter for dh_installinit (cdbs)
+  * Set --only-scripts parameter for dh_installinit (cdbs)
     - update debian/rules
 
   [ Mathieu Trudel <mathieu.tl@gmail.com> ]
-  * bump Standards-Version to 3.8.3
-    - update debian/control 
-  * add GIT_BRANCH, GIT_BRANCH_NAME, DEB_MAJOR_VERSION to support daily builds
+  * Bump Standards-Version to 3.8.3
+    - update debian/control
+  * Add GIT_BRANCH, GIT_BRANCH_NAME, DEB_MAJOR_VERSION to support daily builds
     - update debian/rules
   * Add update-local-branch code to work with local git copies
-    - update debian/rules 
+    - update debian/rules
   * Revise get-orig-source code, add get-current-source and GET_SOURCE snippets
     - update debian/rules
   * Handle dfsg special case, add MAKE_DFSG_COMPLIANT snippet
     - update debian/rules
   * Add pre-build, clean targets
-    - update debian/rules 
+    - update debian/rules
   * Patch init script to add LSB headers (Closes: #543869)
     - add debian/patches/01-init-script-lsb-headers.patch
     - update debian/patches/series
@@ -216,7 +215,7 @@ connman (0.42+dfsg-1) unstable; urgency=low
 
 connman (0.42+dfsg-0ubuntu1) karmic; urgency=low
 
-  * new upstream release 0.42 with FFe (LP: #444172)
+  * New upstream release. (LP: #444172)
 
   [ Alexander Sack <asac@ubuntu.com> ]
   * LP: #402998 - homepage used in package is outdated; updated to
@@ -229,24 +228,24 @@ connman (0.42+dfsg-0ubuntu1) karmic; urgency=low
     dbus interface; ship a /etc/default/connman which enables NM
     compatibility mode; also include example how to enable debugging
     - add debian/connman.default
-  * explicitly install init script
+  * Explicitly install init script
     - debian/connnman.install
-  * set --only-scripts parameter for dh_installinit (cdbs)
+  * Set --only-scripts parameter for dh_installinit (cdbs)
     - update debian/rules
 
   [ Mathieu Trudel <mathieu.tl@gmail.com> ]
-  * bump Standards-Version to 3.8.3
-    - update debian/control 
-  * add GIT_BRANCH, GIT_BRANCH_NAME, DEB_MAJOR_VERSION to support daily builds
+  * Bump Standards-Version to 3.8.3
+    - update debian/control
+  * Add GIT_BRANCH, GIT_BRANCH_NAME, DEB_MAJOR_VERSION to support daily builds
     - update debian/rules
   * Add update-local-branch code to work with local git copies
-    - update debian/rules 
+    - update debian/rules
   * Revise get-orig-source code, add get-current-source and GET_SOURCE snippets
     - update debian/rules
   * Handle dfsg special case, add MAKE_DFSG_COMPLIANT snippet
     - update debian/rules
   * Add pre-build, clean targets
-    - update debian/rules 
+    - update debian/rules
   * Patch init script to add LSB headers (Closes: #543869)
     - add debian/patches/01-init-script-lsb-headers.patch
     - update debian/patches/series
@@ -256,8 +255,8 @@ connman (0.42+dfsg-0ubuntu1) karmic; urgency=low
 connman (0.30+git.1.5b69740e1+dfsg-1) unstable; urgency=low
 
   * Upstream snapshot for debian: 0.30+git.1.5b69740e1 (Closes: #475022)
-  * addresses ftp-master review concerns; see: 0.19+dfsg-1
-  * setup debian packaging branch:
+  * Addresses ftp-master review concerns; see: 0.19+dfsg-1
+  * Setup debian packaging branch:
     - https://code.launchpad.net/~asac/connman/connman.debian.unstable
     - adjust Vcs-Bzr: in debian/control accordingly
   * debian/rules: make get-orig-source aware of +dfsg suffix
@@ -266,56 +265,56 @@ connman (0.30+git.1.5b69740e1+dfsg-1) unstable; urgency=low
 
 connman (0.30+git.1.5b69740e1+dfsg-0ubuntu1) karmic; urgency=low
 
-  * new upstream snapshot 0.30 + 5b69740e1
+  * New upstream release.
   * debian/rules: make get-orig-source aware of +dfsg suffix
 
  -- Alexander Sack <asac@ubuntu.com>  Wed, 22 Jul 2009 10:37:21 +0200
 
 connman (0.23+git.1.e08a09987-0ubuntu1) karmic; urgency=low
 
-  * new upstream release 0.23 + git snapshot
-  * fix broken build dependency: gtk-doc-tools
+  * New upstream release.
+  * Fix broken build dependency: gtk-doc-tools
     - update debian/control
 
  -- Tony Espy <espy@ubuntu.com>  Tue, 14 Jul 2009 21:23:02 -0400
 
 connman (0.19+dfsg-1) unstable; urgency=low
 
-  * new copyright format; properly document docs
+  * New copyright format; properly document docs
     - update debian/copyright
-  * remove dfsg non-free files on tarball production
+  * Remove dfsg non-free files on tarball production
     - update debian/rules
-  * document source information (e.g. files removed due to dfsg non-freeness)
+  * Document source information (e.g. files removed due to dfsg non-freeness)
     - add debian/README.source
 
  -- Alexander Sack <asac@ubuntu.com>  Mon, 08 Jun 2009 14:15:01 +0200
 
 connman (0.19-0ubuntu1) karmic; urgency=low
 
-  * new upstream release 0.19 
+  * New upstream release.
 
  -- Tony Espy <espy@canonical.com>  Mon, 25 May 2009 12:18:32 +0200
 
 connman (0.17-0ubuntu1) karmic; urgency=low
 
-  * new upstream release 0.17
-  * fix get-orig-source target to create tarball in topsrcdir
+  * New upstream release.
+  * Fix get-orig-source target to create tarball in topsrcdir
     - update debian/rules
 
  -- Alexander Sack <asac@ubuntu.com>  Mon, 25 May 2009 12:13:33 +0200
 
 connman (0.15+git.1.864cd602c-0ubuntu1) karmic; urgency=low
 
-  * new upstream snapshot 0.15 + git 864cd602c
-  * drop upstreamed patches
+  * New upstream snapshot 0.15 + git 864cd602c
+  * Drop upstreamed patches
     - delete debian/patches/fix_dhclient_configure_typo.patch
     - delete debian/patches/fix_ubuntu_init_script.patch
     - update debian/patches/series
-  * enable more plugins: modemmgr and ethernet
+  * Enable more plugins: modemmgr and ethernet
     - update debian/rules
-  * make debian/rules in bzr executable
+  * Make debian/rules in bzr executable
     - update debian/rules
-  * add get-orig-source target that parses changelog to guess git commit
+  * Add get-orig-source target that parses changelog to guess git commit
     id or tag
     - update debian/rules
 
@@ -323,7 +322,7 @@ connman (0.15+git.1.864cd602c-0ubuntu1) karmic; urgency=low
 
 connman (0.10+git20090203t223225-1) unstable; urgency=low
 
-  * Initial upload to Debian - Closes: #475022
+  * Initial upload to Debian - (Closes: #475022)
   * debian/control: add Vcs-Bzr info pointing to
     + https://code.launchpad.net/~asac/connman/connman.ubuntu.head
 
@@ -348,7 +347,6 @@ connman (0.10+git20090203t223225-0ubuntu2) jaunty; urgency=low
 
 connman (0.10+git20090203t223225-0ubuntu1) jaunty; urgency=low
 
-  * Initial release of upstream 0.10 + git snapshot
-    Tue Feb 3 23:32:25 2009 +0100
+  * Initial release.
 
  -- Alexander Sack <asac@ubuntu.com>  Tue, 17 Feb 2009 11:58:09 +0100
