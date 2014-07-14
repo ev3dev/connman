@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -66,6 +66,8 @@ static void dhcp_free(struct connman_dhcp *dhcp)
 	dhcp->nameservers = NULL;
 	dhcp->timeservers = NULL;
 	dhcp->pac = NULL;
+
+	g_free(dhcp);
 }
 
 /**
@@ -93,11 +95,11 @@ static void dhcp_invalidate(struct connman_dhcp *dhcp, bool callback)
 
 	service = connman_service_lookup_from_network(dhcp->network);
 	if (!service)
-		goto out;
+		return;
 
 	ipconfig = __connman_service_get_ip4config(service);
 	if (!ipconfig)
-		goto out;
+		return;
 
 	__connman_6to4_remove(ipconfig);
 
@@ -131,9 +133,6 @@ static void dhcp_invalidate(struct connman_dhcp *dhcp, bool callback)
 
 	if (dhcp->callback && callback)
 		dhcp->callback(dhcp->network, false, NULL);
-
-out:
-	dhcp_free(dhcp);
 }
 
 static void dhcp_valid(struct connman_dhcp *dhcp)
@@ -353,11 +352,9 @@ static void lease_available_cb(GDHCPClient *dhcp_client, gpointer user_data)
 
 	DBG("c_address %s", c_address);
 
-	if (address && c_address &&
-					g_strcmp0(address, c_address) != 0)
+	if (address && c_address && g_strcmp0(address, c_address) != 0)
 		ip_change = true;
-	else if (gateway && c_gateway &&
-					g_strcmp0(gateway, c_gateway) != 0)
+	else if (gateway && c_gateway && g_strcmp0(gateway, c_gateway) != 0)
 		ip_change = true;
 	else if (prefixlen != c_prefixlen)
 		ip_change = true;
@@ -495,10 +492,9 @@ static void ipv4ll_available_cb(GDHCPClient *ipv4ll_client, gpointer user_data)
 	g_free(netmask);
 }
 
-static int dhcp_request(struct connman_dhcp *dhcp)
+static int dhcp_initialize(struct connman_dhcp *dhcp)
 {
 	struct connman_service *service;
-	struct connman_ipconfig *ipconfig;
 	GDHCPClient *dhcp_client;
 	GDHCPClientError error;
 	const char *hostname;
@@ -550,16 +546,7 @@ static int dhcp_request(struct connman_dhcp *dhcp)
 
 	dhcp->dhcp_client = dhcp_client;
 
-	ipconfig = __connman_service_get_ip4config(service);
-
-	/*
-	 * Clear the addresses at startup so that lease callback will
-	 * take the lease and set ip address properly.
-	 */
-	__connman_ipconfig_clear_address(ipconfig);
-
-	return g_dhcp_client_start(dhcp_client,
-				__connman_ipconfig_get_dhcp_address(ipconfig));
+	return 0;
 }
 
 static int dhcp_release(struct connman_dhcp *dhcp)
@@ -584,47 +571,60 @@ static int dhcp_release(struct connman_dhcp *dhcp)
 	return 0;
 }
 
-static void remove_network(gpointer user_data)
-{
-	struct connman_dhcp *dhcp = user_data;
-
-	DBG("dhcp %p", dhcp);
-
-	dhcp_invalidate(dhcp, false);
-	dhcp_release(dhcp);
-
-	g_free(dhcp);
-}
-
 int __connman_dhcp_start(struct connman_network *network, dhcp_cb callback)
 {
+	struct connman_service *service;
+	struct connman_ipconfig *ipconfig;
+	const char *last_addr = NULL;
 	struct connman_dhcp *dhcp;
 
 	DBG("");
 
-	dhcp = g_try_new0(struct connman_dhcp, 1);
-	if (!dhcp)
-		return -ENOMEM;
+	service = connman_service_lookup_from_network(network);
+	if (!service)
+		return -EINVAL;
 
-	dhcp->network = network;
+	ipconfig = __connman_service_get_ip4config(service);
+	if (ipconfig)
+		last_addr = __connman_ipconfig_get_dhcp_address(ipconfig);
+
+	dhcp = g_hash_table_lookup(network_table, network);
+	if (!dhcp) {
+
+		dhcp = g_try_new0(struct connman_dhcp, 1);
+		if (!dhcp)
+			return -ENOMEM;
+
+		dhcp->network = network;
+		connman_network_ref(network);
+
+		g_hash_table_insert(network_table, network, dhcp);
+
+		dhcp_initialize(dhcp);
+	}
+
 	dhcp->callback = callback;
 
-	connman_network_ref(network);
-
-	g_hash_table_replace(network_table, network, dhcp);
-
-	return dhcp_request(dhcp);
+	return g_dhcp_client_start(dhcp->dhcp_client, last_addr);
 }
 
 void __connman_dhcp_stop(struct connman_network *network)
 {
-	DBG("");
+	struct connman_dhcp *dhcp;
+
+	DBG("network_table %p network %p", network_table, network);
 
 	if (!network_table)
 		return;
 
-	if (g_hash_table_remove(network_table, network))
+	dhcp = g_hash_table_lookup(network_table, network);
+	if (dhcp) {
+		g_hash_table_remove(network_table, network);
 		connman_network_unref(network);
+		dhcp_release(dhcp);
+		dhcp_invalidate(dhcp, false);
+		dhcp_free(dhcp);
+	}
 }
 
 int __connman_dhcp_init(void)
@@ -632,7 +632,7 @@ int __connman_dhcp_init(void)
 	DBG("");
 
 	network_table = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-							NULL, remove_network);
+							NULL, NULL);
 
 	return 0;
 }

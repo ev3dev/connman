@@ -99,6 +99,8 @@ static const char *type2string(enum connman_network_type type)
 		break;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
 		return "ethernet";
+	case CONNMAN_NETWORK_TYPE_GADGET:
+		return "gadget";
 	case CONNMAN_NETWORK_TYPE_WIFI:
 		return "wifi";
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
@@ -156,6 +158,12 @@ static void dhcp_success(struct connman_network *network)
 	network->connecting = false;
 
 	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+
+	DBG("lease acquired for ipconfig %p", ipconfig_ipv4);
+
+	if (!ipconfig_ipv4)
+		return;
+
 	err = __connman_ipconfig_address_add(ipconfig_ipv4);
 	if (err < 0)
 		goto err;
@@ -173,14 +181,30 @@ err:
 
 static void dhcp_failure(struct connman_network *network)
 {
-	__connman_dhcp_stop(network);
+	struct connman_service *service;
+	struct connman_ipconfig *ipconfig_ipv4;
+
+	service = connman_service_lookup_from_network(network);
+	if (!service)
+		return;
+
+	connman_network_set_associating(network, false);
+	network->connecting = false;
+
+	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+
+	DBG("lease lost for ipconfig %p", ipconfig_ipv4);
+
+	if (!ipconfig_ipv4)
+		return;
+
+	__connman_ipconfig_address_remove(ipconfig_ipv4);
+	__connman_ipconfig_gateway_remove(ipconfig_ipv4);
 }
 
 static void dhcp_callback(struct connman_network *network,
 			bool success, gpointer data)
 {
-	DBG("success %d", success);
-
 	if (success)
 		dhcp_success(network);
 	else
@@ -791,6 +815,7 @@ static int network_probe(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return 0;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -820,6 +845,7 @@ static void network_remove(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		break;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1124,6 +1150,7 @@ void connman_network_set_group(struct connman_network *network,
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1174,6 +1201,7 @@ bool __connman_network_get_weakness(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_UNKNOWN:
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1469,9 +1497,9 @@ int connman_network_connect_hidden(struct connman_network *network,
 		goto out;
 	} else {
 		__connman_service_set_hidden(service);
-		__connman_service_set_userconnect(service, true);
 		__connman_service_set_hidden_data(service, user_data);
-		return __connman_service_connect(service);
+		return __connman_service_connect(service,
+					CONNMAN_SERVICE_CONNECT_REASON_USER);
 	}
 
 out:
@@ -1533,7 +1561,7 @@ int __connman_network_connect(struct connman_network *network)
  */
 int __connman_network_disconnect(struct connman_network *network)
 {
-	int err;
+	int err = 0;
 
 	DBG("network %p", network);
 
@@ -1544,13 +1572,12 @@ int __connman_network_disconnect(struct connman_network *network)
 	if (!network->driver)
 		return -EUNATCH;
 
-	if (!network->driver->disconnect)
-		return -ENOSYS;
-
 	network->connecting = false;
 
-	err = network->driver->disconnect(network);
-	if (err == 0)
+	if (network->driver->disconnect)
+		err = network->driver->disconnect(network);
+
+	if (err != -EINPROGRESS)
 		set_disconnected(network);
 
 	return err;
@@ -2076,6 +2103,7 @@ void connman_network_update(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:

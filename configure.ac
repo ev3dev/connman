@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(connman, 1.21)
+AC_INIT(connman, 1.24)
 
 AM_INIT_AUTOMAKE([foreign subdir-objects color-tests])
 AC_CONFIG_HEADERS([config.h])
@@ -286,6 +286,11 @@ AC_ARG_ENABLE(ethernet, AC_HELP_STRING([--disable-ethernet],
 					[enable_ethernet=${enableval}])
 AM_CONDITIONAL(ETHERNET, test "${enable_ethernet}" != "no")
 
+AC_ARG_ENABLE(gadget, AC_HELP_STRING([--disable-gadget],
+				[disable USB Gadget support]),
+					[enable_gadget=${enableval}])
+AM_CONDITIONAL(GADGET, test "${enable_gadget}" != "no")
+
 AC_ARG_ENABLE(wifi, AC_HELP_STRING([--disable-wifi],
 				[disable WiFi support]),
 					[enable_wifi=${enableval}])
@@ -381,4 +386,4 @@ AM_CONDITIONAL(VPN, test "${enable_openconnect}" != "no" -o \
 
 AC_OUTPUT(Makefile include/version.h src/connman.service
 		vpn/connman-vpn.service	vpn/net.connman.vpn.service
-		scripts/connman	connman.pc)
+		scripts/connman	connman.pc src/net.connman.service)

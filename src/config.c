@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -182,12 +182,14 @@ static void unregister_service(gpointer data)
 			__connman_service_remove(service);
 
 			/*
-			 * Ethernet service cannot be removed by
+			 * Ethernet or gadget service cannot be removed by
 			 * __connman_service_remove() so reset the ipconfig
 			 * here.
 			 */
 			if (connman_service_get_type(service) ==
-						CONNMAN_SERVICE_TYPE_ETHERNET) {
+						CONNMAN_SERVICE_TYPE_ETHERNET ||
+					connman_service_get_type(service) ==
+						CONNMAN_SERVICE_TYPE_GADGET) {
 				__connman_service_disconnect(service);
 				__connman_service_reset_ipconfig(service,
 					CONNMAN_IPCONFIG_TYPE_IPV4, NULL, NULL);
@@ -975,8 +977,7 @@ static char *config_pem_fsid(const char *pem_file)
 	return g_strdup_printf("%llx", fsid64);
 }
 
-static void provision_service_wifi(gpointer key,
-				struct connman_config_service *config,
+static void provision_service_wifi(struct connman_config_service *config,
 				struct connman_service *service,
 				struct connman_network *network,
 				const void *ssid, unsigned int ssid_len)
@@ -1044,7 +1045,8 @@ static gboolean remove_virtual_config(gpointer user_data)
 {
 	struct connect_virtual *virtual = user_data;
 
-	__connman_service_connect(virtual->service);
+	__connman_service_connect(virtual->service,
+				CONNMAN_SERVICE_CONNECT_REASON_AUTO);
 	g_hash_table_remove(config_table, virtual->vfile);
 
 	g_free(virtual);
@@ -1052,11 +1054,9 @@ static gboolean remove_virtual_config(gpointer user_data)
 	return FALSE;
 }
 
-static void provision_service(gpointer key, gpointer value,
-							gpointer user_data)
+static int try_provision_service(struct connman_config_service *config,
+				struct connman_service *service)
 {
-	struct connman_service *service = user_data;
-	struct connman_config_service *config = value;
 	struct connman_network *network;
 	const void *service_id;
 	enum connman_service_type type;
@@ -1066,11 +1066,15 @@ static void provision_service(gpointer key, gpointer value,
 	type = connman_service_get_type(service);
 	if (type == CONNMAN_SERVICE_TYPE_WIFI &&
 				g_strcmp0(config->type, "wifi") != 0)
-		return;
+		return -ENOENT;
 
 	if (type == CONNMAN_SERVICE_TYPE_ETHERNET &&
 				g_strcmp0(config->type, "ethernet") != 0)
-		return;
+		return -ENOENT;
+
+	if (type == CONNMAN_SERVICE_TYPE_GADGET &&
+				g_strcmp0(config->type, "gadget") != 0)
+		return -ENOENT;
 
 	DBG("service %p ident %s", service,
 					__connman_service_get_ident(service));
@@ -1078,7 +1082,7 @@ static void provision_service(gpointer key, gpointer value,
 	network = __connman_service_get_network(service);
 	if (!network) {
 		connman_error("Service has no network set");
-		return;
+		return -EINVAL;
 	}
 
 	DBG("network %p ident %s", network,
@@ -1091,7 +1095,7 @@ static void provision_service(gpointer key, gpointer value,
 		device = connman_network_get_device(network);
 		if (!device) {
 			connman_error("Network device is missing");
-			return;
+			return -ENODEV;
 		}
 
 		device_addr = connman_device_get_string(device, "Address");
@@ -1099,7 +1103,7 @@ static void provision_service(gpointer key, gpointer value,
 		DBG("wants %s has %s", config->mac, device_addr);
 
 		if (g_ascii_strcasecmp(device_addr, config->mac) != 0)
-			return;
+			return -ENOENT;
 	}
 
 	if (g_strcmp0(config->type, "wifi") == 0 &&
@@ -1108,14 +1112,14 @@ static void provision_service(gpointer key, gpointer value,
 						&ssid_len);
 		if (!ssid) {
 			connman_error("Network SSID not set");
-			return;
+			return -EINVAL;
 		}
 
 		if (!config->ssid || ssid_len != config->ssid_len)
-			return;
+			return -ENOENT;
 
 		if (memcmp(config->ssid, ssid, ssid_len) != 0)
-			return;
+			return -ENOENT;
 	}
 
 	if (!config->ipv6_address) {
@@ -1133,12 +1137,12 @@ static void provision_service(gpointer key, gpointer value,
 
 		if (config->ipv6_prefix_length == 0) {
 			DBG("IPv6 prefix missing");
-			return;
+			return -EINVAL;
 		}
 
 		address = connman_ipaddress_alloc(AF_INET6);
 		if (!address)
-			return;
+			return -ENOENT;
 
 		connman_ipaddress_set_ipv6(address, config->ipv6_address,
 					config->ipv6_prefix_length,
@@ -1178,12 +1182,12 @@ static void provision_service(gpointer key, gpointer value,
 
 		if (!config->ipv4_netmask) {
 			DBG("IPv4 netmask missing");
-			return;
+			return -EINVAL;
 		}
 
 		address = connman_ipaddress_alloc(AF_INET);
 		if (!address)
-			return;
+			return -ENOENT;
 
 		connman_ipaddress_set_ipv4(address, config->ipv4_address,
 					config->ipv4_netmask,
@@ -1238,14 +1242,15 @@ static void provision_service(gpointer key, gpointer value,
 
 	if (g_strcmp0(config->type, "wifi") == 0 &&
 				type == CONNMAN_SERVICE_TYPE_WIFI) {
-		provision_service_wifi(key, config, service, network,
+		provision_service_wifi(config, service, network,
 							ssid, ssid_len);
 	} else
-		__connman_service_connect(service);
+		__connman_service_connect(service,
+					CONNMAN_SERVICE_CONNECT_REASON_AUTO);
 
 	__connman_service_mark_dirty();
 
-	__connman_service_save(service);
+	__connman_service_load_modifiable(service);
 
 	if (config->virtual) {
 		struct connect_virtual *virtual;
@@ -1256,34 +1261,47 @@ static void provision_service(gpointer key, gpointer value,
 
 		g_timeout_add(0, remove_virtual_config, virtual);
 	} else
-		__connman_service_auto_connect();
+		__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_AUTO);
+
+	return 0;
 }
 
-int __connman_config_provision_service(struct connman_service *service)
+static int find_and_provision_service(struct connman_service *service)
 {
-	enum connman_service_type type;
-	GHashTableIter iter;
-	gpointer value, key;
-
-	/* For now only WiFi and Ethernet services are supported */
-	type = connman_service_get_type(service);
-
-	DBG("service %p type %d", service, type);
-
-	if (type != CONNMAN_SERVICE_TYPE_WIFI &&
-					type != CONNMAN_SERVICE_TYPE_ETHERNET)
-		return -ENOSYS;
+	GHashTableIter iter, iter_service;
+	gpointer value, key, value_service, key_service;
 
 	g_hash_table_iter_init(&iter, config_table);
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct connman_config *config = value;
 
-		g_hash_table_foreach(config->service_table,
-						provision_service, service);
+		g_hash_table_iter_init(&iter_service, config->service_table);
+		while (g_hash_table_iter_next(&iter_service, &key_service,
+						&value_service)) {
+			if (!try_provision_service(value_service, service))
+				return 0;
+		}
 	}
 
-	return 0;
+	return -ENOENT;
+}
+
+int __connman_config_provision_service(struct connman_service *service)
+{
+	enum connman_service_type type;
+
+	/* For now only WiFi, Gadget and Ethernet services are supported */
+	type = connman_service_get_type(service);
+
+	DBG("service %p type %d", service, type);
+
+	if (type != CONNMAN_SERVICE_TYPE_WIFI &&
+			type != CONNMAN_SERVICE_TYPE_ETHERNET &&
+			type != CONNMAN_SERVICE_TYPE_GADGET)
+		return -ENOSYS;
+
+	return find_and_provision_service(service);
 }
 
 int __connman_config_provision_service_ident(struct connman_service *service,
@@ -1293,13 +1311,14 @@ int __connman_config_provision_service_ident(struct connman_service *service,
 	struct connman_config *config;
 	int ret = 0;
 
-	/* For now only WiFi and Ethernet services are supported */
+	/* For now only WiFi, Gadget and Ethernet services are supported */
 	type = connman_service_get_type(service);
 
 	DBG("service %p type %d", service, type);
 
 	if (type != CONNMAN_SERVICE_TYPE_WIFI &&
-					type != CONNMAN_SERVICE_TYPE_ETHERNET)
+			type != CONNMAN_SERVICE_TYPE_ETHERNET &&
+			type != CONNMAN_SERVICE_TYPE_GADGET)
 		return -ENOSYS;
 
 	config = g_hash_table_lookup(config_table, ident);
@@ -1346,8 +1365,7 @@ int __connman_config_provision_service_ident(struct connman_service *service,
 			}
 		}
 
-		g_hash_table_foreach(config->service_table,
-						provision_service, service);
+		find_and_provision_service(service);
 	}
 
 	return ret;

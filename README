@@ -71,6 +71,14 @@ For a working system, certain configuration options need to be enabled:
 		enabled. This option can be used to build a small daemon
 		for a specific system if Ethernet support is not required.
 
+	--disable-gadget
+
+		Disable support for USB Ethernet Gadget devices
+
+		By default USB Ethernet Gadget technology support is built-in and
+		enabled. This option can be used to build a small daemon
+		for a specific system if USB Ethernet Gadget support is not required.
+
 	--disable-wifi
 
 		Disable support for WiFi devices
@@ -286,6 +294,7 @@ options need to be enabled:
 CONFIG_USB_GADGET
 CONFIG_USB_ETH
 
+
 wpa_supplicant configuration
 ============================
 
@@ -310,7 +319,7 @@ CONFIG_AUTOSCAN_EXPONENTIAL=y
 This will enable the exact same function as bgscan but while being
 disconnected.
 
-It is recommended to use wpa_supplicant 1.x or later.
+It is recommended to use wpa_supplicant 2.x or later.
 
 If wpa_supplicant is configured to D-Bus autostart, then ConnMan will
 trigger the autostart of wpa_supplicant. However please keep in mind
@@ -351,6 +360,7 @@ Mailing list:
 	connman@connman.net
 
 For additional information about the project visit ConnMan web site:
+	https://01.org/connman
 	http://www.connman.net
 
 You can report bugs at https://01.org/jira/browse/CM

@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -60,7 +60,6 @@ struct connman_device {
 	char *interface;
 	char *ident;
 	char *path;
-	char *devname;
 	int index;
 	guint pending_timeout;
 
@@ -386,7 +385,6 @@ static void device_destruct(struct connman_device *device)
 	g_free(device->address);
 	g_free(device->interface);
 	g_free(device->path);
-	g_free(device->devname);
 
 	g_free(device->last_network);
 
@@ -522,9 +520,6 @@ int connman_device_get_index(struct connman_device *device)
 void connman_device_set_interface(struct connman_device *device,
 						const char *interface)
 {
-	g_free(device->devname);
-	device->devname = g_strdup(interface);
-
 	g_free(device->interface);
 	device->interface = g_strdup(interface);
 
@@ -591,7 +586,8 @@ int connman_device_set_powered(struct connman_device *device,
 	device->scanning = false;
 
 	if (device->driver && device->driver->scan)
-		device->driver->scan(device, NULL, 0, NULL, NULL, NULL, NULL);
+		device->driver->scan(CONNMAN_SERVICE_TYPE_UNKNOWN, device,
+					NULL, 0, NULL, NULL, NULL, NULL);
 
 	return 0;
 }
@@ -601,7 +597,8 @@ bool connman_device_get_powered(struct connman_device *device)
 	return device->powered;
 }
 
-static int device_scan(struct connman_device *device)
+static int device_scan(enum connman_service_type type,
+				struct connman_device *device)
 {
 	if (!device->driver || !device->driver->scan)
 		return -EOPNOTSUPP;
@@ -609,7 +606,8 @@ static int device_scan(struct connman_device *device)
 	if (!device->powered)
 		return -ENOLINK;
 
-	return device->driver->scan(device, NULL, 0, NULL, NULL, NULL, NULL);
+	return device->driver->scan(type, device, NULL, 0,
+					NULL, NULL, NULL, NULL);
 }
 
 int __connman_device_disconnect(struct connman_device *device)
@@ -648,28 +646,11 @@ int __connman_device_disconnect(struct connman_device *device)
 	return 0;
 }
 
-int connman_device_disconnect_service(struct connman_device *device)
-{
-	DBG("device %p", device);
-
-	if (device->network) {
-		struct connman_service *service =
-			connman_service_lookup_from_network(device->network);
-
-		if (service)
-			__connman_service_disconnect(service);
-		else
-			connman_network_set_connected(device->network, false);
-	}
-
-	return 0;
-}
-
 int connman_device_reconnect_service(struct connman_device *device)
 {
 	DBG("device %p", device);
 
-	__connman_service_auto_connect();
+	__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_AUTO);
 
 	return 0;
 }
@@ -733,7 +714,7 @@ void connman_device_reset_scanning(struct connman_device *device)
  * Change scanning state of device
  */
 int connman_device_set_scanning(struct connman_device *device,
-						bool scanning)
+				enum connman_service_type type, bool scanning)
 {
 	DBG("device %p scanning %d", device, scanning);
 
@@ -756,9 +737,9 @@ int connman_device_set_scanning(struct connman_device *device,
 
 	__connman_device_cleanup_networks(device);
 
-	__connman_technology_scan_stopped(device);
+	__connman_technology_scan_stopped(device, type);
 
-	__connman_service_auto_connect();
+	__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_AUTO);
 
 	return 0;
 }
@@ -915,11 +896,6 @@ int connman_device_remove_network(struct connman_device *device,
 	g_hash_table_remove(device->networks, identifier);
 
 	return 0;
-}
-
-void connman_device_remove_all_networks(struct connman_device *device)
-{
-	g_hash_table_remove_all(device->networks);
 }
 
 void __connman_device_set_network(struct connman_device *device,
@@ -1113,6 +1089,7 @@ int __connman_device_request_scan(enum connman_service_type type)
 	case CONNMAN_SERVICE_TYPE_GADGET:
 		return -EOPNOTSUPP;
 	case CONNMAN_SERVICE_TYPE_WIFI:
+	case CONNMAN_SERVICE_TYPE_P2P:
 		break;
 	}
 
@@ -1121,12 +1098,15 @@ int __connman_device_request_scan(enum connman_service_type type)
 		enum connman_service_type service_type =
 			__connman_device_get_service_type(device);
 
-		if (service_type != CONNMAN_SERVICE_TYPE_UNKNOWN &&
-				service_type != type) {
-			continue;
+		if (service_type != CONNMAN_SERVICE_TYPE_UNKNOWN) {
+			if (type == CONNMAN_SERVICE_TYPE_P2P) {
+				if (service_type != CONNMAN_SERVICE_TYPE_WIFI)
+					continue;
+			} else if (service_type != type)
+				continue;
 		}
 
-		err = device_scan(device);
+		err = device_scan(type, device);
 		if (err == 0 || err == -EALREADY || err == -EINPROGRESS) {
 			success = true;
 		} else {
@@ -1152,7 +1132,8 @@ int __connman_device_request_hidden_scan(struct connman_device *device,
 			!device->driver->scan)
 		return -EINVAL;
 
-	return device->driver->scan(device, ssid, ssid_len, identity,
+	return device->driver->scan(CONNMAN_SERVICE_TYPE_UNKNOWN,
+					device, ssid, ssid_len, identity,
 					passphrase, security, user_data);
 }
 

@@ -2,7 +2,7 @@
  *
  *  WPA supplicant library with GLib integration
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -71,10 +71,10 @@ int supplicant_dbus_method_call(const char *path,
 				const char *interface, const char *method,
 				supplicant_dbus_setup_function setup,
 				supplicant_dbus_result_function function,
-				void *user_data, DBusPendingCall **pending,
-				dbus_int32_t *slot);
+				void *user_data,
+				void *caller);
 
-void supplicant_dbus_call_callback(DBusPendingCall *call, dbus_int32_t slot);
+void supplicant_dbus_method_call_cancel_all(void *caller);
 
 void supplicant_dbus_property_append_basic(DBusMessageIter *iter,
 					const char *key, int type, void *val);

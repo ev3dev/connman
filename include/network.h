@@ -1,9 +1,8 @@
-
 /*
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -46,6 +45,7 @@ enum connman_network_type {
 	CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN = 8,
 	CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN = 9,
 	CONNMAN_NETWORK_TYPE_CELLULAR      = 10,
+	CONNMAN_NETWORK_TYPE_GADGET        = 11,
 	CONNMAN_NETWORK_TYPE_VENDOR        = 10000,
 };
 

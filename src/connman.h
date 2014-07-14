@@ -28,7 +28,9 @@
 #include <connman/dbus.h>
 
 dbus_bool_t __connman_dbus_append_objpath_dict_array(DBusMessage *msg,
-		connman_dbus_append_cb_t function, void *user_data);
+			connman_dbus_append_cb_t function, void *user_data);
+dbus_bool_t __connman_dbus_append_objpath_array(DBusMessage *msg,
+			connman_dbus_append_cb_t function, void *user_data);
 int __connman_dbus_init(DBusConnection *conn);
 void __connman_dbus_cleanup(void);
 
@@ -513,7 +515,8 @@ int __connman_technology_remove_rfkill(unsigned int index,
 					enum connman_service_type type);
 
 void __connman_technology_scan_started(struct connman_device *device);
-void __connman_technology_scan_stopped(struct connman_device *device);
+void __connman_technology_scan_stopped(struct connman_device *device,
+					enum connman_service_type type);
 void __connman_technology_add_interface(enum connman_service_type type,
 				int index, const char *ident);
 void __connman_technology_remove_interface(enum connman_service_type type,
@@ -631,6 +634,7 @@ int __connman_provider_init(void);
 
 int __connman_service_init(void);
 void __connman_service_cleanup(void);
+int __connman_service_load_modifiable(struct connman_service *service);
 
 void __connman_service_list_struct(DBusMessageIter *iter);
 
@@ -638,6 +642,7 @@ struct connman_service *__connman_service_lookup_from_index(int index);
 struct connman_service *__connman_service_lookup_from_ident(const char *identifier);
 struct connman_service *__connman_service_create_from_network(struct connman_network *network);
 struct connman_service *__connman_service_create_from_provider(struct connman_provider *provider);
+bool __connman_service_index_is_default(int index);
 struct connman_service *__connman_service_get_default(void);
 void __connman_service_update_from_network(struct connman_network *network);
 void __connman_service_remove_from_network(struct connman_network *network);
@@ -671,8 +676,6 @@ int __connman_service_set_immutable(struct connman_service *service,
 						bool immutable);
 int __connman_service_set_ignore(struct connman_service *service,
 						bool ignore);
-void __connman_service_set_userconnect(struct connman_service *service,
-						bool userconnect);
 void __connman_service_set_search_domains(struct connman_service *service,
 					char **domains);
 void __connman_service_update_search_domains(struct connman_service *service,
@@ -694,11 +697,12 @@ int __connman_service_indicate_error(struct connman_service *service,
 int __connman_service_clear_error(struct connman_service *service);
 int __connman_service_indicate_default(struct connman_service *service);
 
-int __connman_service_connect(struct connman_service *service);
+int __connman_service_connect(struct connman_service *service,
+			enum connman_service_connect_reason reason);
 int __connman_service_disconnect(struct connman_service *service);
 int __connman_service_disconnect_all(void);
 void __connman_service_set_active_session(bool enable, GSList *list);
-void __connman_service_auto_connect(void);
+void __connman_service_auto_connect(enum connman_service_connect_reason reason);
 bool __connman_service_remove(struct connman_service *service);
 bool __connman_service_is_provider_pending(struct connman_service *service);
 void __connman_service_set_provider_pending(struct connman_service *service,
@@ -738,6 +742,7 @@ void __connman_service_set_pac(struct connman_service *service,
 					const char *pac);
 bool __connman_service_is_hidden(struct connman_service *service);
 bool __connman_service_is_split_routing(struct connman_service *service);
+bool __connman_service_index_is_split_routing(int index);
 int __connman_service_get_index(struct connman_service *service);
 void __connman_service_set_hidden(struct connman_service *service);
 void __connman_service_set_hostname(struct connman_service *service,
@@ -768,6 +773,13 @@ void __connman_service_notify(struct connman_service *service,
 
 int __connman_service_counter_register(const char *counter);
 void __connman_service_counter_unregister(const char *counter);
+
+#include <connman/peer.h>
+
+int __connman_peer_init(void);
+void __connman_peer_cleanup(void);
+
+void __connman_peer_list_struct(DBusMessageIter *array);
 
 #include <connman/session.h>
 
@@ -817,8 +829,7 @@ unsigned int __connman_rtnl_update_interval_remove(unsigned int interval);
 int __connman_rtnl_request_update(void);
 int __connman_rtnl_send(const void *buf, size_t len);
 
-bool __connman_session_mode();
-void __connman_session_set_mode(bool enable);
+bool __connman_session_policy_autoconnect(enum connman_service_connect_reason reason);
 
 int __connman_session_create(DBusMessage *msg);
 int __connman_session_destroy(DBusMessage *msg);

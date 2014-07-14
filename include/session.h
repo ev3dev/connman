@@ -74,10 +74,15 @@ typedef int (* connman_session_config_func_t) (struct connman_session *session,
 struct connman_session_policy {
 	const char *name;
 	int priority;
+	bool (*autoconnect)(enum connman_service_connect_reason reason);
 	int (*create)(struct connman_session *session,
 			connman_session_config_func_t cb,
 			void *user_data);
 	void (*destroy)(struct connman_session *session);
+	void (*session_changed)(struct connman_session *session, bool active,
+				GSList *bearers);
+	bool (*allowed)(struct connman_session *session,
+			struct connman_service *service);
 };
 
 int connman_session_policy_register(struct connman_session_policy *config);
@@ -94,6 +99,9 @@ enum connman_session_type connman_session_parse_connection_type(const char *type
 int connman_session_parse_bearers(const char *token, GSList **list);
 
 const char *connman_session_get_owner(struct connman_session *session);
+
+int connman_session_connect(struct connman_service *service);
+int connman_session_disconnect(struct connman_service *service);
 
 #ifdef __cplusplus
 }

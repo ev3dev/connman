@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -23,6 +23,7 @@
 #define __CONNMAN_DEVICE_H
 
 #include <connman/network.h>
+#include <connman/service.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,7 +81,7 @@ int connman_device_set_powered(struct connman_device *device,
 						bool powered);
 bool connman_device_get_powered(struct connman_device *device);
 int connman_device_set_scanning(struct connman_device *device,
-						bool scanning);
+				enum connman_service_type type, bool scanning);
 bool connman_device_get_scanning(struct connman_device *device);
 void connman_device_reset_scanning(struct connman_device *device);
 
@@ -99,7 +100,6 @@ struct connman_network *connman_device_get_network(struct connman_device *device
 							const char *identifier);
 int connman_device_remove_network(struct connman_device *device,
 					struct connman_network *network);
-void connman_device_remove_all_networks(struct connman_device *device);
 
 int connman_device_register(struct connman_device *device);
 void connman_device_unregister(struct connman_device *device);
@@ -113,7 +113,6 @@ void connman_device_regdom_notify(struct connman_device *device,
 					int result, const char *alpha2);
 struct connman_device *connman_device_create_from_index(int index);
 struct connman_device *connman_device_find_by_index(int index);
-int connman_device_disconnect_service(struct connman_device *device);
 int connman_device_reconnect_service(struct connman_device *device);
 
 struct connman_device_driver {
@@ -124,7 +123,8 @@ struct connman_device_driver {
 	void (*remove) (struct connman_device *device);
 	int (*enable) (struct connman_device *device);
 	int (*disable) (struct connman_device *device);
-	int (*scan)(struct connman_device *device,
+	int (*scan)(enum connman_service_type type,
+			struct connman_device *device,
 			const char *ssid, unsigned int ssid_len,
 			const char *identity, const char* passphrase,
 			const char *security, void *user_data);

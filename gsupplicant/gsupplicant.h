@@ -2,7 +2,7 @@
  *
  *  WPA supplicant library with GLib integration
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -189,6 +189,12 @@ int g_supplicant_interface_autoscan(GSupplicantInterface *interface,
 					GSupplicantInterfaceCallback callback,
 							void *user_data);
 
+int g_supplicant_interface_p2p_find(GSupplicantInterface *interface,
+					GSupplicantInterfaceCallback callback,
+							void *user_data);
+
+int g_supplicant_interface_p2p_stop_find(GSupplicantInterface *interface);
+
 int g_supplicant_interface_connect(GSupplicantInterface *interface,
 					GSupplicantSSID *ssid,
 					GSupplicantInterfaceCallback callback,
@@ -222,11 +228,14 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 					GSupplicantCountryCallback callback,
 							const char *alpha2,
 							void *user_data);
+bool g_supplicant_interface_has_p2p(GSupplicantInterface *interface);
 
-/* Network API */
+/* Network and Peer API */
 struct _GSupplicantNetwork;
+struct _GSupplicantPeer;
 
 typedef struct _GSupplicantNetwork GSupplicantNetwork;
+typedef struct _GSupplicantPeer GSupplicantPeer;
 
 GSupplicantInterface *g_supplicant_network_get_interface(GSupplicantNetwork *network);
 const char *g_supplicant_network_get_name(GSupplicantNetwork *network);
@@ -243,18 +252,26 @@ dbus_bool_t g_supplicant_network_is_wps_active(GSupplicantNetwork *network);
 dbus_bool_t g_supplicant_network_is_wps_pbc(GSupplicantNetwork *network);
 dbus_bool_t g_supplicant_network_is_wps_advertizing(GSupplicantNetwork *network);
 
+GSupplicantInterface *g_supplicant_peer_get_interface(GSupplicantPeer *peer);
+const char *g_supplicant_peer_get_identifier(GSupplicantPeer *peer);
+const void *g_supplicant_peer_get_device_address(GSupplicantPeer *peer);
+const char *g_supplicant_peer_get_name(GSupplicantPeer *peer);
+
 struct _GSupplicantCallbacks {
 	void (*system_ready) (void);
 	void (*system_killed) (void);
 	void (*interface_added) (GSupplicantInterface *interface);
 	void (*interface_state) (GSupplicantInterface *interface);
 	void (*interface_removed) (GSupplicantInterface *interface);
+	void (*p2p_support) (GSupplicantInterface *interface);
 	void (*scan_started) (GSupplicantInterface *interface);
 	void (*scan_finished) (GSupplicantInterface *interface);
 	void (*network_added) (GSupplicantNetwork *network);
 	void (*network_removed) (GSupplicantNetwork *network);
 	void (*network_changed) (GSupplicantNetwork *network,
 					const char *property);
+	void (*peer_found) (GSupplicantPeer *peer);
+	void (*peer_lost) (GSupplicantPeer *peer);
 	void (*debug) (const char *str);
 };
 

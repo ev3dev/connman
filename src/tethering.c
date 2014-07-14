@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *  Copyright (C) 2011	ProFUSION embedded systems
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -293,13 +293,13 @@ void __connman_tethering_set_disabled(void)
 
 	DBG("enabled %d", tethering_enabled - 1);
 
+	if (__sync_fetch_and_sub(&tethering_enabled, 1) != 1)
+		return;
+
 	__connman_ipv6pd_cleanup();
 
 	index = connman_inet_ifindex(BRIDGE_NAME);
 	__connman_dnsproxy_remove_listener(index);
-
-	if (__sync_fetch_and_sub(&tethering_enabled, 1) != 1)
-		return;
 
 	__connman_nat_disable(BRIDGE_NAME);
 

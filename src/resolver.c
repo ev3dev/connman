@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -429,8 +429,13 @@ int connman_resolver_append(int index, const char *domain,
 
 		if (entry->index == index &&
 				g_strcmp0(entry->domain, domain) == 0 &&
-				g_strcmp0(entry->server, server) == 0)
+				g_strcmp0(entry->server, server) == 0) {
+			if (dnsproxy_enabled)
+				__connman_dnsproxy_append(entry->index, domain,
+						server);
+
 			return -EEXIST;
+		}
 	}
 
 	return append_resolver(index, domain, server, 0, 0);

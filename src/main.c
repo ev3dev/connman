@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -56,6 +56,7 @@ static char *default_blacklist[] = {
 	"vmnet",
 	"vboxnet",
 	"virbr",
+	"ifb",
 	NULL
 };
 
@@ -602,12 +603,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (mkdir(STATEDIR, S_IRUSR | S_IWUSR | S_IXUSR |
-				S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) < 0) {
-		if (errno != EEXIST)
-			perror("Failed to create state directory");
-	}
-
 	if (mkdir(STORAGEDIR, S_IRUSR | S_IWUSR | S_IXUSR |
 				S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) < 0) {
 		if (errno != EEXIST)
@@ -649,6 +644,7 @@ int main(int argc, char *argv[])
 	__connman_notifier_init();
 	__connman_agent_init();
 	__connman_service_init();
+	__connman_peer_init();
 	__connman_provider_init();
 	__connman_network_init();
 	__connman_config_init();
@@ -697,7 +693,6 @@ int main(int argc, char *argv[])
 	__connman_wispr_cleanup();
 	__connman_wpad_cleanup();
 	__connman_dhcpv6_cleanup();
-	__connman_dhcp_cleanup();
 	__connman_session_cleanup();
 	__connman_plugin_cleanup();
 	__connman_provider_cleanup();
@@ -717,12 +712,13 @@ int main(int argc, char *argv[])
 	__connman_tethering_cleanup();
 	__connman_nat_cleanup();
 	__connman_firewall_cleanup();
-	__connman_nfacct_cleanup();
 	__connman_iptables_cleanup();
 	__connman_ippool_cleanup();
 	__connman_device_cleanup();
 	__connman_network_cleanup();
+	__connman_dhcp_cleanup();
 	__connman_service_cleanup();
+	__connman_peer_cleanup();
 	__connman_agent_cleanup();
 	__connman_ipconfig_cleanup();
 	__connman_notifier_cleanup();

@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *  Copyright (C) 2003-2005  Go-Core Project
  *  Copyright (C) 2003-2006  Helsinki University of Technology
  *
@@ -2385,9 +2385,10 @@ int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
 
 	err = sendto(rtnl->fd, &rtnl->req.n, rtnl->req.n.nlmsg_len, 0,
 		(struct sockaddr *) &nladdr, sizeof(nladdr));
-	DBG("handle %p len %d err %d", rtnl, rtnl->req.n.nlmsg_len, err);
+	DBG("handle %p len %d", rtnl, rtnl->req.n.nlmsg_len);
 	if (err < 0) {
-		connman_error("Can not talk to rtnetlink");
+		connman_error("Can not talk to rtnetlink err %d %s",
+			-errno, strerror(errno));
 		return -errno;
 	}
 

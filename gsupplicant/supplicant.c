@@ -2,7 +2,7 @@
  *
  *  WPA supplicant library with GLib integration
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -153,6 +153,9 @@ struct _GSupplicantInterface {
 	unsigned int scan_capa;
 	unsigned int mode_capa;
 	unsigned int max_scan_ssids;
+	bool p2p_checked;
+	bool p2p_support;
+	bool p2p_finding;
 	dbus_bool_t ready;
 	GSupplicantState state;
 	dbus_bool_t scanning;
@@ -165,11 +168,10 @@ struct _GSupplicantInterface {
 	struct _GSupplicantWpsCredentials wps_cred;
 	GSupplicantWpsState wps_state;
 	GHashTable *network_table;
+	GHashTable *peer_table;
 	GHashTable *net_mapping;
 	GHashTable *bss_mapping;
 	void *data;
-	DBusPendingCall *pending_call;
-	dbus_int32_t pending_slot;
 };
 
 struct g_supplicant_bss {
@@ -213,6 +215,14 @@ struct _GSupplicantNetwork {
 	unsigned int wps_capabilities;
 	GHashTable *bss_table;
 	GHashTable *config_table;
+};
+
+struct _GSupplicantPeer {
+	GSupplicantInterface *interface;
+	char *path;
+	unsigned char device_address[6];
+	char *name;
+	char *identifier;
 };
 
 static inline void debug(const char *format, ...)
@@ -376,6 +386,19 @@ static void callback_interface_removed(GSupplicantInterface *interface)
 	callbacks_pointer->interface_removed(interface);
 }
 
+static void callback_p2p_support(GSupplicantInterface *interface)
+{
+	SUPPLICANT_DBG("");
+
+	if (interface->p2p_checked)
+		return;
+
+	interface->p2p_checked = true;
+
+	if (callbacks_pointer && callbacks_pointer->p2p_support)
+		callbacks_pointer->p2p_support(interface);
+}
+
 static void callback_scan_started(GSupplicantInterface *interface)
 {
 	if (!callbacks_pointer)
@@ -432,6 +455,28 @@ static void callback_network_changed(GSupplicantNetwork *network,
 	callbacks_pointer->network_changed(network, property);
 }
 
+static void callback_peer_found(GSupplicantPeer *peer)
+{
+	if (!callbacks_pointer)
+		return;
+
+	if (!callbacks_pointer->peer_found)
+		return;
+
+	callbacks_pointer->peer_found(peer);
+}
+
+static void callback_peer_lost(GSupplicantPeer *peer)
+{
+	if (!callbacks_pointer)
+		return;
+
+	if (!callbacks_pointer->peer_lost)
+		return;
+
+	callbacks_pointer->peer_lost(peer);
+}
+
 static void remove_interface(gpointer data)
 {
 	GSupplicantInterface *interface = data;
@@ -439,6 +484,7 @@ static void remove_interface(gpointer data)
 	g_hash_table_destroy(interface->bss_mapping);
 	g_hash_table_destroy(interface->net_mapping);
 	g_hash_table_destroy(interface->network_table);
+	g_hash_table_destroy(interface->peer_table);
 
 	if (interface->scan_callback) {
 		SUPPLICANT_DBG("call interface %p callback %p scanning %d",
@@ -488,6 +534,17 @@ static void remove_bss(gpointer data)
 
 	g_free(bss->path);
 	g_free(bss);
+}
+
+static void remove_peer(gpointer data)
+{
+	GSupplicantPeer *peer = data;
+
+	g_free(peer->path);
+	g_free(peer->name);
+	g_free(peer->identifier);
+
+	g_free(peer);
 }
 
 static void debug_strvalmap(const char *label, struct strvalmap *map,
@@ -686,6 +743,9 @@ void g_supplicant_interface_set_data(GSupplicantInterface *interface,
 		return;
 
 	interface->data = data;
+
+	if (!data)
+		interface->scan_callback = NULL;
 }
 
 void *g_supplicant_interface_get_data(GSupplicantInterface *interface)
@@ -917,6 +977,38 @@ dbus_bool_t g_supplicant_network_is_wps_advertizing(GSupplicantNetwork *network)
 		return TRUE;
 
 	return FALSE;
+}
+
+GSupplicantInterface *g_supplicant_peer_get_interface(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return NULL;
+
+	return peer->interface;
+}
+
+const char *g_supplicant_peer_get_identifier(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return NULL;
+
+	return peer->identifier;
+}
+
+const void *g_supplicant_peer_get_device_address(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return NULL;
+
+	return peer->device_address;
+}
+
+const char *g_supplicant_peer_get_name(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return NULL;
+
+	return peer->name;
 }
 
 static void merge_network(GSupplicantNetwork *network)
@@ -1817,7 +1909,8 @@ static GSupplicantInterface *interface_alloc(const char *path)
 
 	interface->network_table = g_hash_table_new_full(g_str_hash,
 					g_str_equal, NULL, remove_network);
-
+	interface->peer_table = g_hash_table_new_full(g_str_hash,
+					g_str_equal, NULL, remove_peer);
 	interface->net_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
 								NULL, NULL);
 	interface->bss_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
@@ -1826,6 +1919,25 @@ static GSupplicantInterface *interface_alloc(const char *path)
 	g_hash_table_replace(interface_table, interface->path, interface);
 
 	return interface;
+}
+
+static void interface_p2p_flush(const char *error,
+				DBusMessageIter *iter, void *user_data)
+{
+	GSupplicantInterface *interface = user_data;
+
+	if (error) {
+		if (!g_strcmp0(error,
+				"org.freedesktop.DBus.Error.UnknownMethod")) {
+			SUPPLICANT_DBG("wpa_supplicant does not support P2P");
+		} else {
+			SUPPLICANT_DBG("interface %s does not support P2P",
+							interface->ifname);
+		}
+	} else
+		interface->p2p_support = true;
+
+	callback_p2p_support(interface);
 }
 
 static void interface_added(DBusMessageIter *iter, void *user_data)
@@ -1850,6 +1962,10 @@ static void interface_added(DBusMessageIter *iter, void *user_data)
 	if (!interface)
 		return;
 
+	supplicant_dbus_method_call(path,
+			SUPPLICANT_INTERFACE ".Interface.P2PDevice", "Flush",
+			NULL, interface_p2p_flush, interface, NULL);
+
 	dbus_message_iter_next(iter);
 	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_INVALID) {
 		supplicant_dbus_property_foreach(iter, interface_property,
@@ -1873,17 +1989,8 @@ static void interface_removed(DBusMessageIter *iter, void *user_data)
 		return;
 
 	interface = g_hash_table_lookup(interface_table, path);
-	if (interface && interface->pending_call) {
-		dbus_pending_call_cancel(interface->pending_call);
-		SUPPLICANT_DBG("Cancelled pending DBus call %p slot %d",
-			interface->pending_call, interface->pending_slot);
-
-		supplicant_dbus_call_callback(interface->pending_call,
-					interface->pending_slot);
-
-		interface->pending_call = NULL;
-		interface->pending_slot = -1;
-	}
+	SUPPLICANT_DBG("Cancelling any pending DBus calls");
+	supplicant_dbus_method_call_cancel_all(interface);
 
 	g_hash_table_remove(interface_table, path);
 }
@@ -2278,7 +2385,7 @@ static void signal_wps_event(const char *path, DBusMessageIter *iter)
 
 	if (g_strcmp0(name, "success") == 0)
 		interface->wps_state = G_SUPPLICANT_WPS_STATE_SUCCESS;
-	else if (g_strcmp0(name, "failed") == 0)
+	else if (g_strcmp0(name, "fail") == 0)
 		interface->wps_state = G_SUPPLICANT_WPS_STATE_FAIL;
 	else
 		interface->wps_state = G_SUPPLICANT_WPS_STATE_UNKNOWN;
@@ -2289,6 +2396,129 @@ static void signal_wps_event(const char *path, DBusMessageIter *iter)
 	dbus_message_iter_next(iter);
 
 	supplicant_dbus_property_foreach(iter, wps_event_args, interface);
+}
+
+static void create_peer_identifier(GSupplicantPeer *peer)
+{
+	const unsigned char test[6] = {};
+
+	if (!peer)
+		return;
+
+	if (!memcmp(peer->device_address, test, 6)) {
+		peer->identifier = g_strdup(peer->name);
+		return;
+	}
+
+	peer->identifier = g_malloc0(19);
+	snprintf(peer->identifier, 19, "%02x%02x%02x%02x%02x%02x",
+						peer->device_address[0],
+						peer->device_address[1],
+						peer->device_address[2],
+						peer->device_address[3],
+						peer->device_address[4],
+						peer->device_address[5]);
+}
+
+static void peer_property(const char *key, DBusMessageIter *iter,
+							void *user_data)
+{
+	GSupplicantPeer *peer = user_data;
+
+	SUPPLICANT_DBG("key: %s", key);
+
+	if (!peer->interface)
+		return;
+
+	if (!key) {
+		if (peer->name) {
+			create_peer_identifier(peer);
+			callback_peer_found(peer);
+		}
+
+		return;
+	}
+
+	if (g_strcmp0(key, "DeviceAddress") == 0) {
+		unsigned char *dev_addr;
+		DBusMessageIter array;
+		int len;
+
+		dbus_message_iter_recurse(iter, &array);
+		dbus_message_iter_get_fixed_array(&array, &dev_addr, &len);
+
+		if (len == 6)
+			memcpy(peer->device_address, dev_addr, len);
+	} else if (g_strcmp0(key, "DeviceName") == 0) {
+		const char *str = NULL;
+
+		dbus_message_iter_get_basic(iter, &str);
+		if (str)
+			peer->name = g_strdup(str);
+	}
+}
+
+static void signal_peer_found(const char *path, DBusMessageIter *iter)
+{
+	GSupplicantInterface *interface;
+	const char *obj_path = NULL;
+	GSupplicantPeer *peer;
+
+	SUPPLICANT_DBG("");
+
+	interface = g_hash_table_lookup(interface_table, path);
+	if (!interface)
+		return;
+
+	dbus_message_iter_get_basic(iter, &obj_path);
+	if (!obj_path || g_strcmp0(obj_path, "/") == 0)
+		return;
+
+	peer = g_hash_table_lookup(interface->peer_table, obj_path);
+	if (peer)
+		return;
+
+	peer = g_try_new0(GSupplicantPeer, 1);
+	if (!peer)
+		return;
+
+	peer->interface = interface;
+	peer->path = g_strdup(obj_path);
+	g_hash_table_insert(interface->peer_table, peer->path, peer);
+
+	dbus_message_iter_next(iter);
+	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_INVALID) {
+		supplicant_dbus_property_foreach(iter, peer_property, peer);
+		peer_property(NULL, NULL, peer);
+		return;
+	}
+
+	supplicant_dbus_property_get_all(obj_path,
+			SUPPLICANT_INTERFACE ".Peer", peer_property, peer);
+}
+
+static void signal_peer_lost(const char *path, DBusMessageIter *iter)
+{
+	GSupplicantInterface *interface;
+	const char *obj_path = NULL;
+	GSupplicantPeer *peer;
+
+	SUPPLICANT_DBG("");
+
+	interface = g_hash_table_lookup(interface_table, path);
+	if (!interface)
+		return;
+
+	dbus_message_iter_get_basic(iter, &obj_path);
+	if (!obj_path || g_strcmp0(obj_path, "/") == 0)
+		return;
+
+	peer = g_hash_table_lookup(interface->peer_table, obj_path);
+	if (!peer)
+		return;
+
+	callback_peer_lost(peer);
+	g_hash_table_remove(interface->peer_table, obj_path);
 }
 
 static struct {
@@ -2314,6 +2544,9 @@ static struct {
 
 	{ SUPPLICANT_INTERFACE ".Interface.WPS", "Credentials", signal_wps_credentials },
 	{ SUPPLICANT_INTERFACE ".Interface.WPS", "Event",       signal_wps_event       },
+
+	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "DeviceFound", signal_peer_found },
+	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "DeviceLost",  signal_peer_lost  },
 
 	{ }
 };
@@ -2430,6 +2663,11 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 					regdom);
 }
 
+bool g_supplicant_interface_has_p2p(GSupplicantInterface *interface)
+{
+	return interface->p2p_support;
+}
+
 struct interface_data {
 	GSupplicantInterface *interface;
 	char *path; /* Interface path cannot be taken from interface (above) as
@@ -2440,9 +2678,9 @@ struct interface_data {
 };
 
 struct interface_create_data {
-	const char *ifname;
-	const char *driver;
-	const char *bridge;
+	char *ifname;
+	char *driver;
+	char *bridge;
 	GSupplicantInterface *interface;
 	GSupplicantInterfaceCallback callback;
 	void *user_data;
@@ -2472,6 +2710,14 @@ struct interface_autoscan_data {
 	void *user_data;
 };
 
+static void interface_create_data_free(struct interface_create_data *data)
+{
+	g_free(data->ifname);
+	g_free(data->driver);
+	g_free(data->bridge);
+	dbus_free(data);
+}
+
 static bool interface_exists(GSupplicantInterface *interface,
 				const char *path)
 {
@@ -2494,7 +2740,7 @@ static void interface_create_property(const char *key, DBusMessageIter *iter,
 		if (data->callback)
 			data->callback(0, data->interface, data->user_data);
 
-		dbus_free(data);
+		interface_create_data_free(data);
 	}
 
 	interface_property(key, iter, interface);
@@ -2545,7 +2791,7 @@ done:
 	if (data->callback)
 		data->callback(err, NULL, data->user_data);
 
-	dbus_free(data);
+	interface_create_data_free(data);
 }
 
 static void interface_create_params(DBusMessageIter *iter, void *user_data)
@@ -2598,12 +2844,10 @@ static void interface_get_result(const char *error,
 		goto done;
 	}
 
-	interface->pending_call = NULL;
-
 	if (data->callback)
 		data->callback(0, interface, data->user_data);
 
-	dbus_free(data);
+	interface_create_data_free(data);
 
 	return;
 
@@ -2620,7 +2864,7 @@ create:
 						"CreateInterface",
 						interface_create_params,
 						interface_create_result, data,
-						NULL, NULL);
+						NULL);
 	if (err == 0)
 		return;
 
@@ -2628,7 +2872,7 @@ done:
 	if (data->callback)
 		data->callback(err, NULL, data->user_data);
 
-	dbus_free(data);
+	interface_create_data_free(data);
 }
 
 static void interface_get_params(DBusMessageIter *iter, void *user_data)
@@ -2660,9 +2904,9 @@ int g_supplicant_interface_create(const char *ifname, const char *driver,
 	if (!data)
 		return -ENOMEM;
 
-	data->ifname = ifname;
-	data->driver = driver;
-	data->bridge = bridge;
+	data->ifname = g_strdup(ifname);
+	data->driver = g_strdup(driver);
+	data->bridge = g_strdup(bridge);
 	data->callback = callback;
 	data->user_data = user_data;
 
@@ -2671,9 +2915,9 @@ int g_supplicant_interface_create(const char *ifname, const char *driver,
 						"GetInterface",
 						interface_get_params,
 						interface_get_result, data,
-						NULL, NULL);
+						NULL);
 	if (ret < 0)
-		dbus_free(data);
+		interface_create_data_free(data);
 
 	return ret;
 }
@@ -2701,9 +2945,6 @@ static void interface_remove_result(const char *error,
 	err = 0;
 
 done:
-	if (interface_exists(data->interface, data->path))
-		data->interface->pending_call = NULL;
-
 	g_free(data->path);
 
 	if (data->callback)
@@ -2735,17 +2976,8 @@ int g_supplicant_interface_remove(GSupplicantInterface *interface,
 	if (!system_available)
 		return -EFAULT;
 
-	if (interface->pending_call) {
-		dbus_pending_call_cancel(interface->pending_call);
-		SUPPLICANT_DBG("Cancelled pending DBus call %p slot %d",
-			interface->pending_call, interface->pending_slot);
-
-		supplicant_dbus_call_callback(interface->pending_call,
-					interface->pending_slot);
-
-		interface->pending_call = NULL;
-		interface->pending_slot = -1;
-	}
+	SUPPLICANT_DBG("Cancelling any pending DBus calls");
+	supplicant_dbus_method_call_cancel_all(interface);
 
 	data = dbus_malloc0(sizeof(*data));
 	if (!data)
@@ -2761,7 +2993,7 @@ int g_supplicant_interface_remove(GSupplicantInterface *interface,
 						"RemoveInterface",
 						interface_remove_params,
 						interface_remove_result, data,
-						NULL, NULL);
+						NULL);
 	if (ret < 0) {
 		g_free(data->path);
 		dbus_free(data);
@@ -2784,8 +3016,6 @@ static void interface_scan_result(const char *error,
 	if (interface_exists(data->interface, data->path)) {
 		if (!data->interface->ready)
 			err = -ENOLINK;
-
-		data->interface->pending_call = NULL;
 	}
 
 	g_free(data->path);
@@ -2924,14 +3154,8 @@ static void interface_scan_params(DBusMessageIter *iter, void *user_data)
 	supplicant_dbus_dict_close(iter, &dict);
 }
 
-int g_supplicant_interface_scan(GSupplicantInterface *interface,
-				GSupplicantScanParams *scan_data,
-				GSupplicantInterfaceCallback callback,
-							void *user_data)
+static int interface_ready_to_scan(GSupplicantInterface *interface)
 {
-	struct interface_scan_data *data;
-	int ret;
-
 	if (!interface)
 		return -EINVAL;
 
@@ -2957,6 +3181,21 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 		break;
 	}
 
+	return 0;
+}
+
+int g_supplicant_interface_scan(GSupplicantInterface *interface,
+				GSupplicantScanParams *scan_data,
+				GSupplicantInterfaceCallback callback,
+							void *user_data)
+{
+	struct interface_scan_data *data;
+	int ret;
+
+	ret = interface_ready_to_scan(interface);
+	if (ret)
+		return ret;
+
 	data = dbus_malloc0(sizeof(*data));
 	if (!data)
 		return -ENOMEM;
@@ -2973,7 +3212,7 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 	ret = supplicant_dbus_method_call(interface->path,
 			SUPPLICANT_INTERFACE ".Interface", "Scan",
 			interface_scan_params, interface_scan_result, data,
-			&interface->pending_call, &interface->pending_slot);
+			interface);
 
 	if (ret < 0) {
 		g_free(data->path);
@@ -2993,9 +3232,6 @@ static void interface_autoscan_result(const char *error,
 		SUPPLICANT_DBG("error %s", error);
 		err = -EIO;
 	}
-
-	if (interface_exists(data->interface, data->interface->path))
-		data->interface->pending_call = NULL;
 
 	g_free(data->path);
 
@@ -3035,8 +3271,7 @@ int g_supplicant_interface_autoscan(GSupplicantInterface *interface,
 			SUPPLICANT_INTERFACE ".Interface", "AutoScan",
 			interface_autoscan_params,
 			interface_autoscan_result, data,
-			&interface->pending_call,
-			&interface->pending_slot);
+			interface);
 	if (ret < 0) {
 		g_free(data->path);
 		dbus_free(data);
@@ -3082,9 +3317,6 @@ static void interface_select_network_result(const char *error,
 		err = parse_supplicant_error(iter);
 	}
 
-	if (interface_exists(data->interface, data->path))
-		data->interface->pending_call = NULL;
-
 	g_free(data->path);
 
 	if (data->callback)
@@ -3128,8 +3360,7 @@ static void interface_add_network_result(const char *error,
 			SUPPLICANT_INTERFACE ".Interface", "SelectNetwork",
 			interface_select_network_params,
 			interface_select_network_result, data,
-			&interface->pending_call,
-			&interface->pending_slot);
+			interface);
 
 	return;
 
@@ -3137,8 +3368,6 @@ error:
 	SUPPLICANT_DBG("AddNetwork error %s", error);
 
 	if (interface_exists(data->interface, data->interface->path)) {
-		interface->pending_call = NULL;
-
 		err = parse_supplicant_error(iter);
 		if (data->callback)
 			data->callback(err, data->interface, data->user_data);
@@ -3632,7 +3861,7 @@ static void wps_start(const char *error, DBusMessageIter *iter, void *user_data)
 	supplicant_dbus_method_call(data->interface->path,
 			SUPPLICANT_INTERFACE ".Interface.WPS", "Start",
 			interface_add_wps_params,
-			interface_wps_start_result, data, NULL, NULL);
+			interface_wps_start_result, data, NULL);
 }
 
 static void wps_process_credentials(DBusMessageIter *iter, void *user_data)
@@ -3685,8 +3914,7 @@ int g_supplicant_interface_connect(GSupplicantInterface *interface,
 			SUPPLICANT_INTERFACE ".Interface", "AddNetwork",
 			interface_add_network_params,
 			interface_add_network_result, data,
-			&interface->pending_call,
-			&interface->pending_slot);
+			interface);
 
 	if (ret < 0) {
 		g_free(data->path);
@@ -3711,9 +3939,6 @@ static void network_remove_result(const char *error,
 						error) == 0)
 			result = -ECONNABORTED;
 	}
-
-	if (interface_exists(data->interface, data->path))
-		data->interface->pending_call = NULL;
 
 	g_free(data->path);
 
@@ -3742,7 +3967,7 @@ static int network_remove(struct interface_data *data)
 	return supplicant_dbus_method_call(interface->path,
 			SUPPLICANT_INTERFACE ".Interface", "RemoveNetwork",
 			network_remove_params, network_remove_result, data,
-			&interface->pending_call, &interface->pending_slot);
+			interface);
 }
 
 static void interface_disconnect_result(const char *error,
@@ -3759,9 +3984,6 @@ static void interface_disconnect_result(const char *error,
 						error) == 0)
 			result = -ECONNABORTED;
 	}
-
-	if (interface_exists(data->interface, data->path))
-		data->interface->pending_call = NULL;
 
 	if (result < 0 && data->callback) {
 		data->callback(result, data->interface, data->user_data);
@@ -3815,7 +4037,7 @@ int g_supplicant_interface_disconnect(GSupplicantInterface *interface,
 	ret = supplicant_dbus_method_call(interface->path,
 			SUPPLICANT_INTERFACE ".Interface", "Disconnect",
 			NULL, interface_disconnect_result, data,
-			&interface->pending_call, &interface->pending_slot);
+			interface);
 
 	if (ret < 0) {
 		g_free(data->path);
@@ -3825,6 +4047,87 @@ int g_supplicant_interface_disconnect(GSupplicantInterface *interface,
 	return ret;
 }
 
+static void interface_p2p_find_result(const char *error,
+					DBusMessageIter *iter, void *user_data)
+{
+	struct interface_scan_data *data = user_data;
+	int err = 0;
+
+	SUPPLICANT_DBG("error %s", error);
+
+	if (error)
+		err = -EIO;
+
+	if (interface_exists(data->interface, data->path)) {
+		if (!data->interface->ready)
+			err = -ENOLINK;
+		if (!err)
+			data->interface->p2p_finding = true;
+	}
+
+	if (data->callback)
+		data->callback(err, data->interface, data->user_data);
+
+	g_free(data->path);
+	dbus_free(data);
+}
+
+static void interface_p2p_find_params(DBusMessageIter *iter, void *user_data)
+{
+	DBusMessageIter dict;
+
+	supplicant_dbus_dict_open(iter, &dict);
+	supplicant_dbus_dict_close(iter, &dict);
+}
+
+int g_supplicant_interface_p2p_find(GSupplicantInterface *interface,
+					GSupplicantInterfaceCallback callback,
+							void *user_data)
+{
+	struct interface_scan_data *data;
+	int ret;
+
+	if (!interface->p2p_support)
+		return -ENOTSUP;
+
+	ret = interface_ready_to_scan(interface);
+	if (ret)
+		return ret;
+
+	data = dbus_malloc0(sizeof(*data));
+	if (!data)
+		return -ENOMEM;
+
+	data->interface = interface;
+	data->path = g_strdup(interface->path);
+	data->callback = callback;
+	data->user_data = user_data;
+
+	ret = supplicant_dbus_method_call(interface->path,
+			SUPPLICANT_INTERFACE ".Interface.P2PDevice", "Find",
+			interface_p2p_find_params, interface_p2p_find_result,
+			data, interface);
+	if (ret < 0) {
+		g_free(data->path);
+		dbus_free(data);
+	}
+
+	return ret;
+}
+
+int g_supplicant_interface_p2p_stop_find(GSupplicantInterface *interface)
+{
+	if (!interface->p2p_finding)
+		return 0;
+
+	SUPPLICANT_DBG("");
+
+	interface->p2p_finding = false;
+
+	return supplicant_dbus_method_call(interface->path,
+		SUPPLICANT_INTERFACE ".Interface.P2PDevice", "StopFind",
+		NULL, NULL, NULL, NULL);
+}
 
 static const char *g_supplicant_rule0 = "type=signal,"
 					"path=" DBUS_PATH_DBUS ","
@@ -3842,6 +4145,8 @@ static const char *g_supplicant_rule4 = "type=signal,"
 			"interface=" SUPPLICANT_INTERFACE ".BSS";
 static const char *g_supplicant_rule5 = "type=signal,"
 			"interface=" SUPPLICANT_INTERFACE ".Network";
+static const char *g_supplicant_rule6 = "type=signal,"
+		"interface=" SUPPLICANT_INTERFACE ".Interface.P2PDevice";
 
 static void invoke_introspect_method(void)
 {
@@ -3890,6 +4195,7 @@ int g_supplicant_register(const GSupplicantCallbacks *callbacks)
 	dbus_bus_add_match(connection, g_supplicant_rule3, NULL);
 	dbus_bus_add_match(connection, g_supplicant_rule4, NULL);
 	dbus_bus_add_match(connection, g_supplicant_rule5, NULL);
+	dbus_bus_add_match(connection, g_supplicant_rule6, NULL);
 	dbus_connection_flush(connection);
 
 	if (dbus_bus_name_has_owner(connection,
@@ -3923,7 +4229,7 @@ static void unregister_remove_interface(gpointer key, gpointer value,
 					SUPPLICANT_INTERFACE,
 					"RemoveInterface",
 					unregister_interface_remove_params,
-					NULL, interface->path, NULL, NULL);
+					NULL, interface->path, NULL);
 }
 
 void g_supplicant_unregister(const GSupplicantCallbacks *callbacks)

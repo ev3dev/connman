@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -38,12 +38,14 @@
 #include "dbus_helpers.h"
 #include "input.h"
 #include "services.h"
+#include "peers.h"
 #include "commands.h"
 #include "agent.h"
 #include "vpnconnections.h"
 
 static DBusConnection *connection;
 static GHashTable *service_hash;
+static GHashTable *peer_hash;
 static GHashTable *technology_hash;
 static char *session_notify_path;
 static char *session_path;
@@ -275,8 +277,20 @@ static int services_list(DBusMessageIter *iter, const char *error,
 	return 0;
 }
 
-static int services_properties(DBusMessageIter *iter, const char *error,
-		void *user_data)
+static int peers_list(DBusMessageIter *iter,
+					const char *error, void *user_data)
+{
+	if (!error) {
+		__connmanctl_peers_list(iter);
+		fprintf(stdout, "\n");
+	} else
+		fprintf(stderr, "Error: %s\n", error);
+
+	return 0;
+}
+
+static int object_properties(DBusMessageIter *iter,
+					const char *error, void *user_data)
 {
 	char *path = user_data;
 	char *str;
@@ -343,7 +357,34 @@ static int cmd_services(char *args[], int num, struct connman_option *options)
 	path = g_strdup_printf("/net/connman/service/%s", service_name);
 	return __connmanctl_dbus_method_call(connection, CONNMAN_SERVICE, path,
 			"net.connman.Service", "GetProperties",
-			services_properties, path, NULL, NULL);
+			object_properties, path, NULL, NULL);
+}
+
+static int cmd_peers(char *args[], int num, struct connman_option *options)
+{
+	char *peer_name = NULL;
+	char *path;
+
+	if (num > 2)
+		return -E2BIG;
+
+	if (num == 2)
+		peer_name = args[1];
+
+	if (!peer_name) {
+		return __connmanctl_dbus_method_call(connection,
+					CONNMAN_SERVICE, CONNMAN_PATH,
+					"net.connman.Manager", "GetPeers",
+					peers_list, NULL, NULL, NULL);
+	}
+
+	if (check_dbus_name(peer_name) == false)
+		return -EINVAL;
+
+	path = g_strdup_printf("/net/connman/peer/%s", peer_name);
+	return __connmanctl_dbus_method_call(connection, CONNMAN_SERVICE,
+				path, "net.connman.Peer", "GetProperties",
+				object_properties, path, NULL, NULL);
 }
 
 static int technology_print(DBusMessageIter *iter, const char *error,
@@ -1054,10 +1095,18 @@ static DBusHandlerResult monitor_changed(DBusConnection *connection,
 		__connmanctl_redraw_rl();
 
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-	}
+	} else if (dbus_message_is_signal(message, "net.connman.Manager",
+							"PeersChanged")) {
+		fprintf(stdout, "%-12s %-20s = {\n", interface,
+							"PeersChanged");
+		dbus_message_iter_init(message, &iter);
+		__connmanctl_peers_list(&iter);
+		fprintf(stdout, "\n}\n");
 
+		__connmanctl_redraw_rl();
 
-	if (dbus_message_is_signal(message, "net.connman.vpn.Manager",
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	} else if (dbus_message_is_signal(message, "net.connman.vpn.Manager",
 					"ConnectionAdded") ||
 			dbus_message_is_signal(message,
 					"net.connman.vpn.Manager",
@@ -1259,6 +1308,12 @@ static int cmd_monitor(char *args[], int num, struct connman_option *options)
 
 static int cmd_agent(char *args[], int num, struct connman_option *options)
 {
+	if (!__connmanctl_is_interactive()) {
+		fprintf(stderr, "Error: Not supported in non-interactive "
+				"mode\n");
+		return 0;
+	}
+
 	if (num > 2)
 		return -E2BIG;
 
@@ -1355,6 +1410,12 @@ static int cmd_vpnconnections(char *args[], int num,
 
 static int cmd_vpnagent(char *args[], int num, struct connman_option *options)
 {
+	if (!__connmanctl_is_interactive()) {
+		fprintf(stderr, "Error: Not supported in non-interactive "
+				"mode\n");
+		return 0;
+	}
+
 	if (num > 2)
 		return -E2BIG;
 
@@ -1733,23 +1794,12 @@ static int cmd_session(char *args[], int num, struct connman_option *options)
 			if (!session_path)
 				return session_create(TRUE);
 
-			if (session_connected == true) {
-				fprintf(stdout, "Session already connected\n");
-				return 0;
-			}
-
 			return session_connect();
 
 		} else if (!strcmp(command, "disconnect")) {
 
 			if (!session_path) {
 				fprintf(stdout, "Session does not exist\n");
-				return 0;
-			}
-
-			if (session_connected == false) {
-				fprintf(stdout, "Session already "
-						"disconnected\n");
 				return 0;
 			}
 
@@ -1796,6 +1846,46 @@ static char *lookup_service(const char *text, int state)
 	return NULL;
 }
 
+static char *lookup_service_arg(const char *text, int state)
+{
+	if (__connmanctl_input_calc_level() > 1) {
+		__connmanctl_input_lookup_end();
+		return NULL;
+	}
+
+	return lookup_service(text, state);
+}
+
+static char *lookup_peer(const char *text, int state)
+{
+	static GHashTableIter iter;
+	gpointer key, value;
+	static int len = 0;
+
+	if (state == 0) {
+		g_hash_table_iter_init(&iter, peer_hash);
+		len = strlen(text);
+	}
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		const char *peer = key;
+		if (strncmp(text, peer, len) == 0)
+			return strdup(peer);
+	}
+
+	return NULL;
+}
+
+static char *lookup_peer_arg(const char *text, int state)
+{
+	if (__connmanctl_input_calc_level() > 1) {
+		__connmanctl_input_lookup_end();
+		return NULL;
+	}
+
+	return lookup_peer(text, state);
+}
+
 static char *lookup_technology(const char *text, int state)
 {
 	static int len = 0;
@@ -1816,11 +1906,26 @@ static char *lookup_technology(const char *text, int state)
 	return NULL;
 }
 
+static char *lookup_technology_arg(const char *text, int state)
+{
+	if (__connmanctl_input_calc_level() > 1) {
+		__connmanctl_input_lookup_end();
+		return NULL;
+	}
+
+	return lookup_technology(text, state);
+}
+
 static char *lookup_technology_offline(const char *text, int state)
 {
 	static int len = 0;
 	static bool end = false;
 	char *str;
+
+	if (__connmanctl_input_calc_level() > 1) {
+		__connmanctl_input_lookup_end();
+		return NULL;
+	}
 
 	if (state == 0) {
 		len = strlen(text);
@@ -1840,6 +1945,56 @@ static char *lookup_technology_offline(const char *text, int state)
 		return strdup("offline");
 
 	return NULL;
+}
+
+static char *lookup_on_off(const char *text, int state)
+{
+	char *onoff[] = { "on", "off", NULL };
+	static int idx = 0;
+	static int len = 0;
+
+	char *str;
+
+	if (!state) {
+		idx = 0;
+		len = strlen(text);
+	}
+
+	while (onoff[idx]) {
+		str = onoff[idx];
+		idx++;
+
+		if (!strncmp(text, str, len))
+			return strdup(str);
+	}
+
+	return NULL;
+}
+
+static char *lookup_tether(const char *text, int state)
+{
+	int level;
+
+	level = __connmanctl_input_calc_level();
+	if (level < 2)
+		return lookup_technology(text, state);
+
+	if (level == 2)
+		return lookup_on_off(text, state);
+
+	__connmanctl_input_lookup_end();
+
+	return NULL;
+}
+
+static char *lookup_agent(const char *text, int state)
+{
+	if (__connmanctl_input_calc_level() > 1) {
+		__connmanctl_input_lookup_end();
+		return NULL;
+	}
+
+	return lookup_on_off(text, state);
 }
 
 static struct connman_option service_options[] = {
@@ -1878,6 +2033,58 @@ static struct connman_option session_options[] = {
 	{ NULL, }
 };
 
+static char *lookup_options(struct connman_option *options, const char *text,
+		int state)
+{
+	static int idx = 0;
+	static int len = 0;
+	const char *str;
+
+	if (state == 0) {
+		idx = 0;
+		len = strlen(text);
+	}
+
+	while (options[idx].name) {
+		str = options[idx].name;
+		idx++;
+
+		if (str && strncmp(text, str, len) == 0)
+			return strdup(str);
+	}
+
+	return NULL;
+}
+
+static char *lookup_monitor(const char *text, int state)
+{
+	int level;
+
+	level = __connmanctl_input_calc_level();
+
+	if (level < 2)
+		return lookup_options(monitor_options, text, state);
+
+	if (level == 2)
+		return lookup_on_off(text, state);
+
+	__connmanctl_input_lookup_end();
+	return NULL;
+}
+
+static char *lookup_config(const char *text, int state)
+{
+	if (__connmanctl_input_calc_level() < 2)
+		return lookup_service(text, state);
+
+	return lookup_options(config_options, text, state);
+}
+
+static char *lookup_session(const char *text, int state)
+{
+	return lookup_options(session_options, text, state);
+}
+
 static const struct {
         const char *cmd;
 	const char *argument;
@@ -1900,27 +2107,30 @@ static const struct {
 	            "            wifi [on|off] <ssid> <passphrase> ",
 	                                  NULL,            cmd_tether,
 	  "Enable, disable tethering, set SSID and passphrase for wifi",
-	  lookup_technology },
+	  lookup_tether },
 	{ "services",     "[<service>]",  service_options, cmd_services,
-	  "Display services", lookup_service },
+	  "Display services", lookup_service_arg },
+	{ "peers",        "[peer]",       NULL,            cmd_peers,
+	  "Display peers", lookup_peer_arg },
 	{ "scan",         "<technology>", NULL,            cmd_scan,
-	  "Scans for new services for given technology", lookup_technology },
+	  "Scans for new services for given technology",
+	  lookup_technology_arg },
 	{ "connect",      "<service>",    NULL,            cmd_connect,
-	  "Connect a given service", lookup_service },
+	  "Connect a given service", lookup_service_arg },
 	{ "disconnect",   "<service>",    NULL,            cmd_disconnect,
-	  "Disconnect a given service", lookup_service },
+	  "Disconnect a given service", lookup_service_arg },
 	{ "config",       "<service>",    config_options,  cmd_config,
-	  "Set service configuration options", lookup_service },
+	  "Set service configuration options", lookup_config },
 	{ "monitor",      "[off]",        monitor_options, cmd_monitor,
-	  "Monitor signals from interfaces", NULL },
+	  "Monitor signals from interfaces", lookup_monitor },
 	{ "agent", "on|off",              NULL,            cmd_agent,
-	  "Agent mode", NULL },
+	  "Agent mode", lookup_agent },
 	{"vpnconnections", "[<connection>]", NULL,         cmd_vpnconnections,
 	 "Display VPN connections", NULL },
 	{ "vpnagent",     "on|off",     NULL,            cmd_vpnagent,
-	  "VPN Agent mode", NULL },
+	  "VPN Agent mode", lookup_agent },
 	{ "session",      "on|off|connect|disconnect|config", session_options,
-	  cmd_session, "Enable or disable a session", NULL },
+	  cmd_session, "Enable or disable a session", lookup_session },
 	{ "help",         NULL,           NULL,            cmd_help,
 	  "Show help", NULL },
 	{ "exit",         NULL,           NULL,            cmd_exit,
@@ -1970,10 +2180,20 @@ static int cmd_help(char *args[], int num, struct connman_option *options)
 
 __connmanctl_lookup_cb __connmanctl_get_lookup_func(const char *text)
 {
-	int i;
+	int i, cmdlen, textlen;
+
+	if (!text)
+		return NULL;
+
+	textlen = strlen(text);
 
 	for (i = 0; cmd_table[i].cmd; i++) {
-		if (g_strcmp0(cmd_table[i].cmd, text) == 0)
+		cmdlen = strlen(cmd_table[i].cmd);
+
+		if (textlen > cmdlen && text[cmdlen] != ' ')
+			continue;
+
+		if (strncmp(cmd_table[i].cmd, text, cmdlen) == 0)
 			return cmd_table[i].cb;
 	}
 
@@ -2099,6 +2319,67 @@ static int populate_service_hash(DBusMessageIter *iter, const char *error,
 	return 0;
 }
 
+static void add_peer_id(const char *path)
+{
+	g_hash_table_replace(peer_hash, g_strdup(path),	GINT_TO_POINTER(TRUE));
+}
+
+static void remove_peer_id(const char *path)
+{
+	g_hash_table_remove(peer_hash, path);
+}
+
+static void peers_added(DBusMessageIter *iter)
+{
+	DBusMessageIter array;
+	char *path = NULL;
+
+	while (dbus_message_iter_get_arg_type(iter) == DBUS_TYPE_STRUCT) {
+
+		dbus_message_iter_recurse(iter, &array);
+		if (dbus_message_iter_get_arg_type(&array) !=
+						DBUS_TYPE_OBJECT_PATH)
+			return;
+
+		dbus_message_iter_get_basic(&array, &path);
+		add_peer_id(get_path(path));
+
+		dbus_message_iter_next(iter);
+	}
+}
+
+static void update_peers(DBusMessageIter *iter)
+{
+	DBusMessageIter array;
+	char *path;
+
+	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_ARRAY)
+		return;
+
+	dbus_message_iter_recurse(iter, &array);
+	peers_added(&array);
+
+	dbus_message_iter_next(iter);
+	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_ARRAY)
+		return;
+
+	dbus_message_iter_recurse(iter, &array);
+	while (dbus_message_iter_get_arg_type(&array) ==
+						DBUS_TYPE_OBJECT_PATH) {
+		dbus_message_iter_get_basic(&array, &path);
+		remove_peer_id(get_path(path));
+
+		dbus_message_iter_next(&array);
+	}
+}
+
+static int populate_peer_hash(DBusMessageIter *iter,
+					const char *error, void *user_data)
+{
+	update_peers(iter);
+	return 0;
+}
+
 static void add_technology_id(const char *path)
 {
 	g_hash_table_replace(technology_hash, g_strdup(path),
@@ -2181,6 +2462,13 @@ static DBusHandlerResult monitor_completions_changed(
 	}
 
 	if (dbus_message_is_signal(message, "net.connman.Manager",
+						"PeersChanged")) {
+		dbus_message_iter_init(message, &iter);
+		update_peers(&iter);
+		return handled;
+	}
+
+	if (dbus_message_is_signal(message, "net.connman.Manager",
 					"TechnologyAdded")) {
 		dbus_message_iter_init(message, &iter);
 		add_technology(&iter);
@@ -2231,6 +2519,9 @@ void __connmanctl_monitor_completions(DBusConnection *dbus_conn)
 	service_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
 								g_free, NULL);
 
+	peer_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
+								g_free, NULL);
+
 	technology_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
 								g_free, NULL);
 
@@ -2238,6 +2529,11 @@ void __connmanctl_monitor_completions(DBusConnection *dbus_conn)
 				CONNMAN_SERVICE, CONNMAN_PATH,
 				"net.connman.Manager", "GetServices",
 				populate_service_hash, NULL, NULL, NULL);
+
+	__connmanctl_dbus_method_call(connection,
+				CONNMAN_SERVICE, CONNMAN_PATH,
+				"net.connman.Manager", "GetPeers",
+				populate_peer_hash, NULL, NULL, NULL);
 
 	__connmanctl_dbus_method_call(connection,
 				CONNMAN_SERVICE, CONNMAN_PATH,

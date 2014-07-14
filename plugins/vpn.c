@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -194,8 +194,10 @@ static void resolv_result(GResolvResultStatus status,
 	DBG("status %d", status);
 
 	if (status == G_RESOLV_RESULT_STATUS_SUCCESS && results &&
-						g_strv_length(results) > 0)
+						g_strv_length(results) > 0) {
+		g_strfreev(data->host_ip);
 		data->host_ip = g_strdupv(results);
+	}
 
 	/*
 	 * We cannot unref the resolver here as resolv struct is manipulated
