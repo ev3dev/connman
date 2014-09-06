@@ -34,6 +34,7 @@ extern "C" {
 
 struct connman_ipaddress;
 
+unsigned char connman_ipaddress_calc_netmask_len(const char *netmask);
 struct connman_ipaddress *connman_ipaddress_alloc(int family);
 void connman_ipaddress_free(struct connman_ipaddress *ipaddress);
 int connman_ipaddress_set_ipv4(struct connman_ipaddress *ipaddress,
@@ -43,11 +44,14 @@ int connman_ipaddress_set_ipv6(struct connman_ipaddress *ipaddress,
 				const char *address,
 				unsigned char prefix_length,
 				const char *gateway);
+int connman_ipaddress_get_ip(struct connman_ipaddress *ipaddress,
+			const char **address, unsigned char *prefix_length);
 void connman_ipaddress_set_peer(struct connman_ipaddress *ipaddress,
 				const char *peer);
 void connman_ipaddress_clear(struct connman_ipaddress *ipaddress);
 void connman_ipaddress_copy_address(struct connman_ipaddress *ipaddress,
 					struct connman_ipaddress *source);
+struct connman_ipaddress *connman_ipaddress_copy(struct connman_ipaddress *ipaddress);
 
 #ifdef __cplusplus
 }

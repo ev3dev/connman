@@ -356,8 +356,7 @@ static int dns_name_length(unsigned char *buf)
 static void update_cached_ttl(unsigned char *buf, int len, int new_ttl)
 {
 	unsigned char *c;
-	uint32_t *i;
-	uint16_t *w;
+	uint16_t w;
 	int l;
 
 	/* skip the header */
@@ -387,17 +386,19 @@ static void update_cached_ttl(unsigned char *buf, int len, int new_ttl)
 			break;
 
 		/* now the 4 byte TTL field */
-		i = (uint32_t *)c;
-		*i = htonl(new_ttl);
+		c[0] = new_ttl >> 24 & 0xff;
+		c[1] = new_ttl >> 16 & 0xff;
+		c[2] = new_ttl >> 8 & 0xff;
+		c[3] = new_ttl & 0xff;
 		c += 4;
 		len -= 4;
 		if (len < 0)
 			break;
 
 		/* now the 2 byte rdlen field */
-		w = (uint16_t *)c;
-		c += ntohs(*w) + 2;
-		len -= ntohs(*w) + 2;
+		w = c[0] << 8 | c[1];
+		c += w + 2;
+		len -= w + 2;
 	}
 }
 
@@ -435,7 +436,7 @@ static void send_cached_response(int sk, unsigned char *buf, int len,
 
 	hdr->id = id;
 	hdr->qr = 1;
-	hdr->rcode = 0;
+	hdr->rcode = ns_r_noerror;
 	hdr->ancount = htons(answers);
 	hdr->nscount = 0;
 	hdr->arcount = 0;
@@ -482,7 +483,7 @@ static void send_response(int sk, unsigned char *buf, int len,
 	DBG("id 0x%04x qr %d opcode %d", hdr->id, hdr->qr, hdr->opcode);
 
 	hdr->qr = 1;
-	hdr->rcode = 2;
+	hdr->rcode = ns_r_servfail;
 
 	hdr->ancount = 0;
 	hdr->nscount = 0;
@@ -1344,7 +1345,6 @@ static void cache_refresh(void)
 static int reply_query_type(unsigned char *msg, int len)
 {
 	unsigned char *c;
-	uint16_t *w;
 	int l;
 	int type;
 
@@ -1358,8 +1358,7 @@ static int reply_query_type(unsigned char *msg, int len)
 	/* now the query, which is a name and 2 16 bit words */
 	l = dns_name_length(c) + 1;
 	c += l;
-	w = (uint16_t *) c;
-	type = ntohs(*w);
+	type = c[0] << 8 | c[1];
 
 	return type;
 }
@@ -1401,7 +1400,7 @@ static int cache_update(struct server_data *srv, unsigned char *msg,
 	DBG("offset %d hdr %p msg %p rcode %d", offset, hdr, msg, hdr->rcode);
 
 	/* Continue only if response code is 0 (=ok) */
-	if (hdr->rcode != 0)
+	if (hdr->rcode != ns_r_noerror)
 		return 0;
 
 	if (!cache)
@@ -1760,14 +1759,11 @@ static char *uncompress(int16_t field_count, char *start, char *end,
 		int pos;		/* position in compressed string */
 		char name[NS_MAXLABEL]; /* tmp label */
 		uint16_t dns_type, dns_class;
+		int comp_pos;
 
-		pos = dn_expand((const u_char *)start, (u_char *)end,
-				(u_char *)ptr, name, NS_MAXLABEL);
-		if (pos < 0) {
-			DBG("uncompress error [%d/%s]", errno,
-				strerror(errno));
+		if (!convert_label(start, end, ptr, name, NS_MAXLABEL,
+					&pos, &comp_pos))
 			goto out;
-		}
 
 		/*
 		 * Copy the uncompressed resource record, type, class and \0 to
@@ -1775,7 +1771,6 @@ static char *uncompress(int16_t field_count, char *start, char *end,
 		 */
 
 		ulen = strlen(name);
-		*uptr++ = ulen;
 		strncpy(uptr, name, uncomp_len - (uptr - uncompressed));
 
 		DBG("pos %d ulen %d left %d name %s", pos, ulen,
@@ -1807,8 +1802,6 @@ static char *uncompress(int16_t field_count, char *start, char *end,
 		 * so we need to uncompress it also when necessary.
 		 */
 		if (dns_type == ns_t_cname) {
-			int comp_pos;
-
 			if (!convert_label(start, end, ptr, uptr,
 					uncomp_len - (uptr - uncompressed),
 						&pos, &comp_pos))
@@ -1833,7 +1826,6 @@ static char *uncompress(int16_t field_count, char *start, char *end,
 			ptr += dlen;
 
 		} else if (dns_type == ns_t_soa) {
-			int comp_pos;
 			int total_len = 0;
 			char *len_ptr;
 
@@ -1884,6 +1876,45 @@ out:
 	return NULL;
 }
 
+static int strip_domains(char *name, char *answers, int maxlen)
+{
+	uint16_t data_len;
+	int name_len = strlen(name);
+	char *ptr, *start = answers, *end = answers + maxlen;
+
+	while (maxlen > 0) {
+		ptr = strstr(answers, name);
+		if (ptr) {
+			char *domain = ptr + name_len;
+
+			if (*domain) {
+				int domain_len = strlen(domain);
+
+				memmove(answers + name_len,
+					domain + domain_len,
+					end - (domain + domain_len));
+
+				end -= domain_len;
+				maxlen -= domain_len;
+			}
+		}
+
+		answers += strlen(answers) + 1;
+		answers += 2 + 2 + 4;  /* skip type, class and ttl fields */
+
+		data_len = answers[0] << 8 | answers[1];
+		answers += 2; /* skip the length field */
+
+		if (answers + data_len > end)
+			return -EINVAL;
+
+		answers += data_len;
+		maxlen -= answers - ptr;
+	}
+
+	return end - start;
+}
+
 static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 				struct server_data *data)
 {
@@ -1911,7 +1942,7 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 
 	req->numresp++;
 
-	if (hdr->rcode == 0 || !req->resp) {
+	if (hdr->rcode == ns_r_noerror || !req->resp) {
 		unsigned char *new_reply = NULL;
 
 		/*
@@ -1979,6 +2010,8 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 			 */
 			if (domain_len > 0) {
 				int len = host_len + 1;
+				int new_len, fixed_len;
+				char *answers;
 
 				/*
 				 * First copy host (without domain name) into
@@ -2001,6 +2034,8 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 				 */
 				ptr += NS_QFIXEDSZ;
 				uptr += NS_QFIXEDSZ;
+				answers = uptr;
+				fixed_len = answers - uncompressed;
 
 				/*
 				 * We then uncompress the result to buffer
@@ -2032,22 +2067,39 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 					goto out;
 
 				/*
+				 * The uncompressed buffer now contains almost
+				 * valid response. Final step is to get rid of
+				 * the domain name because at least glibc
+				 * gethostbyname() implementation does extra
+				 * checks and expects to find an answer without
+				 * domain name if we asked a query without
+				 * domain part. Note that glibc getaddrinfo()
+				 * works differently and accepts FQDN in answer
+				 */
+				new_len = strip_domains(uncompressed, answers,
+							uptr - answers);
+				if (new_len < 0) {
+					DBG("Corrupted packet");
+					return -EINVAL;
+				}
+
+				/*
 				 * Because we have now uncompressed the answers
-				 * we must create a bigger buffer to hold all
-				 * that data.
+				 * we might have to create a bigger buffer to
+				 * hold all that data.
 				 */
 
-				new_reply = g_try_malloc(header_len +
-							uptr - uncompressed);
+				reply_len = header_len + new_len + fixed_len;
+
+				new_reply = g_try_malloc(reply_len);
 				if (!new_reply)
 					return -ENOMEM;
 
 				memcpy(new_reply, reply, header_len);
 				memcpy(new_reply + header_len, uncompressed,
-					uptr - uncompressed);
+					new_len + fixed_len);
 
 				reply = new_reply;
-				reply_len = header_len + uptr - uncompressed;
 			}
 		}
 
@@ -2068,8 +2120,13 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 	}
 
 out:
-	if (hdr->rcode > 0 && req->numresp < req->numserv)
-		return -EINVAL;
+	if (req->numresp < req->numserv) {
+		if (hdr->rcode > ns_r_noerror) {
+			return -EINVAL;
+		} else if (hdr->ancount == 0 && req->append_domain) {
+			return -EINVAL;
+		}
+	}
 
 	request_list = g_slist_remove(request_list, req);
 

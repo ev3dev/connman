@@ -3,7 +3,7 @@
  *  Connection Manager
  *
  *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
- *  Copyright (C) 2010  BMW Car IT GmbH. All rights reserved.
+ *  Copyright (C) 2010,2012-2014  BMW Car IT GmbH.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -83,7 +83,9 @@ int main(int argc, char *argv[])
 	reason = getenv("script_type");
 
 	if (!busname || !interface || !path || !reason) {
-		print("Required environment variables not set");
+		print("Required environment variables not set; "
+			"bus=%s iface=%s path=%s reason=%s",
+			busname, interface, path, reason);
 		ret = 1;
 		goto out;
 	}

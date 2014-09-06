@@ -33,6 +33,29 @@
 
 #include "connman.h"
 
+unsigned char connman_ipaddress_calc_netmask_len(const char *netmask)
+{
+	unsigned char bits;
+	in_addr_t mask;
+	in_addr_t host;
+
+	if (!netmask)
+		return 32;
+
+	mask = inet_network(netmask);
+	host = ~mask;
+
+	/* a valid netmask must be 2^n - 1 */
+	if ((host & (host + 1)) != 0)
+		return -1;
+
+	bits = 0;
+	for (; mask; mask <<= 1)
+		++bits;
+
+	return bits;
+}
+
 struct connman_ipaddress *connman_ipaddress_alloc(int family)
 {
 	struct connman_ipaddress *ipaddress;
@@ -61,29 +84,6 @@ void connman_ipaddress_free(struct connman_ipaddress *ipaddress)
 	g_free(ipaddress->local);
 	g_free(ipaddress->gateway);
 	g_free(ipaddress);
-}
-
-unsigned char __connman_ipaddress_netmask_prefix_len(const char *netmask)
-{
-	unsigned char bits;
-	in_addr_t mask;
-	in_addr_t host;
-
-	if (!netmask)
-		return 32;
-
-	mask = inet_network(netmask);
-	host = ~mask;
-
-	/* a valid netmask must be 2^n - 1 */
-	if ((host & (host + 1)) != 0)
-		return -1;
-
-	bits = 0;
-	for (; mask; mask <<= 1)
-		++bits;
-
-	return bits;
 }
 
 static bool check_ipv6_address(const char *address)
@@ -128,6 +128,19 @@ int connman_ipaddress_set_ipv6(struct connman_ipaddress *ipaddress,
 	return 0;
 }
 
+int connman_ipaddress_get_ip(struct connman_ipaddress *ipaddress,
+			const char **address,
+			unsigned char *netmask_prefix_length)
+{
+	if (!ipaddress)
+		return -EINVAL;
+
+	*netmask_prefix_length = ipaddress->prefixlen;
+	*address = ipaddress->local;
+
+	return 0;
+}
+
 int connman_ipaddress_set_ipv4(struct connman_ipaddress *ipaddress,
 		const char *address, const char *netmask, const char *gateway)
 {
@@ -136,7 +149,7 @@ int connman_ipaddress_set_ipv4(struct connman_ipaddress *ipaddress,
 
 	ipaddress->family = AF_INET;
 
-	ipaddress->prefixlen = __connman_ipaddress_netmask_prefix_len(netmask);
+	ipaddress->prefixlen = connman_ipaddress_calc_netmask_len(netmask);
 
 	g_free(ipaddress->local);
 	ipaddress->local = g_strdup(address);
@@ -179,8 +192,7 @@ void connman_ipaddress_clear(struct connman_ipaddress *ipaddress)
 
 /*
  * Note that this copy function only copies the actual address and
- * prefixlen. If you need full copy of ipaddress struct, then you need
- * to create a new function that does that.
+ * prefixlen. Use the other copy function to copy the whole struct.
  */
 void connman_ipaddress_copy_address(struct connman_ipaddress *ipaddress,
 					struct connman_ipaddress *source)
@@ -193,4 +205,24 @@ void connman_ipaddress_copy_address(struct connman_ipaddress *ipaddress,
 
 	g_free(ipaddress->local);
 	ipaddress->local = g_strdup(source->local);
+}
+
+struct connman_ipaddress *
+connman_ipaddress_copy(struct connman_ipaddress *ipaddress)
+{
+	struct connman_ipaddress *copy;
+
+	if (!ipaddress)
+		return NULL;
+
+	copy = g_new0(struct connman_ipaddress, 1);
+
+	copy->family = ipaddress->family;
+	copy->prefixlen = ipaddress->prefixlen;
+	copy->local = g_strdup(ipaddress->local);
+	copy->peer = g_strdup(ipaddress->peer);
+	copy->broadcast = g_strdup(ipaddress->broadcast);
+	copy->gateway = g_strdup(ipaddress->gateway);
+
+	return copy;
 }

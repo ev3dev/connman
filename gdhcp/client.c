@@ -47,11 +47,11 @@
 #include "common.h"
 #include "ipv4ll.h"
 
-#define DISCOVER_TIMEOUT 3
-#define DISCOVER_RETRIES 10
+#define DISCOVER_TIMEOUT 5
+#define DISCOVER_RETRIES 6
 
-#define REQUEST_TIMEOUT 3
-#define REQUEST_RETRIES 5
+#define REQUEST_TIMEOUT 5
+#define REQUEST_RETRIES 3
 
 typedef enum _listen_mode {
 	L_NONE,
@@ -484,13 +484,13 @@ static int send_request(GDHCPClient *dhcp_client)
 
 	add_send_options(dhcp_client, &packet);
 
-	if (dhcp_client->state == RENEWING) {
+	if (dhcp_client->state == RENEWING || dhcp_client->state == REBINDING)
 		packet.ciaddr = htonl(dhcp_client->requested_ip);
 
+	if (dhcp_client->state == RENEWING)
 		return dhcp_send_kernel_packet(&packet,
 				dhcp_client->requested_ip, CLIENT_PORT,
 				dhcp_client->server_ip, SERVER_PORT);
-	}
 
 	return dhcp_send_raw_packet(&packet, INADDR_ANY, CLIENT_PORT,
 					INADDR_BROADCAST, SERVER_PORT,
@@ -2365,6 +2365,12 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 
 			g_free(dhcp_client->assigned_ip);
 			dhcp_client->assigned_ip = get_ip(packet.yiaddr);
+
+			if (dhcp_client->state == REBOOTING) {
+				option = dhcp_get_option(&packet,
+							DHCP_SERVER_ID);
+				dhcp_client->server_ip = get_be32(option);
+			}
 
 			/* Address should be set up here */
 			if (dhcp_client->lease_available_cb)

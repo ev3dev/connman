@@ -54,6 +54,7 @@
 #include <connman/storage.h>
 #include <include/setting.h>
 #include <connman/provision.h>
+#include <connman/utsname.h>
 
 #include <gsupplicant/gsupplicant.h>
 
@@ -65,6 +66,7 @@
 #define AUTOSCAN_DEFAULT "exponential:3:300"
 
 #define P2P_FIND_TIMEOUT 30
+#define P2P_CONNECTION_TIMEOUT 100
 
 static struct connman_technology *wifi_technology = NULL;
 static struct connman_technology *p2p_technology = NULL;
@@ -117,9 +119,16 @@ struct wifi_data {
 
 	GSupplicantScanParams *scan_params;
 	unsigned int p2p_find_timeout;
+	unsigned int p2p_connection_timeout;
+	struct connman_peer *pending_peer;
+	bool p2p_connecting;
+	bool p2p_device;
 };
 
 static GList *iface_list = NULL;
+
+static GList *pending_wifi_device = NULL;
+static GList *p2p_iface_list = NULL;
 
 static void start_autoscan(struct connman_device *device);
 
@@ -140,6 +149,198 @@ static struct connman_technology_driver p2p_tech_driver = {
 	.type		= CONNMAN_SERVICE_TYPE_P2P,
 	.probe		= p2p_tech_probe,
 	.remove		= p2p_tech_remove,
+};
+
+static bool is_p2p_connecting(void)
+{
+	GList *list;
+
+	for (list = iface_list; list; list = list->next) {
+		struct wifi_data *wifi = list->data;
+
+		if (wifi->p2p_connecting)
+			return true;
+	}
+
+	return false;
+}
+
+static void add_pending_wifi_device(struct wifi_data *wifi)
+{
+	if (g_list_find(pending_wifi_device, wifi))
+		return;
+
+	pending_wifi_device = g_list_append(pending_wifi_device, wifi);
+}
+
+static struct wifi_data *get_pending_wifi_data(const char *ifname)
+{
+	GList *list;
+
+	for (list = pending_wifi_device; list; list = list->next) {
+		struct wifi_data *wifi;
+		const char *dev_name;
+
+		wifi = list->data;
+		if (!wifi)
+			continue;
+
+		dev_name = connman_device_get_string(wifi->device, "Interface");
+		if (!g_strcmp0(ifname, dev_name)) {
+			pending_wifi_device = g_list_delete_link(
+						pending_wifi_device, list);
+			return wifi;
+		}
+	}
+
+	return NULL;
+}
+
+static void peer_cancel_timeout(struct wifi_data *wifi)
+{
+	if (wifi->p2p_connection_timeout > 0)
+		g_source_remove(wifi->p2p_connection_timeout);
+	wifi->p2p_connection_timeout = 0;
+	wifi->p2p_connecting = false;
+	connman_peer_unref(wifi->pending_peer);
+	wifi->pending_peer = NULL;
+}
+
+static gboolean peer_connect_timeout(gpointer data)
+{
+	struct wifi_data *wifi = data;
+
+	if (wifi->p2p_connecting)
+		connman_peer_set_state(wifi->pending_peer,
+					CONNMAN_PEER_STATE_FAILURE);
+	peer_cancel_timeout(wifi);
+
+	return FALSE;
+}
+
+static void peer_connect_callback(int result, GSupplicantInterface *interface,
+							void *user_data)
+{
+	struct wifi_data *wifi = user_data;
+	struct connman_peer *peer = wifi->pending_peer;
+
+	DBG("peer %p - %d", peer, result);
+
+	if (!peer)
+		return;
+
+	if (result < 0) {
+		connman_peer_set_state(peer, CONNMAN_PEER_STATE_FAILURE);
+		return;
+	}
+
+	connman_peer_set_state(peer, CONNMAN_PEER_STATE_ASSOCIATION);
+
+	wifi->p2p_connection_timeout = g_timeout_add_seconds(
+						P2P_CONNECTION_TIMEOUT,
+						peer_connect_timeout, wifi);
+}
+
+static int peer_connect(struct connman_peer *peer,
+			enum connman_peer_wps_method wps_method,
+			const char *wps_pin)
+{
+	struct connman_device *device = connman_peer_get_device(peer);
+	GSupplicantPeerParams *peer_params;
+	GSupplicantPeer *gs_peer;
+	struct wifi_data *wifi;
+	bool pbc, pin;
+	int ret;
+
+	DBG("peer %p", peer);
+
+	if (!device)
+		return -ENODEV;
+
+	wifi = connman_device_get_data(device);
+	if (!wifi)
+		return -ENODEV;
+
+	if (wifi->p2p_connecting)
+		return -EBUSY;
+
+	gs_peer = g_supplicant_interface_peer_lookup(wifi->interface,
+					connman_peer_get_identifier(peer));
+	if (!gs_peer)
+		return -EINVAL;
+
+	pbc = g_supplicant_peer_is_wps_pbc(gs_peer);
+	pin = g_supplicant_peer_is_wps_pin(gs_peer);
+
+	switch (wps_method) {
+	case CONNMAN_PEER_WPS_UNKNOWN:
+		if ((pbc && pin) || pin)
+			return -ENOKEY;
+		break;
+	case CONNMAN_PEER_WPS_PBC:
+		if (!pbc)
+			return -EINVAL;
+		wps_pin = NULL;
+		break;
+	case CONNMAN_PEER_WPS_PIN:
+		if (!pin || !wps_pin)
+			return -EINVAL;
+		break;
+	}
+
+	peer_params = g_try_malloc0(sizeof(GSupplicantPeerParams));
+	if (!peer_params)
+		return -ENOMEM;
+
+	peer_params->path = g_strdup(g_supplicant_peer_get_path(gs_peer));
+	if (wps_pin)
+		peer_params->wps_pin = g_strdup(wps_pin);
+
+	ret = g_supplicant_interface_p2p_connect(wifi->interface, peer_params,
+						peer_connect_callback, wifi);
+	if (ret == -EINPROGRESS) {
+		wifi->pending_peer = connman_peer_ref(peer);
+		wifi->p2p_connecting = true;
+	} else if (ret < 0)
+		g_free(peer_params);
+
+	return ret;
+}
+
+static int peer_disconnect(struct connman_peer *peer)
+{
+	struct connman_device *device = connman_peer_get_device(peer);
+	GSupplicantPeerParams peer_params = {};
+	GSupplicantPeer *gs_peer;
+	struct wifi_data *wifi;
+	int ret;
+
+	DBG("peer %p", peer);
+
+	if (!device)
+		return -ENODEV;
+
+	wifi = connman_device_get_data(device);
+	if (!wifi)
+		return -ENODEV;
+
+	gs_peer = g_supplicant_interface_peer_lookup(wifi->interface,
+					connman_peer_get_identifier(peer));
+	if (!gs_peer)
+		return -EINVAL;
+
+	peer_params.path = g_strdup(g_supplicant_peer_get_path(gs_peer));
+
+	ret = g_supplicant_interface_p2p_disconnect(wifi->interface,
+							&peer_params);
+	g_free(peer_params.path);
+
+	return ret;
+}
+
+static struct connman_peer_driver peer_driver = {
+	.connect    = peer_connect,
+	.disconnect = peer_disconnect,
 };
 
 static void handle_tethering(struct wifi_data *wifi)
@@ -210,8 +411,10 @@ static int wifi_probe(struct connman_device *device)
 
 	wifi->watch = connman_rtnl_add_newlink_watch(wifi->index,
 							wifi_newlink, device);
-
-	iface_list = g_list_append(iface_list, wifi);
+	if (is_p2p_connecting())
+		add_pending_wifi_device(wifi);
+	else
+		iface_list = g_list_append(iface_list, wifi);
 
 	return 0;
 }
@@ -280,8 +483,10 @@ static void check_p2p_technology(void)
 			p2p_exists = true;
 	}
 
-	if (!p2p_exists)
+	if (!p2p_exists) {
 		connman_technology_driver_unregister(&p2p_tech_driver);
+		connman_peer_driver_unregister(&peer_driver);
+	}
 }
 
 static void wifi_remove(struct connman_device *device)
@@ -295,7 +500,10 @@ static void wifi_remove(struct connman_device *device)
 
 	stop_autoscan(device);
 
-	iface_list = g_list_remove(iface_list, wifi);
+	if (wifi->p2p_device)
+		p2p_iface_list = g_list_remove(p2p_iface_list, wifi);
+	else
+		iface_list = g_list_remove(iface_list, wifi);
 
 	check_p2p_technology();
 
@@ -303,6 +511,9 @@ static void wifi_remove(struct connman_device *device)
 		g_source_remove(wifi->p2p_find_timeout);
 		connman_device_unref(wifi->device);
 	}
+
+	if (wifi->p2p_connection_timeout)
+		g_source_remove(wifi->p2p_connection_timeout);
 
 	remove_networks(device, wifi);
 
@@ -312,6 +523,8 @@ static void wifi_remove(struct connman_device *device)
 	connman_rtnl_remove_watch(wifi->watch);
 
 	g_supplicant_interface_set_data(wifi->interface, NULL);
+
+	g_supplicant_interface_cancel(wifi->interface);
 
 	if (wifi->scan_params)
 		g_supplicant_free_scan_params(wifi->scan_params);
@@ -787,6 +1000,9 @@ static void start_autoscan(struct connman_device *device)
 	if (!wifi)
 		return;
 
+	if (wifi->p2p_device)
+		return;
+
 	autoscan = wifi->autoscan;
 	if (!autoscan)
 		return;
@@ -871,6 +1087,9 @@ static void finalize_interface_creation(struct wifi_data *wifi)
 	if (!connman_setting_get_bool("BackgroundScanning"))
 		return;
 
+	if (wifi->p2p_device)
+		return;
+
 	/* Setting up automatic scanning */
 	if (g_supplicant_interface_autoscan(interface, AUTOSCAN_DEFAULT,
 				interface_autoscan_callback, wifi) < 0) {
@@ -915,6 +1134,9 @@ static int wifi_enable(struct connman_device *device)
 	if (!wifi || index < 0)
 		return -ENODEV;
 
+	if (is_p2p_connecting())
+		return -EINPROGRESS;
+
 	interface = connman_inet_ifname(index);
 	ret = g_supplicant_interface_create(interface, driver, NULL,
 						interface_create_callback,
@@ -948,6 +1170,7 @@ static int wifi_disable(struct connman_device *device)
 	if (wifi->p2p_find_timeout) {
 		g_source_remove(wifi->p2p_find_timeout);
 		wifi->p2p_find_timeout = 0;
+		connman_device_set_scanning(device, CONNMAN_SERVICE_TYPE_P2P, false);
 		connman_device_unref(wifi->device);
 	}
 
@@ -1153,13 +1376,18 @@ error:
 
 static int p2p_find(struct connman_device *device)
 {
-	struct wifi_data *wifi = connman_device_get_data(device);
+	struct wifi_data *wifi;
 	int ret;
 
 	DBG("");
 
 	if (!p2p_technology)
 		return -ENOTSUP;
+
+	wifi = connman_device_get_data(device);
+
+	if (g_supplicant_interface_is_p2p_finding(wifi->interface))
+		return -EALREADY;
 
 	reset_autoscan(device);
 	connman_device_ref(device);
@@ -1198,6 +1426,9 @@ static int wifi_scan(enum connman_service_type type,
 
 	if (!wifi)
 		return -ENODEV;
+
+	if (wifi->p2p_device)
+		return 0;
 
 	if (type == CONNMAN_SERVICE_TYPE_P2P)
 		return p2p_find(device);
@@ -1588,14 +1819,15 @@ static void interface_added(GSupplicantInterface *interface)
 	struct wifi_data *wifi;
 
 	wifi = g_supplicant_interface_get_data(interface);
+	if (!wifi) {
+		wifi = get_pending_wifi_data(ifname);
+		if (!wifi)
+			return;
 
-	/*
-	 * We can get here with a NULL wifi pointer when
-	 * the interface added signal is sent before the
-	 * interface creation callback is called.
-	 */
-	if (!wifi)
-		return;
+		g_supplicant_interface_set_data(interface, wifi);
+		p2p_iface_list = g_list_append(p2p_iface_list, wifi);
+		wifi->p2p_device = true;
+	}
 
 	DBG("ifname %s driver %s wifi %p tethering %d",
 			ifname, driver, wifi, wifi->tethering);
@@ -1606,9 +1838,6 @@ static void interface_added(GSupplicantInterface *interface)
 	}
 
 	connman_device_set_powered(wifi->device, true);
-
-	if (wifi->tethering)
-		return;
 }
 
 static bool is_idle(struct wifi_data *wifi)
@@ -1890,13 +2119,24 @@ static void interface_removed(GSupplicantInterface *interface)
 
 static void p2p_support(GSupplicantInterface *interface)
 {
+	const char *hostname;
+
 	DBG("");
 
 	if (!g_supplicant_interface_has_p2p(interface))
 		return;
 
-	if (connman_technology_driver_register(&p2p_tech_driver) == 0)
+	if (connman_technology_driver_register(&p2p_tech_driver) < 0) {
 		DBG("Could not register P2P technology driver");
+		return;
+	}
+
+	hostname = connman_utsname_get_hostname();
+	if (!hostname)
+		hostname = "ConnMan";
+
+	g_supplicant_interface_set_p2p_device_config(interface, hostname);
+	connman_peer_driver_register(&peer_driver);
 }
 
 static void scan_started(GSupplicantInterface *interface)
@@ -2074,26 +2314,63 @@ static void network_changed(GSupplicantNetwork *network, const char *property)
 
 static void peer_found(GSupplicantPeer *peer)
 {
+	GSupplicantInterface *iface = g_supplicant_peer_get_interface(peer);
+	struct wifi_data *wifi = g_supplicant_interface_get_data(iface);
 	struct connman_peer *connman_peer;
 	const char *identifier, *name;
+	int ret;
 
 	identifier = g_supplicant_peer_get_identifier(peer);
 	name = g_supplicant_peer_get_name(peer);
 
 	DBG("ident: %s", identifier);
 
-	connman_peer = connman_peer_get(identifier);
+	connman_peer = connman_peer_get(wifi->device, identifier);
 	if (connman_peer)
 		return;
 
 	connman_peer = connman_peer_create(identifier);
 	connman_peer_set_name(connman_peer, name);
+	connman_peer_set_device(connman_peer, wifi->device);
 
-	connman_peer_register(connman_peer);
+	ret = connman_peer_register(connman_peer);
+	if (ret < 0 && ret != -EALREADY)
+		connman_peer_unref(connman_peer);
 }
 
 static void peer_lost(GSupplicantPeer *peer)
 {
+	GSupplicantInterface *iface = g_supplicant_peer_get_interface(peer);
+	struct wifi_data *wifi = g_supplicant_interface_get_data(iface);
+	struct connman_peer *connman_peer;
+	const char *identifier;
+
+	if (!wifi)
+		return;
+
+	identifier = g_supplicant_peer_get_identifier(peer);
+
+	DBG("ident: %s", identifier);
+
+	connman_peer = connman_peer_get(wifi->device, identifier);
+	if (connman_peer) {
+		if (wifi->p2p_connecting &&
+				wifi->pending_peer == connman_peer) {
+			connman_peer_set_state(connman_peer,
+						CONNMAN_PEER_STATE_FAILURE);
+			peer_cancel_timeout(wifi);
+		}
+		connman_peer_unregister(connman_peer);
+		connman_peer_unref(connman_peer);
+	}
+}
+
+static void peer_changed(GSupplicantPeer *peer,
+					GSupplicantPeerGroupState state)
+{
+	GSupplicantInterface *iface = g_supplicant_peer_get_interface(peer);
+	struct wifi_data *wifi = g_supplicant_interface_get_data(iface);
+	enum connman_peer_state p_state = CONNMAN_PEER_STATE_UNKNOWN;
 	struct connman_peer *connman_peer;
 	const char *identifier;
 
@@ -2101,9 +2378,65 @@ static void peer_lost(GSupplicantPeer *peer)
 
 	DBG("ident: %s", identifier);
 
-	connman_peer = connman_peer_get(identifier);
-	if (connman_peer)
-		connman_peer_unregister(connman_peer);
+	connman_peer = connman_peer_get(wifi->device, identifier);
+	if (!connman_peer)
+		return;
+
+	switch (state) {
+	case G_SUPPLICANT_PEER_GROUP_CHANGED:
+		if (!g_supplicant_peer_is_in_a_group(peer))
+			p_state = CONNMAN_PEER_STATE_IDLE;
+		else
+			p_state = CONNMAN_PEER_STATE_CONFIGURATION;
+		break;
+	case G_SUPPLICANT_PEER_GROUP_STARTED:
+		break;
+	case G_SUPPLICANT_PEER_GROUP_FINISHED:
+		p_state = CONNMAN_PEER_STATE_IDLE;
+		break;
+	case G_SUPPLICANT_PEER_GROUP_JOINED:
+		if (!g_supplicant_peer_is_in_a_group(peer))
+			break;
+		p_state = CONNMAN_PEER_STATE_READY;
+		break;
+	case G_SUPPLICANT_PEER_GROUP_DISCONNECTED:
+		p_state = CONNMAN_PEER_STATE_IDLE;
+		break;
+	case G_SUPPLICANT_PEER_GROUP_FAILED:
+		p_state = CONNMAN_PEER_STATE_FAILURE;
+		break;
+	}
+
+	if (p_state == CONNMAN_PEER_STATE_CONFIGURATION ||
+					p_state == CONNMAN_PEER_STATE_FAILURE) {
+		if (wifi->p2p_connecting
+				&& connman_peer == wifi->pending_peer)
+			peer_cancel_timeout(wifi);
+		else
+			p_state = CONNMAN_PEER_STATE_UNKNOWN;
+	}
+
+	if (p_state == CONNMAN_PEER_STATE_UNKNOWN)
+		return;
+
+	if (p_state == CONNMAN_PEER_STATE_CONFIGURATION) {
+		GSupplicantInterface *g_iface;
+		struct wifi_data *g_wifi;
+
+		g_iface = g_supplicant_peer_get_group_interface(peer);
+		if (!g_iface)
+			return;
+
+		g_wifi = g_supplicant_interface_get_data(g_iface);
+		if (!g_wifi)
+			return;
+
+		connman_peer_set_as_master(connman_peer,
+					!g_supplicant_peer_is_client(peer));
+		connman_peer_set_sub_device(connman_peer, g_wifi->device);
+	}
+
+	connman_peer_set_state(connman_peer, p_state);
 }
 
 static void debug(const char *str)
@@ -2126,6 +2459,7 @@ static const GSupplicantCallbacks callbacks = {
 	.network_changed	= network_changed,
 	.peer_found		= peer_found,
 	.peer_lost		= peer_lost,
+	.peer_changed		= peer_changed,
 	.debug			= debug,
 };
 

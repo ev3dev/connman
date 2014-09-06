@@ -350,6 +350,9 @@ static void report_error_reply(DBusMessage *reply, void *user_data)
 	bool retry = false;
 	const char *dbus_err;
 
+	if (!reply)
+		goto out;
+
 	if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
 		dbus_err = dbus_message_get_error_name(reply);
 		if (dbus_err &&
@@ -360,11 +363,12 @@ static void report_error_reply(DBusMessage *reply, void *user_data)
 
 	report_error->callback(report_error->user_context, retry,
 			report_error->user_data);
+out:
 	g_free(report_error);
 }
 
-int connman_agent_report_error(void *user_context, const char *path,
-				const char *error,
+int connman_agent_report_error_full(void *user_context, const char *path,
+				const char *method, const char *error,
 				report_error_cb_t callback,
 				const char *dbus_sender, void *user_data)
 {
@@ -383,8 +387,7 @@ int connman_agent_report_error(void *user_context, const char *path,
 		return -ESRCH;
 
 	message = dbus_message_new_method_call(agent->owner, agent->path,
-					CONNMAN_AGENT_INTERFACE,
-					"ReportError");
+					CONNMAN_AGENT_INTERFACE, method);
 	if (!message)
 		return -ENOMEM;
 
@@ -419,6 +422,16 @@ int connman_agent_report_error(void *user_context, const char *path,
 	dbus_message_unref(message);
 
 	return -EINPROGRESS;
+}
+
+int connman_agent_report_error(void *user_context, const char *path,
+				const char *error,
+				report_error_cb_t callback,
+				const char *dbus_sender, void *user_data)
+{
+	return connman_agent_report_error_full(user_context, path,
+				"ReportError", error, callback, dbus_sender,
+				user_data);
 }
 
 static gint compare_priority(gconstpointer a, gconstpointer b)

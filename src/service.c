@@ -3800,50 +3800,17 @@ static void remove_timeout(struct connman_service *service)
 	}
 }
 
-void __connman_service_reply_dbus_pending(DBusMessage *pending, int error,
-					const char *path)
-{
-	if (pending) {
-		if (error > 0) {
-			DBusMessage *reply;
-
-			reply = __connman_error_failed(pending,	error);
-			if (reply)
-				g_dbus_send_message(connection, reply);
-		} else {
-			const char *sender;
-
-			sender = dbus_message_get_interface(pending);
-			if (!path)
-				path = dbus_message_get_path(pending);
-
-			DBG("sender %s path %s", sender, path);
-
-			if (g_strcmp0(sender, CONNMAN_MANAGER_INTERFACE) == 0)
-				g_dbus_send_reply(connection, pending,
-					DBUS_TYPE_OBJECT_PATH, &path,
-							DBUS_TYPE_INVALID);
-			else
-				g_dbus_send_reply(connection, pending,
-							DBUS_TYPE_INVALID);
-		}
-
-		dbus_message_unref(pending);
-	}
-}
-
 static void reply_pending(struct connman_service *service, int error)
 {
 	remove_timeout(service);
 
 	if (service->pending) {
-		__connman_service_reply_dbus_pending(service->pending, error,
-						NULL);
+		connman_dbus_reply_pending(service->pending, error, NULL);
 		service->pending = NULL;
 	}
 
 	if (service->provider_pending) {
-		__connman_service_reply_dbus_pending(service->provider_pending,
+		connman_dbus_reply_pending(service->provider_pending,
 						error, service->path);
 		service->provider_pending = NULL;
 	}
@@ -3955,34 +3922,11 @@ static gboolean connect_timeout(gpointer user_data)
 	return FALSE;
 }
 
-static bool is_interface_available(struct connman_service *service,
-					struct connman_service *other_service)
-{
-	unsigned int index = 0, other_index = 0;
-
-	if (service->ipconfig_ipv4)
-		index =	__connman_ipconfig_get_index(service->ipconfig_ipv4);
-	else if (service->ipconfig_ipv6)
-		index =	__connman_ipconfig_get_index(service->ipconfig_ipv6);
-
-	if (other_service->ipconfig_ipv4)
-		other_index = __connman_ipconfig_get_index(
-						other_service->ipconfig_ipv4);
-	else if (other_service->ipconfig_ipv6)
-		other_index = __connman_ipconfig_get_index(
-						other_service->ipconfig_ipv6);
-
-	if (index > 0 && other_index != index)
-		return true;
-
-	return false;
-}
-
 static DBusMessage *connect_service(DBusConnection *conn,
 					DBusMessage *msg, void *user_data)
 {
 	struct connman_service *service = user_data;
-	int err = 0;
+	int index, err = 0;
 	GList *list;
 
 	DBG("service %p", service);
@@ -3990,27 +3934,27 @@ static DBusMessage *connect_service(DBusConnection *conn,
 	if (service->pending)
 		return __connman_error_in_progress(msg);
 
+	index = __connman_service_get_index(service);
+
 	for (list = service_list; list; list = list->next) {
 		struct connman_service *temp = list->data;
 
-		/*
-		 * We should allow connection if there are available
-		 * interfaces for a given technology type (like having
-		 * more than one wifi card).
-		 */
 		if (!is_connecting(temp) && !is_connected(temp))
 			break;
+
+		if (service == temp)
+			continue;
 
 		if (service->type != temp->type)
 			continue;
 
-		if(!is_interface_available(service, temp)) {
-			if (__connman_service_disconnect(temp) == -EINPROGRESS)
-				err = -EINPROGRESS;
-		}
+		if (__connman_service_get_index(temp) == index &&
+				__connman_service_disconnect(temp) == -EINPROGRESS)
+			err = -EINPROGRESS;
+
 	}
 	if (err == -EINPROGRESS)
-		return __connman_error_in_progress(msg);
+		return __connman_error_operation_timeout(msg);
 
 	service->ignore = false;
 
@@ -4022,8 +3966,10 @@ static DBusMessage *connect_service(DBusConnection *conn,
 	if (err == -EINPROGRESS)
 		return NULL;
 
-	dbus_message_unref(service->pending);
-	service->pending = NULL;
+	if (service->pending) {
+		dbus_message_unref(service->pending);
+		service->pending = NULL;
+	}
 
 	if (err < 0)
 		return __connman_error_failed(msg, -err);
@@ -5062,7 +5008,7 @@ static void report_error_cb(void *user_context, bool retry,
 	else {
 		/* It is not relevant to stay on Failure state
 		 * when failing is due to wrong user input */
-		service->state = CONNMAN_SERVICE_STATE_IDLE;
+		__connman_service_clear_error(service);
 
 		service_complete(service);
 		__connman_connection_update_gateway();
@@ -5427,6 +5373,9 @@ static int service_indicate_state(struct connman_service *service)
 			vpn_auto_connect();
 
 	} else if (new_state == CONNMAN_SERVICE_STATE_DISCONNECT) {
+
+		reply_pending(service, ECONNABORTED);
+
 		def_service = __connman_service_get_default();
 
 		if (!__connman_notifier_is_connected() &&
@@ -5737,9 +5686,6 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 	switch (new_state) {
 	case CONNMAN_SERVICE_STATE_UNKNOWN:
 	case CONNMAN_SERVICE_STATE_IDLE:
-		if (service->state == CONNMAN_SERVICE_STATE_FAILURE)
-			return -EINVAL;
-		break;
 	case CONNMAN_SERVICE_STATE_ASSOCIATION:
 		break;
 	case CONNMAN_SERVICE_STATE_CONFIGURATION:
@@ -5995,12 +5941,22 @@ int __connman_service_connect(struct connman_service *service,
 	case CONNMAN_SERVICE_TYPE_GPS:
 	case CONNMAN_SERVICE_TYPE_P2P:
 		return -EINVAL;
-	default:
-		if (!is_ipconfig_usable(service))
-			return -ENOLINK;
 
-		err = service_connect(service);
+	case CONNMAN_SERVICE_TYPE_ETHERNET:
+	case CONNMAN_SERVICE_TYPE_GADGET:
+	case CONNMAN_SERVICE_TYPE_BLUETOOTH:
+	case CONNMAN_SERVICE_TYPE_CELLULAR:
+	case CONNMAN_SERVICE_TYPE_VPN:
+	case CONNMAN_SERVICE_TYPE_WIFI:
+		break;
 	}
+
+	if (!is_ipconfig_usable(service))
+		return -ENOLINK;
+
+	__connman_service_clear_error(service);
+
+	err = service_connect(service);
 
 	service->connect_reason = reason;
 	if (err >= 0) {

@@ -49,6 +49,7 @@ extern "C" {
 #define G_SUPPLICANT_CAPABILITY_MODE_INFRA	(1 << 0)
 #define G_SUPPLICANT_CAPABILITY_MODE_IBSS		(1 << 1)
 #define G_SUPPLICANT_CAPABILITY_MODE_AP		(1 << 2)
+#define G_SUPPLICANT_CAPABILITY_MODE_P2P	(1 << 3)
 
 #define G_SUPPLICANT_KEYMGMT_NONE		(1 << 0)
 #define G_SUPPLICANT_KEYMGMT_IEEE8021X	(1 << 1)
@@ -77,6 +78,11 @@ extern "C" {
 #define G_SUPPLICANT_WPS_PBC            (1 << 1)
 #define G_SUPPLICANT_WPS_PIN            (1 << 2)
 #define G_SUPPLICANT_WPS_REGISTRAR      (1 << 3)
+
+#define G_SUPPLICANT_WPS_CONFIG_PBC	0x0080
+
+#define G_SUPPLICANT_GROUP_ROLE_CLIENT	(1 << 0)
+#define G_SUPPLICANT_GROUP_ROLE_GO      (1 << 1)
 
 typedef enum {
 	G_SUPPLICANT_MODE_UNKNOWN,
@@ -112,6 +118,15 @@ typedef enum {
 	G_SUPPLICANT_WPS_STATE_SUCCESS,
 	G_SUPPLICANT_WPS_STATE_FAIL,
 } GSupplicantWpsState;
+
+typedef enum {
+	G_SUPPLICANT_PEER_GROUP_CHANGED,
+	G_SUPPLICANT_PEER_GROUP_STARTED,
+	G_SUPPLICANT_PEER_GROUP_FINISHED,
+	G_SUPPLICANT_PEER_GROUP_JOINED,
+	G_SUPPLICANT_PEER_GROUP_DISCONNECTED,
+	G_SUPPLICANT_PEER_GROUP_FAILED,
+} GSupplicantPeerGroupState;
 
 struct _GSupplicantSSID {
 	const void *ssid;
@@ -154,6 +169,13 @@ struct _GSupplicantScanParams {
 
 typedef struct _GSupplicantScanParams GSupplicantScanParams;
 
+struct _GSupplicantPeerParams {
+	char *wps_pin;
+	char *path;
+};
+
+typedef struct _GSupplicantPeerParams GSupplicantPeerParams;
+
 /* global API */
 typedef void (*GSupplicantCountryCallback) (int result,
 						const char *alpha2,
@@ -165,12 +187,16 @@ int g_supplicant_set_country(const char *alpha2,
 
 /* Interface API */
 struct _GSupplicantInterface;
+struct _GSupplicantPeer;
 
 typedef struct _GSupplicantInterface GSupplicantInterface;
+typedef struct _GSupplicantPeer GSupplicantPeer;
 
 typedef void (*GSupplicantInterfaceCallback) (int result,
 					GSupplicantInterface *interface,
 							void *user_data);
+
+void g_supplicant_interface_cancel(GSupplicantInterface *interface);
 
 int g_supplicant_interface_create(const char *ifname, const char *driver,
 					const char *bridge,
@@ -194,6 +220,14 @@ int g_supplicant_interface_p2p_find(GSupplicantInterface *interface,
 							void *user_data);
 
 int g_supplicant_interface_p2p_stop_find(GSupplicantInterface *interface);
+
+int g_supplicant_interface_p2p_connect(GSupplicantInterface *interface,
+					GSupplicantPeerParams *peer_params,
+					GSupplicantInterfaceCallback callback,
+					void *user_data);
+
+int g_supplicant_interface_p2p_disconnect(GSupplicantInterface *interface,
+					GSupplicantPeerParams *peer_params);
 
 int g_supplicant_interface_connect(GSupplicantInterface *interface,
 					GSupplicantSSID *ssid,
@@ -229,13 +263,17 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 							const char *alpha2,
 							void *user_data);
 bool g_supplicant_interface_has_p2p(GSupplicantInterface *interface);
+int g_supplicant_interface_set_p2p_device_config(GSupplicantInterface *interface,
+						const char *device_name);
+GSupplicantPeer *g_supplicant_interface_peer_lookup(GSupplicantInterface *interface,
+						const char *identifier);
 
 /* Network and Peer API */
 struct _GSupplicantNetwork;
-struct _GSupplicantPeer;
+struct _GSupplicantGroup;
 
 typedef struct _GSupplicantNetwork GSupplicantNetwork;
-typedef struct _GSupplicantPeer GSupplicantPeer;
+typedef struct _GSupplicantGroup GSupplicantGroup;
 
 GSupplicantInterface *g_supplicant_network_get_interface(GSupplicantNetwork *network);
 const char *g_supplicant_network_get_name(GSupplicantNetwork *network);
@@ -253,9 +291,16 @@ dbus_bool_t g_supplicant_network_is_wps_pbc(GSupplicantNetwork *network);
 dbus_bool_t g_supplicant_network_is_wps_advertizing(GSupplicantNetwork *network);
 
 GSupplicantInterface *g_supplicant_peer_get_interface(GSupplicantPeer *peer);
+const char *g_supplicant_peer_get_path(GSupplicantPeer *peer);
 const char *g_supplicant_peer_get_identifier(GSupplicantPeer *peer);
 const void *g_supplicant_peer_get_device_address(GSupplicantPeer *peer);
 const char *g_supplicant_peer_get_name(GSupplicantPeer *peer);
+bool g_supplicant_peer_is_wps_pbc(GSupplicantPeer *peer);
+bool g_supplicant_peer_is_wps_pin(GSupplicantPeer *peer);
+bool g_supplicant_peer_is_in_a_group(GSupplicantPeer *peer);
+GSupplicantInterface *g_supplicant_peer_get_group_interface(GSupplicantPeer *peer);
+bool g_supplicant_peer_is_client(GSupplicantPeer *peer);
+bool g_supplicant_interface_is_p2p_finding(GSupplicantInterface *interface);
 
 struct _GSupplicantCallbacks {
 	void (*system_ready) (void);
@@ -272,6 +317,8 @@ struct _GSupplicantCallbacks {
 					const char *property);
 	void (*peer_found) (GSupplicantPeer *peer);
 	void (*peer_lost) (GSupplicantPeer *peer);
+	void (*peer_changed) (GSupplicantPeer *peer,
+					GSupplicantPeerGroupState state);
 	void (*debug) (const char *str);
 };
 
