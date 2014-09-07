@@ -1,3 +1,24 @@
+connman (1.25-0ev3dev1) testing; urgency=medium
+
+  * New upstream release.
+    * Experimental WiFi P2P support enhancements.
+    * Pending D-Bus calls towards wpa_supplicant are now cancelled properly
+      (Hannu Mallat)
+    * Several issues with DHCPv4 and v6 have been fixed by just about everybody
+      active with ConnMan development (Aaron McCarthy, Alexandru Costache,
+      Tomasz Bursztyka, Justin Maggard, Jukka Rissanen, Pasi Sjöholm, Patrik
+      Flykt, Saurav Babu)
+    * VPN IP addresses were not properly set on renegotiation of the VPN
+      connection (Jukka Rissanen)
+    * A few new and interesting WiSPR HTTP status codes have been found and
+      implemented (Pasi Sjöholm)
+    * A few more fixes when appending and removing domain names for DNS queries
+      (Jukka Rissanen) and selecting the best response (Pasi Sjöholm)
+    * Incorrect passphrases are now handled properly when an agent requests a
+      retry and after a reconnect attempt (Patrik Flykt)
+
+ -- David Lechner <david@lechnology.com>  Sat, 06 Sep 2014 20:53:45 -0500
+
 connman (1.24-1ev3dev1) testing; urgency=medium
 
   * New upstream release. 
