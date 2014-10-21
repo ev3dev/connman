@@ -1,3 +1,21 @@
+connman (1.26-0ev3dev1) testing; urgency=medium
+
+  * New upstream release.
+    * Fix issue with missing WiFi security provisioning support.
+    * Fix issue with immutable setting and provisioned services.
+    * Fix issue with scheduling DNS cache cleanup procedure.
+    * Fix issue with IPv6 Privacy setting on service removal.
+    * Fix issue with DHCPv6 CONFIRM message sending procedure.
+    * Fix issue with DHCPv6 lease expiration handling support.
+    * Fix issue with DHCPv4 networks and broadcast flag handling.
+    * Fix issue with DHCPv4 networks without gateway configuration.
+    * Fix issue with P2P Peer authorization handling.
+    * Fix issue with P2P Peer service registration.
+    * Add support for WiFi Display information elements.
+    * Add support for systemd-hostnamed integration.
+
+ -- David Lechner <david@lechnology.com>  Mon, 20 Oct 2014 21:56:08 -0500
+
 connman (1.25-0ev3dev1) testing; urgency=medium
 
   * New upstream release.
