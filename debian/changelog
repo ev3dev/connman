@@ -1,3 +1,10 @@
+connman (1.26-0ev3dev2) testing; urgency=medium
+
+  * Remove all rfkill from technology before cleaning up technology. Fixes
+    ev3dev/ev3dev#181.
+
+ -- David Lechner <david@lechnology.com>  Tue, 21 Oct 2014 11:02:15 -0500
+
 connman (1.26-0ev3dev1) testing; urgency=medium
 
   * New upstream release.
