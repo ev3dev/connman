@@ -1,3 +1,9 @@
+connman (1.26-0ev3dev3) testing; urgency=medium
+
+  * Do not restart when upgrading. Fixes ev3dev/ev3dev/#183.
+
+ -- David Lechner <david@lechnology.com>  Tue, 21 Oct 2014 18:51:46 -0500
+
 connman (1.26-0ev3dev2) testing; urgency=medium
 
   * Remove all rfkill from technology before cleaning up technology. Fixes
