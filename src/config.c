@@ -52,6 +52,7 @@ struct connman_config_service {
 	char *private_key_passphrase_type;
 	char *phase2;
 	char *passphrase;
+	enum connman_service_security security;
 	GSList *service_identifiers;
 	char *config_ident; /* file prefix */
 	char *config_entry; /* entry name */
@@ -99,6 +100,7 @@ static bool cleanup = false;
 #define SERVICE_KEY_IDENTITY           "Identity"
 #define SERVICE_KEY_PHASE2             "Phase2"
 #define SERVICE_KEY_PASSPHRASE         "Passphrase"
+#define SERVICE_KEY_SECURITY           "Security"
 #define SERVICE_KEY_HIDDEN             "Hidden"
 
 #define SERVICE_KEY_IPv4               "IPv4"
@@ -129,6 +131,7 @@ static const char *service_possible_keys[] = {
 	SERVICE_KEY_IDENTITY,
 	SERVICE_KEY_PHASE2,
 	SERVICE_KEY_PASSPHRASE,
+	SERVICE_KEY_SECURITY,
 	SERVICE_KEY_HIDDEN,
 	SERVICE_KEY_IPv4,
 	SERVICE_KEY_IPv6,
@@ -513,6 +516,7 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 	struct connman_config_service *service;
 	const char *ident;
 	char *str, *hex_ssid;
+	enum connman_service_security security;
 	bool service_created = false;
 
 	/* Strip off "service_" prefix */
@@ -662,6 +666,38 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 	if (str) {
 		g_free(service->passphrase);
 		service->passphrase = str;
+	}
+
+	str = __connman_config_get_string(keyfile, group, SERVICE_KEY_SECURITY,
+			NULL);
+	security = __connman_service_string2security(str);
+
+	if (service->eap) {
+
+		if (str && security != CONNMAN_SERVICE_SECURITY_8021X)
+			connman_info("Mismatch between EAP configuration and "
+					"setting %s = %s",
+					SERVICE_KEY_SECURITY, str);
+
+		service->security = CONNMAN_SERVICE_SECURITY_8021X;
+
+	} else if (service->passphrase) {
+
+		if (str) {
+			if (security == CONNMAN_SERVICE_SECURITY_PSK ||
+					security == CONNMAN_SERVICE_SECURITY_WEP) {
+				service->security = security;
+			} else {
+				connman_info("Mismatch with passphrase and "
+						"setting %s = %s",
+						SERVICE_KEY_SECURITY, str);
+
+				service->security =
+					CONNMAN_SERVICE_SECURITY_PSK;
+			}
+
+		} else
+			service->security = CONNMAN_SERVICE_SECURITY_PSK;
 	}
 
 	service->config_ident = g_strdup(config->ident);
@@ -1062,22 +1098,7 @@ static int try_provision_service(struct connman_config_service *config,
 	enum connman_service_type type;
 	const void *ssid;
 	unsigned int ssid_len;
-
-	type = connman_service_get_type(service);
-	if (type == CONNMAN_SERVICE_TYPE_WIFI &&
-				g_strcmp0(config->type, "wifi") != 0)
-		return -ENOENT;
-
-	if (type == CONNMAN_SERVICE_TYPE_ETHERNET &&
-				g_strcmp0(config->type, "ethernet") != 0)
-		return -ENOENT;
-
-	if (type == CONNMAN_SERVICE_TYPE_GADGET &&
-				g_strcmp0(config->type, "gadget") != 0)
-		return -ENOENT;
-
-	DBG("service %p ident %s", service,
-					__connman_service_get_ident(service));
+	const char *str;
 
 	network = __connman_service_get_network(service);
 	if (!network) {
@@ -1087,6 +1108,54 @@ static int try_provision_service(struct connman_config_service *config,
 
 	DBG("network %p ident %s", network,
 				connman_network_get_identifier(network));
+
+	type = connman_service_get_type(service);
+
+	switch(type) {
+	case CONNMAN_SERVICE_TYPE_WIFI:
+		if (__connman_service_string2type(config->type) != type)
+			return -ENOENT;
+
+		ssid = connman_network_get_blob(network, "WiFi.SSID",
+						&ssid_len);
+		if (!ssid) {
+			connman_error("Network SSID not set");
+			return -EINVAL;
+		}
+
+		if (!config->ssid || ssid_len != config->ssid_len)
+			return -ENOENT;
+
+		if (memcmp(config->ssid, ssid, ssid_len))
+			return -ENOENT;
+
+		str = connman_network_get_string(network, "WiFi.Security");
+		if (config->security != __connman_service_string2security(str))
+			return -ENOENT;
+
+		break;
+
+	case CONNMAN_SERVICE_TYPE_ETHERNET:
+	case CONNMAN_SERVICE_TYPE_GADGET:
+
+		if (__connman_service_string2type(config->type) != type)
+			return -ENOENT;
+
+		break;
+
+	case CONNMAN_SERVICE_TYPE_UNKNOWN:
+	case CONNMAN_SERVICE_TYPE_SYSTEM:
+	case CONNMAN_SERVICE_TYPE_BLUETOOTH:
+	case CONNMAN_SERVICE_TYPE_CELLULAR:
+	case CONNMAN_SERVICE_TYPE_GPS:
+	case CONNMAN_SERVICE_TYPE_VPN:
+	case CONNMAN_SERVICE_TYPE_P2P:
+
+		return -ENOENT;
+	}
+
+	DBG("service %p ident %s", service,
+					__connman_service_get_ident(service));
 
 	if (config->mac) {
 		struct connman_device *device;
@@ -1103,22 +1172,6 @@ static int try_provision_service(struct connman_config_service *config,
 		DBG("wants %s has %s", config->mac, device_addr);
 
 		if (g_ascii_strcasecmp(device_addr, config->mac) != 0)
-			return -ENOENT;
-	}
-
-	if (g_strcmp0(config->type, "wifi") == 0 &&
-				type == CONNMAN_SERVICE_TYPE_WIFI) {
-		ssid = connman_network_get_blob(network, "WiFi.SSID",
-						&ssid_len);
-		if (!ssid) {
-			connman_error("Network SSID not set");
-			return -EINVAL;
-		}
-
-		if (!config->ssid || ssid_len != config->ssid_len)
-			return -ENOENT;
-
-		if (memcmp(config->ssid, ssid, ssid_len) != 0)
 			return -ENOENT;
 	}
 
@@ -1210,9 +1263,6 @@ static int try_provision_service(struct connman_config_service *config,
 		g_slist_prepend(config->service_identifiers,
 				g_strdup(service_id));
 
-	if (!config->virtual)
-		__connman_service_set_immutable(service, true);
-
 	__connman_service_set_favorite_delayed(service, true, true);
 
 	__connman_service_set_config(service, config->config_ident,
@@ -1240,13 +1290,10 @@ static int try_provision_service(struct connman_config_service *config,
 		__connman_service_set_timeservers(service,
 						config->timeservers);
 
-	if (g_strcmp0(config->type, "wifi") == 0 &&
-				type == CONNMAN_SERVICE_TYPE_WIFI) {
+	if (type == CONNMAN_SERVICE_TYPE_WIFI) {
 		provision_service_wifi(config, service, network,
 							ssid, ssid_len);
-	} else
-		__connman_service_connect(service,
-					CONNMAN_SERVICE_CONNECT_REASON_AUTO);
+	}
 
 	__connman_service_mark_dirty();
 
@@ -1260,8 +1307,21 @@ static int try_provision_service(struct connman_config_service *config,
 		virtual->vfile = config->virtual_file;
 
 		g_timeout_add(0, remove_virtual_config, virtual);
-	} else
-		__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_AUTO);
+
+		return 0;
+	}
+
+	__connman_service_set_immutable(service, true);
+
+	if (type == CONNMAN_SERVICE_TYPE_ETHERNET ||
+			type == CONNMAN_SERVICE_TYPE_GADGET) {
+		__connman_service_connect(service,
+				CONNMAN_SERVICE_CONNECT_REASON_AUTO);
+
+		return 0;
+	}
+
+	__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_AUTO);
 
 	return 0;
 }

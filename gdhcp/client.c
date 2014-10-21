@@ -155,6 +155,7 @@ struct _GDHCPClient {
 	uint32_t expire;
 	bool retransmit;
 	struct timeval start_time;
+	bool request_bcast;
 };
 
 static inline void debug(GDHCPClient *client, const char *format, ...)
@@ -455,15 +456,26 @@ static int send_discover(GDHCPClient *dhcp_client, uint32_t requested)
 
 	add_send_options(dhcp_client, &packet);
 
+	/*
+	 * If we do not get a reply to DISCOVER packet, then we try with
+	 * broadcast flag set. So first packet is sent without broadcast flag,
+	 * first retry is with broadcast flag, second retry is without it etc.
+	 * Reason is various buggy routers/AP that either eat the other or vice
+	 * versa. In the receiving side we then find out what kind of packet
+	 * the server can send.
+	 */
 	return dhcp_send_raw_packet(&packet, INADDR_ANY, CLIENT_PORT,
-					INADDR_BROADCAST, SERVER_PORT,
-					MAC_BCAST_ADDR, dhcp_client->ifindex);
+				INADDR_BROADCAST, SERVER_PORT,
+				MAC_BCAST_ADDR, dhcp_client->ifindex,
+				dhcp_client->retry_times % 2);
 }
 
 static int send_request(GDHCPClient *dhcp_client)
 {
 	struct dhcp_packet packet;
-	debug(dhcp_client, "sending DHCP request");
+
+	debug(dhcp_client, "sending DHCP request (state %d)",
+		dhcp_client->state);
 
 	init_packet(dhcp_client, &packet, DHCPREQUEST);
 
@@ -493,8 +505,9 @@ static int send_request(GDHCPClient *dhcp_client)
 				dhcp_client->server_ip, SERVER_PORT);
 
 	return dhcp_send_raw_packet(&packet, INADDR_ANY, CLIENT_PORT,
-					INADDR_BROADCAST, SERVER_PORT,
-					MAC_BCAST_ADDR, dhcp_client->ifindex);
+				INADDR_BROADCAST, SERVER_PORT,
+				MAC_BCAST_ADDR, dhcp_client->ifindex,
+				dhcp_client->request_bcast);
 }
 
 static int send_release(GDHCPClient *dhcp_client,
@@ -1130,6 +1143,7 @@ static void remove_option_value(gpointer data)
 	GList *option_value = data;
 
 	g_list_foreach(option_value, remove_value, NULL);
+	g_list_free(option_value);
 }
 
 GDHCPClient *g_dhcp_client_new(GDHCPType type,
@@ -1185,6 +1199,7 @@ GDHCPClient *g_dhcp_client_new(GDHCPType type,
 	dhcp_client->duid_len = 0;
 	dhcp_client->last_request = time(NULL);
 	dhcp_client->expire = 0;
+	dhcp_client->request_bcast = false;
 
 	*error = G_DHCP_CLIENT_ERROR_NONE;
 
@@ -1292,7 +1307,8 @@ static bool sanity_check(struct ip_udp_dhcp_packet *packet, int bytes)
 	return true;
 }
 
-static int dhcp_recv_l2_packet(struct dhcp_packet *dhcp_pkt, int fd)
+static int dhcp_recv_l2_packet(struct dhcp_packet *dhcp_pkt, int fd,
+				struct sockaddr_in *dst_addr)
 {
 	int bytes;
 	struct ip_udp_dhcp_packet packet;
@@ -1336,6 +1352,8 @@ static int dhcp_recv_l2_packet(struct dhcp_packet *dhcp_pkt, int fd)
 
 	if (dhcp_pkt->cookie != htonl(DHCP_MAGIC))
 		return -1;
+
+	dst_addr->sin_addr.s_addr = packet.ip.daddr;
 
 	return bytes - (sizeof(packet.ip) + sizeof(packet.udp));
 }
@@ -2047,7 +2065,7 @@ static GList *get_addresses(GDHCPClient *dhcp_client,
 			memcpy(&dhcp_client->ia_ta, &addr,
 						sizeof(struct in6_addr));
 
-		if (valid > dhcp_client->expire)
+		if (valid != dhcp_client->expire)
 			dhcp_client->expire = valid;
 	}
 
@@ -2230,6 +2248,7 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 							gpointer user_data)
 {
 	GDHCPClient *dhcp_client = user_data;
+	struct sockaddr_in dst_addr = { 0 };
 	struct dhcp_packet packet;
 	struct dhcpv6_packet *packet6 = NULL;
 	uint8_t *message_type = NULL, *client_id = NULL, *option,
@@ -2256,7 +2275,9 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 
 	if (dhcp_client->listen_mode == L2) {
 		re = dhcp_recv_l2_packet(&packet,
-					dhcp_client->listener_sockfd);
+					dhcp_client->listener_sockfd,
+					&dst_addr);
+		xid = packet.xid;
 	} else if (dhcp_client->listen_mode == L3) {
 		if (dhcp_client->type == G_DHCP_IPV6) {
 			re = dhcpv6_recv_l3_packet(&packet6, buf, sizeof(buf),
@@ -2328,7 +2349,7 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 		return TRUE;
 
 	debug(dhcp_client, "received DHCP packet xid 0x%04x "
-			"(current state %d)", xid, dhcp_client->state);
+		"(current state %d)", ntohl(xid), dhcp_client->state);
 
 	switch (dhcp_client->state) {
 	case INIT_SELECTING:
@@ -2345,10 +2366,28 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 
 		dhcp_client->state = REQUESTING;
 
+		if (dst_addr.sin_addr.s_addr == INADDR_BROADCAST)
+			dhcp_client->request_bcast = true;
+		else
+			dhcp_client->request_bcast = false;
+
+		debug(dhcp_client, "init ip %s -> %sadding broadcast flag",
+			inet_ntoa(dst_addr.sin_addr),
+			dhcp_client->request_bcast ? "" : "not ");
+
 		start_request(dhcp_client);
 
 		return TRUE;
 	case REBOOTING:
+		if (dst_addr.sin_addr.s_addr == INADDR_BROADCAST)
+			dhcp_client->request_bcast = true;
+		else
+			dhcp_client->request_bcast = false;
+
+		debug(dhcp_client, "ip %s -> %sadding broadcast flag",
+			inet_ntoa(dst_addr.sin_addr),
+			dhcp_client->request_bcast ? "" : "not ");
+		/* fall through */
 	case REQUESTING:
 	case RENEWING:
 	case REBINDING:
@@ -2839,6 +2878,7 @@ void g_dhcp_client_stop(GDHCPClient *dhcp_client)
 	dhcp_client->requested_ip = 0;
 	dhcp_client->state = RELEASED;
 	dhcp_client->lease_seconds = 0;
+	dhcp_client->request_bcast = false;
 }
 
 GList *g_dhcp_client_get_option(GDHCPClient *dhcp_client,

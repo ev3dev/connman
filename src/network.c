@@ -464,6 +464,7 @@ static void check_dhcpv6(struct nd_router_advert *reply,
 			unsigned int length, void *user_data)
 {
 	struct connman_network *network = user_data;
+	struct connman_service *service;
 	GSList *prefixes;
 
 	DBG("reply %p", reply);
@@ -497,6 +498,23 @@ static void check_dhcpv6(struct nd_router_advert *reply,
 	}
 
 	prefixes = __connman_inet_ipv6_get_prefixes(reply, length);
+
+	/*
+	 * If IPv6 config is missing from service, then create it.
+	 * The ipconfig might be missing if we got a rtnl message
+	 * that disabled IPv6 config and thus removed it. This
+	 * can happen if we are switching from one service to
+	 * another in the same interface. The only way to get IPv6
+	 * config back is to re-create it here.
+	 */
+	service = connman_service_lookup_from_network(network);
+	if (service) {
+		connman_service_create_ip6config(service, network->index);
+
+		__connman_service_ipconfig_indicate_state(service,
+					CONNMAN_SERVICE_STATE_CONFIGURATION,
+					CONNMAN_IPCONFIG_TYPE_IPV6);
+	}
 
 	/*
 	 * We do stateful/stateless DHCPv6 if router advertisement says so.
@@ -593,6 +611,8 @@ static void autoconf_ipv6_set(struct connman_network *network)
 	ipconfig = __connman_service_get_ip6config(service);
 	if (!ipconfig)
 		return;
+
+	__connman_ipconfig_address_remove(ipconfig);
 
 	index = __connman_ipconfig_get_index(ipconfig);
 
@@ -1392,22 +1412,6 @@ void connman_network_set_error(struct connman_network *network,
 	network_change(network);
 }
 
-void connman_network_clear_error(struct connman_network *network)
-{
-	struct connman_service *service;
-
-	DBG("network %p", network);
-
-	if (!network)
-		return;
-
-	if (network->connecting || network->associating)
-		return;
-
-	service = connman_service_lookup_from_network(network);
-	__connman_service_clear_error(service);
-}
-
 /**
  * connman_network_set_connected:
  * @network: network structure
@@ -1496,7 +1500,7 @@ int connman_network_connect_hidden(struct connman_network *network,
 		__connman_service_set_agent_identity(service, identity);
 
 	if (passphrase)
-		err = __connman_service_add_passphrase(service, passphrase);
+		err = __connman_service_set_passphrase(service, passphrase);
 
 	if (err == -ENOKEY) {
 		__connman_service_indicate_error(service,

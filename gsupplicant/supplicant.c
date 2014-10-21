@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <netinet/if_ether.h>
+#include <netinet/in.h>
 
 #include <glib.h>
 #include <gdbus.h>
@@ -139,6 +140,7 @@ static GHashTable *interface_table;
 static GHashTable *bss_mapping;
 static GHashTable *peer_mapping;
 static GHashTable *group_mapping;
+static GHashTable *pending_peer_connection;
 
 struct _GSupplicantWpsCredentials {
 	unsigned char ssid[32];
@@ -157,7 +159,6 @@ struct _GSupplicantInterface {
 	unsigned int scan_capa;
 	unsigned int mode_capa;
 	unsigned int max_scan_ssids;
-	bool p2p_checked;
 	bool p2p_support;
 	bool p2p_finding;
 	dbus_bool_t ready;
@@ -229,11 +230,13 @@ struct _GSupplicantPeer {
 	unsigned char device_address[ETH_ALEN];
 	unsigned char iface_address[ETH_ALEN];
 	char *name;
+	unsigned char *widi_ies;
+	int widi_ies_length;
 	char *identifier;
 	unsigned int wps_capabilities;
 	GSList *groups;
-	bool groups_changed;
 	const GSupplicantInterface *current_group_iface;
+	bool connection_requested;
 };
 
 struct _GSupplicantGroup {
@@ -409,10 +412,8 @@ static void callback_p2p_support(GSupplicantInterface *interface)
 {
 	SUPPLICANT_DBG("");
 
-	if (interface->p2p_checked)
+	if (!interface->p2p_support)
 		return;
-
-	interface->p2p_checked = true;
 
 	if (callbacks_pointer && callbacks_pointer->p2p_support)
 		callbacks_pointer->p2p_support(interface);
@@ -497,7 +498,7 @@ static void callback_peer_lost(GSupplicantPeer *peer)
 }
 
 static void callback_peer_changed(GSupplicantPeer *peer,
-					GSupplicantPeerGroupState state)
+						GSupplicantPeerState state)
 {
 	if (!callbacks_pointer)
 		return;
@@ -506,6 +507,19 @@ static void callback_peer_changed(GSupplicantPeer *peer,
 		return;
 
 	callbacks_pointer->peer_changed(peer, state);
+}
+
+static void callback_peer_request(GSupplicantPeer *peer)
+{
+	if (!callbacks_pointer)
+		return;
+
+	if (!callbacks_pointer->peer_request)
+		return;
+
+	peer->connection_requested = true;
+
+	callbacks_pointer->peer_request(peer);
 }
 
 static void remove_group(gpointer data)
@@ -588,7 +602,11 @@ static void remove_peer(gpointer data)
 	if (peer->groups)
 		g_slist_free_full(peer->groups, g_free);
 
-	g_hash_table_remove(peer_mapping, peer->path);
+	if (peer_mapping)
+		g_hash_table_remove(peer_mapping, peer->path);
+
+	if (pending_peer_connection)
+		g_hash_table_remove(pending_peer_connection, peer->path);
 
 	g_free(peer->path);
 	g_free(peer->name);
@@ -1069,6 +1087,16 @@ const char *g_supplicant_peer_get_name(GSupplicantPeer *peer)
 	return peer->name;
 }
 
+const unsigned char *g_supplicant_peer_get_widi_ies(GSupplicantPeer *peer,
+								int *length)
+{
+	if (!peer || !length)
+		return NULL;
+
+	*length = peer->widi_ies_length;
+	return peer->widi_ies;
+}
+
 bool g_supplicant_peer_is_wps_pbc(GSupplicantPeer *peer)
 {
 	if (!peer)
@@ -1131,6 +1159,14 @@ bool g_supplicant_peer_is_client(GSupplicantPeer *peer)
 	}
 
 	return false;
+}
+
+bool g_supplicant_peer_has_requested_connection(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return false;
+
+	return peer->connection_requested;
 }
 
 static void merge_network(GSupplicantNetwork *network)
@@ -1878,13 +1914,12 @@ static void interface_bss_removed(DBusMessageIter *iter, void *user_data)
 		g_hash_table_remove(interface->network_table, network->group);
 }
 
-static void interface_detect_p2p_support(GSupplicantInterface *interface)
+static void set_config_methods(DBusMessageIter *iter, void *user_data)
 {
-	SUPPLICANT_DBG("p2p detect");
-	if (interface->mode_capa & G_SUPPLICANT_CAPABILITY_MODE_P2P) {
-		interface->p2p_support = true;
-		callback_p2p_support(interface);
-	}
+	const char *config_methods = "push_button";
+
+	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
+							&config_methods);
 }
 
 static void interface_property(const char *key, DBusMessageIter *iter,
@@ -1913,6 +1948,12 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 		debug_strvalmap("Mode capability", mode_capa_map,
 						interface->mode_capa);
 
+
+		supplicant_dbus_property_set(interface->path,
+				SUPPLICANT_INTERFACE ".Interface.WPS",
+				"ConfigMethods", DBUS_TYPE_STRING_AS_STRING,
+				set_config_methods, NULL, NULL, NULL);
+
 		if (interface->ready)
 			callback_interface_added(interface);
 
@@ -1922,7 +1963,8 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 	if (g_strcmp0(key, "Capabilities") == 0) {
 		supplicant_dbus_property_foreach(iter, interface_capability,
 								interface);
-		interface_detect_p2p_support(interface);
+		if (interface->mode_capa & G_SUPPLICANT_CAPABILITY_MODE_P2P)
+			interface->p2p_support = true;
 	} else if (g_strcmp0(key, "State") == 0) {
 		const char *str = NULL;
 
@@ -2540,14 +2582,16 @@ static void create_peer_identifier(GSupplicantPeer *peer)
 						peer->device_address[5]);
 }
 
-struct peer_group_data {
+struct peer_property_data {
 	GSupplicantPeer *peer;
 	GSList *old_groups;
+	bool groups_changed;
+	bool services_changed;
 };
 
 static void peer_groups_relation(DBusMessageIter *iter, void *user_data)
 {
-	struct peer_group_data *data = user_data;
+	struct peer_property_data *data = user_data;
 	GSupplicantPeer *peer = data->peer;
 	GSupplicantGroup *group;
 	const char *str = NULL;
@@ -2567,14 +2611,16 @@ static void peer_groups_relation(DBusMessageIter *iter, void *user_data)
 		peer->groups = g_slist_concat(elem, peer->groups);
 	} else {
 		peer->groups = g_slist_prepend(peer->groups, g_strdup(str));
-		peer->groups_changed = true;
+		data->groups_changed = true;
 	}
 }
 
 static void peer_property(const char *key, DBusMessageIter *iter,
 							void *user_data)
 {
-	GSupplicantPeer *peer = user_data;
+	GSupplicantPeer *pending_peer;
+	struct peer_property_data *data = user_data;
+	GSupplicantPeer *peer = data->peer;
 
 	SUPPLICANT_DBG("key: %s", key);
 
@@ -2585,6 +2631,16 @@ static void peer_property(const char *key, DBusMessageIter *iter,
 		if (peer->name) {
 			create_peer_identifier(peer);
 			callback_peer_found(peer);
+			pending_peer = g_hash_table_lookup(
+					pending_peer_connection, peer->path);
+
+			if (pending_peer && pending_peer == peer) {
+				callback_peer_request(peer);
+				g_hash_table_remove(pending_peer_connection,
+						peer->path);
+			}
+
+			dbus_free(data);
 		}
 
 		return;
@@ -2616,23 +2672,45 @@ static void peer_property(const char *key, DBusMessageIter *iter,
 		if (wps_config & ~G_SUPPLICANT_WPS_CONFIG_PBC)
 			peer->wps_capabilities |= G_SUPPLICANT_WPS_PIN;
 	} else if (g_strcmp0(key, "Groups") == 0) {
-		struct peer_group_data data = {
-			.peer = peer,
-			.old_groups = peer->groups,
-		};
+		data->old_groups = peer->groups;
 		peer->groups = NULL;
 
 		supplicant_dbus_array_foreach(iter,
-						peer_groups_relation, &data);
-		if (g_slist_length(data.old_groups) > 0) {
-			g_slist_free_full(data.old_groups, g_free);
-			peer->groups_changed = true;
+						peer_groups_relation, data);
+		if (g_slist_length(data->old_groups) > 0) {
+			g_slist_free_full(data->old_groups, g_free);
+			data->groups_changed = true;
 		}
+	} else if (g_strcmp0(key, "IEs") == 0) {
+		DBusMessageIter array;
+		unsigned char *ie;
+		int ie_len;
+
+		dbus_message_iter_recurse(iter, &array);
+		dbus_message_iter_get_fixed_array(&array, &ie, &ie_len);
+
+		if (!ie || ie_len < 2)
+			return;
+
+		if (peer->widi_ies) {
+			if (memcmp(peer->widi_ies, ie, ie_len) == 0)
+				return;
+
+			g_free(peer->widi_ies);
+			peer->widi_ies_length = 0;
+		}
+
+		peer->widi_ies = g_malloc0(ie_len * sizeof(unsigned char));
+
+		memcpy(peer->widi_ies, ie, ie_len);
+		peer->widi_ies_length = ie_len;
+		data->services_changed = true;
 	}
 }
 
 static void signal_peer_found(const char *path, DBusMessageIter *iter)
 {
+	struct peer_property_data *property_data;
 	GSupplicantInterface *interface;
 	const char *obj_path = NULL;
 	GSupplicantPeer *peer;
@@ -2660,16 +2738,20 @@ static void signal_peer_found(const char *path, DBusMessageIter *iter)
 	g_hash_table_insert(interface->peer_table, peer->path, peer);
 	g_hash_table_replace(peer_mapping, peer->path, interface);
 
+	property_data = dbus_malloc0(sizeof(struct peer_property_data));
+	property_data->peer = peer;
+
 	dbus_message_iter_next(iter);
 	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_INVALID) {
-		supplicant_dbus_property_foreach(iter, peer_property, peer);
-		peer_property(NULL, NULL, peer);
+		supplicant_dbus_property_foreach(iter, peer_property,
+							property_data);
+		peer_property(NULL, NULL, property_data);
 		return;
 	}
 
 	supplicant_dbus_property_get_all(obj_path,
 					SUPPLICANT_INTERFACE ".Peer",
-					peer_property, peer, NULL);
+					peer_property, property_data, NULL);
 }
 
 static void signal_peer_lost(const char *path, DBusMessageIter *iter)
@@ -2697,6 +2779,7 @@ static void signal_peer_lost(const char *path, DBusMessageIter *iter)
 
 static void signal_peer_changed(const char *path, DBusMessageIter *iter)
 {
+	struct peer_property_data *property_data;
 	GSupplicantInterface *interface;
 	GSupplicantPeer *peer;
 
@@ -2712,13 +2795,21 @@ static void signal_peer_changed(const char *path, DBusMessageIter *iter)
 		return;
 	}
 
-	supplicant_dbus_property_foreach(iter, peer_property, peer);
-	if (!peer->groups_changed)
-		return;
+	property_data = dbus_malloc0(sizeof(struct peer_property_data));
+	property_data->peer = peer;
 
-	callback_peer_changed(peer, G_SUPPLICANT_PEER_GROUP_CHANGED);
+	supplicant_dbus_property_foreach(iter, peer_property, property_data);
+	if (property_data->services_changed)
+		callback_peer_changed(peer,
+					G_SUPPLICANT_PEER_SERVICES_CHANGED);
 
-	peer->groups_changed = false;
+	if (property_data->groups_changed)
+		callback_peer_changed(peer, G_SUPPLICANT_PEER_GROUP_CHANGED);
+
+	dbus_free(property_data);
+
+	if (!g_supplicant_peer_is_in_a_group(peer))
+		peer->connection_requested = false;
 }
 
 struct group_sig_data {
@@ -2810,6 +2901,7 @@ static void signal_group_failure(const char *path, DBusMessageIter *iter)
 		return;
 
 	callback_peer_changed(peer, G_SUPPLICANT_PEER_GROUP_FAILED);
+	peer->connection_requested = false;
 }
 
 static void signal_group_started(const char *path, DBusMessageIter *iter)
@@ -2861,6 +2953,31 @@ static void signal_group_started(const char *path, DBusMessageIter *iter)
 	callback_peer_changed(peer, G_SUPPLICANT_PEER_GROUP_STARTED);
 }
 
+static void remove_peer_group_interface(GHashTable *group_table,
+				const char* path)
+{
+	GSupplicantGroup *group;
+	GHashTableIter iter;
+	gpointer value, key;
+
+	if (!group_table)
+		return;
+
+	group = g_hash_table_lookup(group_table, path);
+
+	if (!group || !group->orig_interface)
+		return;
+
+	g_hash_table_iter_init(&iter, group->orig_interface->peer_table);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		GSupplicantPeer *peer = value;
+
+		if (peer->current_group_iface == group->interface)
+			peer->current_group_iface = NULL;
+	}
+}
+
 static void signal_group_finished(const char *path, DBusMessageIter *iter)
 {
 	GSupplicantInterface *interface;
@@ -2876,7 +2993,42 @@ static void signal_group_finished(const char *path, DBusMessageIter *iter)
 	if (!data.interface_obj_path || !data.group_obj_path)
 		return;
 
+	remove_peer_group_interface(interface->group_table, data.group_obj_path);
+
+	g_hash_table_remove(group_mapping, data.group_obj_path);
+
 	g_hash_table_remove(interface->group_table, data.group_obj_path);
+}
+
+static void signal_group_request(const char *path, DBusMessageIter *iter)
+{
+	GSupplicantInterface *interface;
+	GSupplicantPeer *peer;
+	const char *obj_path;
+
+	SUPPLICANT_DBG("");
+
+	interface = g_hash_table_lookup(interface_table, path);
+	if (!interface)
+		return;
+
+	dbus_message_iter_get_basic(iter, &obj_path);
+	if (!obj_path || !g_strcmp0(obj_path, "/"))
+		return;
+
+	peer = g_hash_table_lookup(interface->peer_table, obj_path);
+	if (!peer)
+		return;
+
+	/*
+	 * Peer has been previously found and property set,
+	 * otherwise, defer connection to when peer property
+	 * is set.
+	 */
+	if (peer->identifier)
+		callback_peer_request(peer);
+	else
+		g_hash_table_replace(pending_peer_connection, peer->path, peer);
 }
 
 static void signal_group_peer_joined(const char *path, DBusMessageIter *iter)
@@ -2943,6 +3095,7 @@ static void signal_group_peer_disconnected(const char *path, DBusMessageIter *it
 		return;
 
 	callback_peer_changed(peer, G_SUPPLICANT_PEER_GROUP_DISCONNECTED);
+	peer->connection_requested = false;
 }
 
 static struct {
@@ -2978,6 +3131,7 @@ static struct {
 	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "GONegotiationFailure", signal_group_failure },
 	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "GroupStarted", signal_group_started },
 	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "GroupFinished", signal_group_finished },
+	{ SUPPLICANT_INTERFACE ".Interface.P2PDevice", "GONegotiationRequest", signal_group_request },
 
 	{ SUPPLICANT_INTERFACE ".Group", "PeerJoined", signal_group_peer_joined },
 	{ SUPPLICANT_INTERFACE ".Group", "PeerDisconnected", signal_group_peer_disconnected },
@@ -3106,11 +3260,15 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 
 bool g_supplicant_interface_has_p2p(GSupplicantInterface *interface)
 {
+	if (!interface)
+		return false;
+
 	return interface->p2p_support;
 }
 
 struct supplicant_p2p_dev_config {
 	char *device_name;
+	char *dev_type;
 };
 
 static void p2p_device_config_result(const char *error,
@@ -3119,10 +3277,36 @@ static void p2p_device_config_result(const char *error,
 	struct supplicant_p2p_dev_config *config = user_data;
 
 	if (error)
-		SUPPLICANT_DBG("Unable to set P2P Device configuration");
+		SUPPLICANT_DBG("Unable to set P2P Device configuration: %s",
+									error);
 
 	g_free(config->device_name);
+	g_free(config->dev_type);
 	dbus_free(config);
+}
+
+static int dev_type_str2bin(const char *type, unsigned char dev_type[8])
+{
+	int length, pos, end;
+	char b[3] = {};
+	char *e = NULL;
+
+	end = strlen(type);
+	for (length = pos = 0; type[pos] != '\0' && length < 8; length++) {
+		if (pos+2 > end)
+			return 0;
+
+		b[0] = type[pos];
+		b[1] = type[pos+1];
+
+		dev_type[length] = strtol(b, &e, 16);
+		if (e && *e != '\0')
+			return 0;
+
+		pos += 2;
+	}
+
+	return 8;
 }
 
 static void p2p_device_config_params(DBusMessageIter *iter, void *user_data)
@@ -3135,22 +3319,38 @@ static void p2p_device_config_params(DBusMessageIter *iter, void *user_data)
 	supplicant_dbus_dict_append_basic(&dict, "DeviceName",
 				DBUS_TYPE_STRING, &config->device_name);
 
+	if (config->dev_type) {
+		unsigned char dev_type[8] = {}, *type;
+		int len;
+
+		len = dev_type_str2bin(config->dev_type, dev_type);
+		if (len) {
+			type = dev_type;
+			supplicant_dbus_dict_append_fixed_array(&dict,
+					"PrimaryDeviceType",
+					DBUS_TYPE_BYTE, &type, len);
+		}
+	}
+
 	supplicant_dbus_dict_close(iter, &dict);
 }
 
 int g_supplicant_interface_set_p2p_device_config(GSupplicantInterface *interface,
-						const char *device_name)
+					const char *device_name,
+					const char *primary_dev_type)
 {
 	struct supplicant_p2p_dev_config *config;
 	int ret;
 
-	SUPPLICANT_DBG("P2P Device Name setting %s", device_name);
+	SUPPLICANT_DBG("P2P Device settings %s/%s",
+					device_name, primary_dev_type);
 
 	config = dbus_malloc0(sizeof(*config));
 	if (!config)
 		return -ENOMEM;
 
 	config->device_name = g_strdup(device_name);
+	config->dev_type = g_strdup(primary_dev_type);
 
 	ret = supplicant_dbus_property_set(interface->path,
 				SUPPLICANT_INTERFACE ".Interface.P2PDevice",
@@ -3164,6 +3364,7 @@ int g_supplicant_interface_set_p2p_device_config(GSupplicantInterface *interface
 				p2p_device_config_result, config, NULL);
 	if (ret < 0) {
 		g_free(config->device_name);
+		g_free(config->dev_type);
 		dbus_free(config);
 		SUPPLICANT_DBG("Unable to set P2P Device configuration");
 	}
@@ -3266,8 +3467,10 @@ static void interface_create_property(const char *key, DBusMessageIter *iter,
 	GSupplicantInterface *interface = data->interface;
 
 	if (!key) {
-		if (data->callback)
+		if (data->callback) {
 			data->callback(0, data->interface, data->user_data);
+			callback_p2p_support(interface);
+		}
 
 		interface_create_data_free(data);
 	}
@@ -3313,7 +3516,7 @@ static void interface_create_result(const char *error,
 	err = supplicant_dbus_property_get_all(path,
 					SUPPLICANT_INTERFACE ".Interface",
 					interface_create_property, data,
-					data->interface);
+					NULL);
 	if (err == 0)
 		return;
 
@@ -3374,8 +3577,10 @@ static void interface_get_result(const char *error,
 		goto done;
 	}
 
-	if (data->callback)
+	if (data->callback) {
 		data->callback(0, interface, data->user_data);
+		callback_p2p_support(interface);
+	}
 
 	interface_create_data_free(data);
 
@@ -4701,6 +4906,9 @@ static void interface_p2p_connect_params(DBusMessageIter *iter, void *user_data)
 
 	supplicant_dbus_dict_open(iter, &dict);
 
+	if (data->peer->master)
+		go_intent = 15;
+
 	if (data->peer->wps_pin)
 		wps = "pin";
 
@@ -4795,6 +5003,226 @@ int g_supplicant_interface_p2p_disconnect(GSupplicantInterface *interface,
 	return -EINPROGRESS;
 }
 
+struct p2p_service_data {
+	bool registration;
+	GSupplicantInterface *interface;
+	GSupplicantP2PServiceParams *service;
+	GSupplicantInterfaceCallback callback;
+	void *user_data;
+};
+
+static void interface_p2p_service_result(const char *error,
+					DBusMessageIter *iter, void *user_data)
+{
+	struct p2p_service_data *data = user_data;
+	int result = 0;
+
+	SUPPLICANT_DBG("%s result - %s", data->registration ?
+				"Registration" : "Deletion",
+				error ? error : "Success");
+	if (error)
+		result = -EINVAL;
+
+	if (data->callback)
+		data->callback(result, data->interface, data->user_data);
+
+	g_free(data->service->query);
+	g_free(data->service->response);
+	g_free(data->service->service);
+	g_free(data->service->wfd_ies);
+	g_free(data->service);
+	dbus_free(data);
+}
+
+static void interface_p2p_service_params(DBusMessageIter *iter,
+							void *user_data)
+{
+	struct p2p_service_data *data = user_data;
+	GSupplicantP2PServiceParams *service;
+	DBusMessageIter dict;
+	const char *type;
+
+	SUPPLICANT_DBG("");
+
+	service = data->service;
+
+	supplicant_dbus_dict_open(iter, &dict);
+
+	if (service->query && service->response) {
+		type = "bonjour";
+		supplicant_dbus_dict_append_basic(&dict, "service_type",
+						DBUS_TYPE_STRING, &type);
+		supplicant_dbus_dict_append_fixed_array(&dict, "query",
+					DBUS_TYPE_BYTE, &service->query,
+					service->query_length);
+		supplicant_dbus_dict_append_fixed_array(&dict, "response",
+					DBUS_TYPE_BYTE, &service->response,
+					service->response_length);
+	} else if (service->version && service->service) {
+		type = "upnp";
+		supplicant_dbus_dict_append_basic(&dict, "service_type",
+						DBUS_TYPE_STRING, &type);
+		supplicant_dbus_dict_append_basic(&dict, "version",
+					DBUS_TYPE_INT32, &service->version);
+		supplicant_dbus_dict_append_basic(&dict, "service",
+					DBUS_TYPE_STRING, &service->service);
+	}
+
+	supplicant_dbus_dict_close(iter, &dict);
+}
+
+int g_supplicant_interface_p2p_add_service(GSupplicantInterface *interface,
+				GSupplicantInterfaceCallback callback,
+				GSupplicantP2PServiceParams *p2p_service_params,
+				void *user_data)
+{
+	struct p2p_service_data *data;
+	int ret;
+
+	SUPPLICANT_DBG("");
+
+	if (!interface->p2p_support)
+		return -ENOTSUP;
+
+	data = dbus_malloc0(sizeof(*data));
+	data->registration = true;
+	data->interface = interface;
+	data->service = p2p_service_params;
+	data->callback = callback;
+	data->user_data = user_data;
+
+	ret = supplicant_dbus_method_call(interface->path,
+		SUPPLICANT_INTERFACE ".Interface.P2PDevice", "AddService",
+		interface_p2p_service_params, interface_p2p_service_result,
+		data, interface);
+	if (ret < 0) {
+		dbus_free(data);
+		return ret;
+	}
+
+	return -EINPROGRESS;
+}
+
+int g_supplicant_interface_p2p_del_service(GSupplicantInterface *interface,
+				GSupplicantP2PServiceParams *p2p_service_params)
+{
+	struct p2p_service_data *data;
+	int ret;
+
+	SUPPLICANT_DBG("");
+
+	if (!interface->p2p_support)
+		return -ENOTSUP;
+
+	data = dbus_malloc0(sizeof(*data));
+	data->interface = interface;
+	data->service = p2p_service_params;
+
+	ret = supplicant_dbus_method_call(interface->path,
+		SUPPLICANT_INTERFACE ".Interface.P2PDevice", "DeleteService",
+		interface_p2p_service_params, interface_p2p_service_result,
+		data, interface);
+	if (ret < 0) {
+		dbus_free(data);
+		return ret;
+	}
+
+	return -EINPROGRESS;
+}
+
+struct p2p_listen_data {
+	int period;
+	int interval;
+};
+
+static void interface_p2p_listen_params(DBusMessageIter *iter, void *user_data)
+{
+	struct p2p_listen_data *params = user_data;
+	DBusMessageIter dict;
+
+	supplicant_dbus_dict_open(iter, &dict);
+
+	supplicant_dbus_dict_append_basic(&dict, "period",
+					DBUS_TYPE_INT32, &params->period);
+	supplicant_dbus_dict_append_basic(&dict, "interval",
+					DBUS_TYPE_INT32, &params->interval);
+	supplicant_dbus_dict_close(iter, &dict);
+}
+
+int g_supplicant_interface_p2p_listen(GSupplicantInterface *interface,
+						int period, int interval)
+{
+	struct p2p_listen_data params;
+
+	SUPPLICANT_DBG("");
+
+	if (!interface->p2p_support)
+		return -ENOTSUP;
+
+	params.period = period;
+	params.interval = interval;
+
+	return supplicant_dbus_method_call(interface->path,
+			SUPPLICANT_INTERFACE ".Interface.P2PDevice",
+			"ExtendedListen", interface_p2p_listen_params,
+			NULL, &params, NULL);
+}
+
+static void widi_ies_params(DBusMessageIter *iter, void *user_data)
+{
+	struct p2p_service_data *data = user_data;
+	GSupplicantP2PServiceParams *service = data->service;
+	DBusMessageIter array;
+
+	SUPPLICANT_DBG("%p - %d", service->wfd_ies, service->wfd_ies_length);
+
+	dbus_message_iter_open_container(iter, DBUS_TYPE_ARRAY,
+					DBUS_TYPE_BYTE_AS_STRING, &array);
+
+	if (service->wfd_ies && service->wfd_ies_length > 0) {
+		dbus_message_iter_append_fixed_array(&array, DBUS_TYPE_BYTE,
+				&service->wfd_ies, service->wfd_ies_length);
+	}
+
+	dbus_message_iter_close_container(iter, &array);
+}
+
+int g_supplicant_set_widi_ies(GSupplicantP2PServiceParams *p2p_service_params,
+					GSupplicantInterfaceCallback callback,
+					void *user_data)
+{
+	struct p2p_service_data *data;
+	int ret;
+
+	SUPPLICANT_DBG("");
+
+	if (!system_available)
+		return -EFAULT;
+
+	data = dbus_malloc0(sizeof(*data));
+	data->service = p2p_service_params;
+	data->callback = callback;
+	data->user_data = user_data;
+
+	if (p2p_service_params->wfd_ies)
+		data->registration = true;
+
+	ret = supplicant_dbus_property_set(SUPPLICANT_PATH,
+					SUPPLICANT_INTERFACE, "WFDIEs",
+					DBUS_TYPE_ARRAY_AS_STRING
+					DBUS_TYPE_BYTE_AS_STRING,
+					widi_ies_params,
+					interface_p2p_service_result,
+					data, NULL);
+	if (ret < 0 && ret != -EINPROGRESS) {
+		dbus_free(data);
+		return ret;
+	}
+
+	return -EINPROGRESS;
+}
+
+
 static const char *g_supplicant_rule0 = "type=signal,"
 					"path=" DBUS_PATH_DBUS ","
 					"sender=" DBUS_SERVICE_DBUS ","
@@ -4859,6 +5287,8 @@ int g_supplicant_register(const GSupplicantCallbacks *callbacks)
 	peer_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
 								NULL, NULL);
 	group_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
+								NULL, NULL);
+	pending_peer_connection = g_hash_table_new_full(g_str_hash, g_str_equal,
 								NULL, NULL);
 
 	supplicant_dbus_setup(connection);

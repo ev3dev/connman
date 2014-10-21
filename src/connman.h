@@ -95,8 +95,6 @@ struct connman_peer;
 
 void __connman_agent_cancel(struct connman_service *service);
 
-int __connman_service_add_passphrase(struct connman_service *service,
-					const gchar *passphrase);
 typedef void (* authentication_cb_t) (struct connman_service *service,
 				bool values_received,
 				const char *name, int name_len,
@@ -415,6 +413,7 @@ int __connman_ipconfig_load(struct connman_ipconfig *ipconfig,
 int __connman_ipconfig_save(struct connman_ipconfig *ipconfig,
 		GKeyFile *keyfile, const char *identifier, const char *prefix);
 bool __connman_ipconfig_ipv6_privacy_enabled(struct connman_ipconfig *ipconfig);
+int __connman_ipconfig_ipv6_reset_privacy(struct connman_ipconfig *ipconfig);
 int __connman_ipconfig_ipv6_set_privacy(struct connman_ipconfig *ipconfig,
 					const char *value);
 bool __connman_ipconfig_ipv6_is_enabled(struct connman_ipconfig *ipconfig);
@@ -736,6 +735,7 @@ void __connman_service_set_config(struct connman_service *service,
 
 const char *__connman_service_type2string(enum connman_service_type type);
 enum connman_service_type __connman_service_string2type(const char *str);
+enum connman_service_security __connman_service_string2security(const char *str);
 
 int __connman_service_nameserver_append(struct connman_service *service,
 				const char *nameserver, bool is_auto);
@@ -797,6 +797,22 @@ void __connman_peer_cleanup(void);
 
 void __connman_peer_list_struct(DBusMessageIter *array);
 const char *__connman_peer_get_path(struct connman_peer *peer);
+
+int __connman_peer_service_init(void);
+void __connman_peer_service_cleanup(void);
+
+void __connman_peer_service_set_driver(struct connman_peer_driver *driver);
+int __connman_peer_service_register(const char *owner, DBusMessage *msg,
+					const unsigned char *specification,
+					int specification_length,
+					const unsigned char *query,
+					int query_length, int version,
+					bool master);
+int __connman_peer_service_unregister(const char *owner,
+					const unsigned char *specification,
+					int specification_length,
+					const unsigned char *query,
+					int query_length, int version);
 
 #include <connman/session.h>
 
@@ -1013,3 +1029,8 @@ int __connman_nfacct_disable(struct nfacct_context *ctx,
 				void *user_data);
 
 void __connman_nfacct_cleanup(void);
+
+#include <connman/machine.h>
+
+int __connman_machine_init(void);
+void __connman_machine_cleanup(void);

@@ -644,6 +644,7 @@ int main(int argc, char *argv[])
 	__connman_notifier_init();
 	__connman_agent_init();
 	__connman_service_init();
+	__connman_peer_service_init();
 	__connman_peer_init();
 	__connman_provider_init();
 	__connman_network_init();
@@ -678,6 +679,7 @@ int main(int argc, char *argv[])
 	__connman_wpad_init();
 	__connman_wispr_init();
 	__connman_rfkill_init();
+	__connman_machine_init();
 
 	g_free(option_config);
 	g_free(option_device);
@@ -689,6 +691,7 @@ int main(int argc, char *argv[])
 
 	g_source_remove(signal);
 
+	__connman_machine_cleanup();
 	__connman_rfkill_cleanup();
 	__connman_wispr_cleanup();
 	__connman_wpad_cleanup();
@@ -713,6 +716,7 @@ int main(int argc, char *argv[])
 	__connman_nat_cleanup();
 	__connman_firewall_cleanup();
 	__connman_iptables_cleanup();
+	__connman_peer_service_cleanup();
 	__connman_peer_cleanup();
 	__connman_ippool_cleanup();
 	__connman_device_cleanup();

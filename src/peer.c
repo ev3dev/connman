@@ -44,6 +44,12 @@ struct _peers_notify {
 	GHashTable *remove;
 } *peers_notify;
 
+struct _peer_service {
+	enum connman_peer_service_type type;
+	unsigned char *data;
+	int length;
+};
+
 struct connman_peer {
 	int refcount;
 	struct connman_device *device;
@@ -58,6 +64,7 @@ struct connman_peer {
 	bool connection_master;
 	struct connman_ippool *ip_pool;
 	GDHCPServer *dhcp_server;
+	GSList *services;
 };
 
 static void stop_dhcp_server(struct connman_peer *peer)
@@ -188,6 +195,9 @@ static void peer_free(gpointer data)
 		peer->device = NULL;
 	}
 
+	if (peer->services)
+		connman_peer_reset_services(peer);
+
 	g_free(peer->identifier);
 	g_free(peer->name);
 
@@ -278,6 +288,49 @@ static void append_ipv4(DBusMessageIter *iter, void *user_data)
 		__connman_ipconfig_append_ipv4(peer->ipconfig, iter);
 }
 
+static void append_peer_service(DBusMessageIter *iter,
+					struct _peer_service *service)
+{
+	DBusMessageIter dict;
+
+	connman_dbus_dict_open(iter, &dict);
+
+	switch (service->type) {
+	case CONNMAN_PEER_SERVICE_UNKNOWN:
+		/* Should never happen */
+		break;
+	case CONNMAN_PEER_SERVICE_WIFI_DISPLAY:
+		connman_dbus_dict_append_fixed_array(&dict,
+				"WiFiDisplayIEs", DBUS_TYPE_BYTE,
+				&service->data, service->length);
+		break;
+	}
+
+	connman_dbus_dict_close(iter, &dict);
+}
+
+static void append_peer_services(DBusMessageIter *iter, void *user_data)
+{
+	struct connman_peer *peer = user_data;
+	DBusMessageIter container;
+	GSList *list;
+
+	dbus_message_iter_open_container(iter, DBUS_TYPE_STRUCT,
+							NULL, &container);
+
+	if (!peer->services) {
+		DBusMessageIter dict;
+
+		connman_dbus_dict_open(&container, &dict);
+		connman_dbus_dict_close(&container, &dict);
+	} else {
+		for (list = peer->services; list; list = list->next)
+			append_peer_service(&container, list->data);
+	}
+
+	dbus_message_iter_close_container(iter, &container);
+}
+
 static void append_properties(DBusMessageIter *iter, struct connman_peer *peer)
 {
 	const char *state = state2string(peer->state);
@@ -290,7 +343,9 @@ static void append_properties(DBusMessageIter *iter, struct connman_peer *peer)
 	connman_dbus_dict_append_basic(&dict, "Name",
 					DBUS_TYPE_STRING, &peer->name);
 	connman_dbus_dict_append_dict(&dict, "IPv4", append_ipv4, peer);
-
+	connman_dbus_dict_append_array(&dict, "Services",
+					DBUS_TYPE_DICT_ENTRY,
+					append_peer_services, peer);
 	connman_dbus_dict_close(iter, &dict);
 }
 
@@ -493,7 +548,9 @@ static void request_authorization_cb(struct connman_peer *peer,
 
 	if (error) {
 		if (g_strcmp0(error,
-				"net.connman.Agent.Error.Canceled") == 0) {
+				"net.connman.Agent.Error.Canceled") == 0 ||
+			g_strcmp0(error,
+				"net.connman.Agent.Error.Rejected") == 0) {
 			err = -EINVAL;
 			goto out;
 		}
@@ -784,6 +841,9 @@ int connman_peer_set_state(struct connman_peer *peer,
 	enum connman_peer_state old_state = peer->state;
 	int err;
 
+	DBG("peer (%s) old state %d new state %d", peer->name,
+				old_state, new_state);
+
 	if (old_state == new_state)
 		return -EALREADY;
 
@@ -826,6 +886,60 @@ int connman_peer_set_state(struct connman_peer *peer,
 	state_changed(peer);
 
 	return 0;
+}
+
+int connman_peer_request_connection(struct connman_peer *peer)
+{
+	return __connman_agent_request_peer_authorization(peer,
+					request_authorization_cb, false,
+					NULL, NULL);
+}
+
+static void peer_service_free(gpointer data)
+{
+	struct _peer_service *service = data;
+
+	if (!service)
+		return;
+
+	g_free(service->data);
+	g_free(service);
+}
+
+void connman_peer_reset_services(struct connman_peer *peer)
+{
+	if (!peer)
+		return;
+
+	g_slist_free_full(peer->services, peer_service_free);
+	peer->services = NULL;
+}
+
+void connman_peer_services_changed(struct connman_peer *peer)
+{
+	if (!peer || !peer->registered || !allow_property_changed(peer))
+		return;
+
+	connman_dbus_property_changed_array(peer->path,
+			CONNMAN_PEER_INTERFACE, "Services",
+			DBUS_TYPE_DICT_ENTRY, append_peer_services, peer);
+}
+
+void connman_peer_add_service(struct connman_peer *peer,
+				enum connman_peer_service_type type,
+				const unsigned char *data, int data_length)
+{
+	struct _peer_service *service;
+
+	if (!peer || !data || type == CONNMAN_PEER_SERVICE_UNKNOWN)
+		return;
+
+	service = g_malloc0(sizeof(struct _peer_service));
+	service->type = type;
+	service->data = g_memdup(data, data_length * sizeof(unsigned char));
+	service->length = data_length;
+
+	peer->services = g_slist_prepend(peer->services, service);
 }
 
 static void peer_up(struct connman_ipconfig *ipconfig, const char *ifname)
@@ -989,6 +1103,8 @@ int connman_peer_driver_register(struct connman_peer_driver *driver)
 
 	peer_driver = driver;
 
+	__connman_peer_service_set_driver(driver);
+
 	return 0;
 }
 
@@ -998,6 +1114,8 @@ void connman_peer_driver_unregister(struct connman_peer_driver *driver)
 		return;
 
 	peer_driver = NULL;
+
+	__connman_peer_service_set_driver(NULL);
 }
 
 void __connman_peer_list_struct(DBusMessageIter *array)

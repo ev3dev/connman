@@ -36,12 +36,8 @@ extern "C" {
 int connman_inet_ifindex(const char *name);
 char *connman_inet_ifname(int index);
 
-short int connman_inet_ifflags(int index);
-
 int connman_inet_ifup(int index);
 int connman_inet_ifdown(int index);
-
-bool connman_inet_is_cfg80211(int index);
 
 int connman_inet_set_address(int index, struct connman_ipaddress *ipaddress);
 int connman_inet_clear_address(int index, struct connman_ipaddress *ipaddress);

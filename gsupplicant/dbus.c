@@ -240,6 +240,8 @@ int supplicant_dbus_property_get_all(const char *path, const char *interface,
 	property_call->function = function;
 	property_call->user_data = user_data;
 
+	property_calls = g_slist_prepend(property_calls, property_call);
+
 	dbus_pending_call_set_notify(call, property_get_all_reply,
 				property_call, property_call_free);
 
@@ -326,6 +328,8 @@ int supplicant_dbus_property_get(const char *path, const char *interface,
 	property_call->pending_call = call;
 	property_call->function = function;
 	property_call->user_data = user_data;
+
+	property_calls = g_slist_prepend(property_calls, property_call);
 
 	dbus_pending_call_set_notify(call, property_get_reply,
 					property_call, property_call_free);
@@ -418,6 +422,8 @@ int supplicant_dbus_property_set(const char *path, const char *interface,
 	property_call->pending_call = call;
 	property_call->function = function;
 	property_call->user_data = user_data;
+
+	property_calls = g_slist_prepend(property_calls, property_call);
 
 	dbus_pending_call_set_notify(call, property_set_reply,
 					property_call, property_call_free);
@@ -618,6 +624,7 @@ void supplicant_dbus_property_append_array(DBusMessageIter *iter,
 
 	switch (type) {
 	case DBUS_TYPE_STRING:
+	case DBUS_TYPE_BYTE:
 		variant_sig = DBUS_TYPE_ARRAY_AS_STRING
 				DBUS_TYPE_ARRAY_AS_STRING
 				DBUS_TYPE_BYTE_AS_STRING;
