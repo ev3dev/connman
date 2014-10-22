@@ -1,0 +1,163 @@
+Description: <short summary of the patch>
+ TODO: Put a short summary on the line above and replace this paragraph
+ with a longer explanation of this change. Complete the meta-information
+ with other relevant fields (see below for details). To make it easier, the
+ information below has been extracted from the changelog. Adjust it or drop
+ it.
+ .
+ connman (1.26-0ev3dev4~1.gbpd4b1a5) testing; urgency=medium
+ .
+   ** SNAPSHOT build @d4b1a55bc58bd9a74e29effe4bda25bc4900c210 **
+ .
+   * add support for bluetooth NAP PANU and GN
+Author: David Lechner <david@lechnology.com>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- a/plugins/bluetooth.c
++++ b/plugins/bluetooth.c
+@@ -36,7 +36,9 @@
+ 
+ #define BLUEZ_SERVICE                   "org.bluez"
+ #define BLUEZ_PATH                      "/org/bluez"
++#define BLUETOOTH_PAN_PANU              "00001115-0000-1000-8000-00805f9b34fb"
+ #define BLUETOOTH_PAN_NAP               "00001116-0000-1000-8000-00805f9b34fb"
++#define BLUETOOTH_PAN_GN                "00001117-0000-1000-8000-00805f9b34fb"
+ 
+ #define BLUETOOTH_ADDR_LEN              6
+ 
+@@ -50,6 +52,7 @@
+ 	struct connman_network *network;
+ 	GDBusProxy *btdevice_proxy;
+ 	GDBusProxy *btnetwork_proxy;
++	const char *pan_role;
+ };
+ 
+ static void address2ident(const char *address, char *ident)
+@@ -85,28 +88,32 @@
+ 	return value;
+ }
+ 
+-static bool proxy_get_nap(GDBusProxy *proxy)
++static const char* proxy_get_role(GDBusProxy *proxy)
+ {
+         DBusMessageIter iter, value;
+ 
+ 	if (!proxy)
+-		return false;
++		return NULL;
+ 
+         if (!g_dbus_proxy_get_property(proxy, "UUIDs", &iter))
+-                return false;
++		return NULL;
+ 
+         dbus_message_iter_recurse(&iter, &value);
+         while (dbus_message_iter_get_arg_type(&value) == DBUS_TYPE_STRING) {
+                 const char *uuid;
+ 
+                 dbus_message_iter_get_basic(&value, &uuid);
++                if (strcmp(uuid, BLUETOOTH_PAN_PANU) == 0)
++			return "panu";
+                 if (strcmp(uuid, BLUETOOTH_PAN_NAP) == 0)
+-                        return true;
++			return "nap";
++                if (strcmp(uuid, BLUETOOTH_PAN_GN) == 0)
++			return "gn";
+ 
+                 dbus_message_iter_next(&value);
+         }
+ 
+-        return false;
++	return NULL;
+ }
+ 
+ static int bluetooth_pan_probe(struct connman_network *network)
+@@ -225,9 +232,11 @@
+ static void pan_connect_append(DBusMessageIter *iter,
+ 		void *user_data)
+ {
+-	const char *role = BLUETOOTH_PAN_NAP;
++	const char *path = user_data;
++	struct bluetooth_pan *pan;
+ 
+-	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, &role);
++	pan = g_hash_table_lookup(networks, path);
++	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, &pan->pan_role);
+ }
+ 
+ static int bluetooth_pan_connect(struct connman_network *network)
+@@ -322,8 +331,10 @@
+ static void pan_create_nap(struct bluetooth_pan *pan)
+ {
+ 	struct connman_device *device;
++	const char* role;
+ 
+-	if (!proxy_get_nap(pan->btdevice_proxy)) {
++	role = proxy_get_role(pan->btdevice_proxy);
++	if (!role) {
+ 		pan_remove_nap(pan);
+ 		return;
+ 	}
+@@ -366,6 +377,7 @@
+ 		connman_network_set_group(pan->network, ident);
+ 	}
+ 
++	pan->pan_role = role;
+ 	connman_device_add_network(device, pan->network);
+ 
+ 	if (pan_connect(pan, NULL))
+@@ -376,7 +388,7 @@
+ 		DBusMessageIter *iter, void *user_data)
+ {
+ 	struct bluetooth_pan *pan;
+-	bool pan_nap = false;
++	const char* pan_role = NULL;
+ 
+ 	if (strcmp(name, "UUIDs") != 0)
+ 		return;
+@@ -387,12 +399,12 @@
+ 
+ 	if (pan->network &&
+ 			connman_network_get_device(pan->network))
+-		pan_nap = true;
++		pan_role = pan->pan_role;
+ 
+-	DBG("network %p network nap %d proxy nap %d", pan->network, pan_nap,
+-			proxy_get_nap(pan->btdevice_proxy));
++	DBG("network %p network role %s proxy role %s", pan->network, pan_role,
++			proxy_get_role(pan->btdevice_proxy));
+ 
+-	if (proxy_get_nap(pan->btdevice_proxy) == pan_nap)
++	if (strcmp(proxy_get_role(pan->btdevice_proxy), pan_role) == 0)
+ 		return;
+ 
+ 	pan_create_nap(pan);
+@@ -447,7 +459,7 @@
+ 	g_dbus_proxy_set_property_watch(pan->btdevice_proxy,
+ 			btdevice_property_change, NULL);
+ 
+-	DBG("pan %p %s nap %d", pan, path, proxy_get_nap(pan->btdevice_proxy));
++	DBG("pan %p %s role %s", pan, path, proxy_get_role(pan->btdevice_proxy));
+ 
+ 	pan_create_nap(pan);
+ }
+@@ -756,7 +768,7 @@
+ 	powered = proxy_get_bool(proxy, "Powered");
+ 	connman_device_set_powered(device, powered);
+ 
+-	if (proxy_get_nap(proxy) && !bluetooth_tethering)
++	if (proxy_get_role(proxy) != NULL && !bluetooth_tethering)
+ 		tethering_create(path, NULL, NULL, false);
+ }
+ 
