@@ -1,3 +1,9 @@
+connman (1.26-0ev3dev4) testing; urgency=medium
+
+  * Add support for bluetooth NAP PANU and GN roles.
+
+ -- David Lechner <david@lechnology.com>  Wed, 22 Oct 2014 19:18:42 -0500
+
 connman (1.26-0ev3dev3) testing; urgency=medium
 
   * Do not restart when upgrading. Fixes ev3dev/ev3dev/#183.
