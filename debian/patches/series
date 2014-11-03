@@ -1,4 +1,3 @@
 01-init-script-lsb-headers.patch
 02-test-pbkdf2-sha1-maximum-salt-len-should-be-32-instead.patch
-cleanup-rfkill.patch
-bluetooth-nap-panu-gn.patch
+Support-connecting-to-bluetooth-GN-and-PANU-roles.patch
