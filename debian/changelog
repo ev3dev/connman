@@ -1,11 +1,10 @@
-connman (1.26-0ev3dev6~5.gbpb00b90) testing; urgency=medium
+connman (1.26-0ev3dev6) testing; urgency=medium
 
-  ** SNAPSHOT build @b00b90c5a8c0ceda1feb38d4dde9367e12187b15 **
-
-  * Revert "Revert "Do not restart when upgrading (ev3dev/ev3dev/#183)""
   * Fix preferred blutooth role matching
+  * Revert "Revert "Do not restart when upgrading (ev3dev/ev3dev/#183)""
+  * Fix crash when connecting to Windows 7 PANU
 
- -- David Lechner <david@lechnology.com>  Mon, 03 Nov 2014 15:42:51 -0600
+ -- David Lechner <david@lechnology.com>  Mon, 03 Nov 2014 22:35:34 -0600
 
 connman (1.26-0ev3dev5) testing; urgency=medium
 
