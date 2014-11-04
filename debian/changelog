@@ -1,3 +1,12 @@
+connman (1.26-0ev3dev6~5.gbpb00b90) testing; urgency=medium
+
+  ** SNAPSHOT build @b00b90c5a8c0ceda1feb38d4dde9367e12187b15 **
+
+  * Revert "Revert "Do not restart when upgrading (ev3dev/ev3dev/#183)""
+  * Fix preferred blutooth role matching
+
+ -- David Lechner <david@lechnology.com>  Mon, 03 Nov 2014 15:42:51 -0600
+
 connman (1.26-0ev3dev5) testing; urgency=medium
 
   * Revert "Do not restart when upgrading (ev3dev/ev3dev/#183)"
