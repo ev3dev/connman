@@ -1,3 +1,77 @@
+connman (1.27-0ev3dev1) testing; urgency=medium
+
+  [ Chengyi Zhao ]
+  * ipconfig: Fix potential memory leak in __connman_ipconfig_newaddr()
+
+  [ Tomasz Bursztyka ]
+  * config: Handle IN_MOVED_TO inotify event
+
+  [ Hannu Mallat ]
+  * proxy: Remove timeout on proxy cleanup
+
+  [ Patrik Flykt ]
+  * service: Document all 'Error' property values
+
+  [ David Lechner ]
+  * Support connecting to bluetooth GN and PANU roles
+
+  [ Patrik Flykt ]
+  * AUTHORS: Mention David's contributions
+
+  [ David Lechner ]
+  * Fix preferred bluetooth role matching.
+  * Fix crash when role is NULL.
+
+  [ Slava Monich ]
+  * ofono: Fix memory leak
+
+  [ Jason Abele ]
+  * wifi: scan all channels when connected
+
+  [ Patrik Flykt ]
+  * AUTHORS: Mention Jason's contributions
+
+  [ Jason Abele ]
+  * wifi: do not start autoscan while connected
+
+  [ Patrik Flykt ]
+  * technology: Set P2P state according to saved and configured values
+
+  [ Erik Larsson ]
+  * agent-connman: Fix crash due to NULL D-Bus reply message
+
+  [ Patrik Flykt ]
+  * AUTHORS: Mention Erik's contributions
+
+  [ Hannu Mallat ]
+  * inotify: Fix buffer size
+  * inotify: Refcount struct connman_inotify
+
+  [ Patrik Flykt ]
+  * util: Use proper source for random numbers
+  * dnsproxy: Use the newly provided function for getting random values
+  * dhcpv6: Use the newly provided function for getting random values
+  * config: Use the newly provided function for getting random values
+  * gdhcp: Add a function to fetch random values
+  * gdhcp: Use dhcp_get_random() where necessary
+  * dhcp: Clean up resources initialized by dhcp_get_random()
+  * TODO: WiFi P2P support has been implemented
+  * ntp: Unset poll id when callback is called
+  * service: Whitespace fixes
+  * service: Clean up pointer usage
+  * ipconfig: Define unique value for CONNMAN_IPCONFIG_TYPE_ALL
+  * gdhcp: Properly specify length of uint64_t
+  * util: Properly specify length of uint64_t
+  * gdhcp: Pass pointer properly
+
+  [ Marcel Holtmann ]
+  * Release 1.27
+
+  [ David Lechner ]
+  * Remove patches that were accepted upstream
+
+ -- David Lechner <david@lechnology.com>  Fri, 19 Dec 2014 13:44:48 -0600
+
 connman (1.26-0ev3dev6) testing; urgency=medium
 
   * Fix preferred blutooth role matching
