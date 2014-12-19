@@ -1340,6 +1340,9 @@ static void start_autoscan(struct connman_device *device)
 	if (wifi->p2p_device)
 		return;
 
+	if (wifi->connected)
+		return;
+
 	autoscan = wifi->autoscan;
 	if (!autoscan)
 		return;
@@ -1839,6 +1842,9 @@ static int wifi_scan(enum connman_service_type type,
 
 			return 0;
 		}
+	} else if (wifi->connected) {
+		g_supplicant_free_scan_params(scan_params);
+		return wifi_scan_simple(device);
 	} else {
 		ret = get_latest_connections(driver_max_ssids, scan_params);
 		if (ret <= 0) {

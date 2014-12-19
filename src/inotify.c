@@ -35,6 +35,8 @@
 #include "connman.h"
 
 struct connman_inotify {
+	unsigned int refcount;
+
 	GIOChannel *channel;
 	uint watch;
 	int wd;
@@ -42,13 +44,30 @@ struct connman_inotify {
 	GSList *list;
 };
 
+static void cleanup_inotify(gpointer user_data);
+
+static void connman_inotify_ref(struct connman_inotify *i)
+{
+	__sync_fetch_and_add(&i->refcount, 1);
+}
+
+static void connman_inotify_unref(gpointer data)
+{
+	struct connman_inotify *i = data;
+
+	if (__sync_fetch_and_sub(&i->refcount, 1) != 1)
+		return;
+
+	cleanup_inotify(data);
+}
+
 static GHashTable *inotify_hash;
 
 static gboolean inotify_data(GIOChannel *channel, GIOCondition cond,
 							gpointer user_data)
 {
 	struct connman_inotify *inotify = user_data;
-	char buffer[256];
+	char buffer[sizeof(struct inotify_event) + NAME_MAX + 1];
 	char *next_event;
 	gsize bytes_read;
 	GIOStatus status;
@@ -60,7 +79,7 @@ static gboolean inotify_data(GIOChannel *channel, GIOCondition cond,
 	}
 
 	status = g_io_channel_read_chars(channel, buffer,
-					sizeof(buffer) -1, &bytes_read, NULL);
+					sizeof(buffer), &bytes_read, NULL);
 
 	switch (status) {
 	case G_IO_STATUS_NORMAL:
@@ -74,6 +93,8 @@ static gboolean inotify_data(GIOChannel *channel, GIOCondition cond,
 	}
 
 	next_event = buffer;
+
+	connman_inotify_ref(inotify);
 
 	while (bytes_read > 0) {
 		struct inotify_event *event;
@@ -101,6 +122,8 @@ static gboolean inotify_data(GIOChannel *channel, GIOCondition cond,
 			(*callback)(event, ident);
 		}
 	}
+
+	connman_inotify_unref(inotify);
 
 	return TRUE;
 }
@@ -179,6 +202,7 @@ int connman_inotify_register(const char *path, inotify_event_cb callback)
 	if (!inotify)
 		return -ENOMEM;
 
+	inotify->refcount = 1;
 	inotify->wd = -1;
 
 	err = create_watch(path, inotify);
@@ -225,7 +249,7 @@ int __connman_inotify_init(void)
 	DBG("");
 
 	inotify_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
-						g_free, cleanup_inotify);
+						g_free, connman_inotify_unref);
 	return 0;
 }
 

@@ -4807,6 +4807,11 @@ bool __connman_service_is_connected_state(struct connman_service *service,
 		return is_connected_state(service, service->state_ipv4);
 	case CONNMAN_IPCONFIG_TYPE_IPV6:
 		return is_connected_state(service, service->state_ipv6);
+	case CONNMAN_IPCONFIG_TYPE_ALL:
+		return is_connected_state(service,
+					CONNMAN_IPCONFIG_TYPE_IPV4) &&
+			is_connected_state(service,
+					CONNMAN_IPCONFIG_TYPE_IPV6);
 	}
 
 	return false;
@@ -5653,7 +5658,7 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 					enum connman_ipconfig_type type)
 {
 	struct connman_ipconfig *ipconfig = NULL;
-	enum connman_service_state *old_state;
+	enum connman_service_state old_state;
 	enum connman_ipconfig_method method;
 
 	if (!service)
@@ -5661,16 +5666,17 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 
 	switch (type) {
 	case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+	case CONNMAN_IPCONFIG_TYPE_ALL:
 		return -EINVAL;
 
 	case CONNMAN_IPCONFIG_TYPE_IPV4:
-		old_state = &service->state_ipv4;
+		old_state = service->state_ipv4;
 		ipconfig = service->ipconfig_ipv4;
 
 		break;
 
 	case CONNMAN_IPCONFIG_TYPE_IPV6:
-		old_state = &service->state_ipv6;
+		old_state = service->state_ipv6;
 		ipconfig = service->ipconfig_ipv6;
 
 		break;
@@ -5680,12 +5686,12 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 		return -EINVAL;
 
 	/* Any change? */
-	if (*old_state == new_state)
+	if (old_state == new_state)
 		return -EALREADY;
 
 	DBG("service %p (%s) old state %d (%s) new state %d (%s) type %d (%s)",
 		service, service ? service->identifier : NULL,
-		*old_state, state2string(*old_state),
+		old_state, state2string(old_state),
 		new_state, state2string(new_state),
 		type, __connman_ipconfig_type2string(type));
 
@@ -5732,14 +5738,17 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 		break;
 
 	case CONNMAN_IPCONFIG_METHOD_FIXED:
-        case CONNMAN_IPCONFIG_METHOD_MANUAL:
-        case CONNMAN_IPCONFIG_METHOD_DHCP:
-        case CONNMAN_IPCONFIG_METHOD_AUTO:
+	case CONNMAN_IPCONFIG_METHOD_MANUAL:
+	case CONNMAN_IPCONFIG_METHOD_DHCP:
+	case CONNMAN_IPCONFIG_METHOD_AUTO:
 		break;
 
 	}
 
-	*old_state = new_state;
+	if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
+		service->state_ipv4 = new_state;
+	else
+		service->state_ipv6 = new_state;
 
 	update_nameservers(service);
 
