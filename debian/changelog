@@ -1,3 +1,10 @@
+connman (1.27-0ev3dev2) testing; urgency=medium
+
+  * Refresh quilt patches.
+  * Add main.conf to install files.
+
+ -- David Lechner <david@lechnology.com>  Tue, 13 Jan 2015 22:42:24 -0600
+
 connman (1.27-0ev3dev1) testing; urgency=medium
 
   [ Chengyi Zhao ]
