@@ -9,11 +9,9 @@ Signed-off-by: Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>
  unit/test-pbkdf2-sha1.c | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/unit/test-pbkdf2-sha1.c b/unit/test-pbkdf2-sha1.c
-index 91be03d..c646cf0 100644
 --- a/unit/test-pbkdf2-sha1.c
 +++ b/unit/test-pbkdf2-sha1.c
-@@ -115,9 +115,9 @@ static const struct pbkdf2_data pbkdf2_test_vector_4 = {
+@@ -114,9 +114,9 @@
  
  static const struct pbkdf2_data pbkdf2_test_vector_5 = {
  	.password	= "passwordPASSWORDpassword",
