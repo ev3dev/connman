@@ -1,3 +1,10 @@
+connman (1.27-0ev3dev3) testing; urgency=medium
+
+  * Fix error when enabling/disabling bluetooth tethering.
+  * Fix bluetooth tethinging state not remembered after reboot.
+
+ -- David Lechner <david@lechnology.com>  Fri, 16 Jan 2015 14:33:36 -0600
+
 connman (1.27-0ev3dev2) testing; urgency=medium
 
   * Refresh quilt patches.
