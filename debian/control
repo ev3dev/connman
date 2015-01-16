@@ -1,8 +1,9 @@
 Source: connman
 Section: net
 Priority: optional
-Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawn@churchofgit.com>
+Maintainer: David Lechner <david@lechnology.com>
+XSBC-Original-Maintainer: Alexander Sack <asac@debian.org>
+XSBC-Original-Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawn@churchofgit.com>
 Homepage: https://www.connman.net
 Build-Depends: debhelper (>= 9),
                libudev-dev,
@@ -17,8 +18,10 @@ Build-Depends: debhelper (>= 9),
                dh-systemd,
                dh-autoreconf
 Standards-Version: 3.9.5
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/connman.git
-Vcs-Git: git://anonscm.debian.org/collab-maint/connman.git
+Vcs-Browser: https://github.com/ev3dev/connman
+Vcs-Git: git://github.com/ev3dev/connman.git
+XSBC-Original-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/connman.git
+XSBC-Original-Vcs-Git: git://anonscm.debian.org/collab-maint/connman.git
 
 Package: connman
 Architecture: any
