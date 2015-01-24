@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -105,25 +105,37 @@ static void clear_timer(struct connman_dhcpv6 *dhcp)
 	}
 }
 
-static inline float get_random(void)
+static inline guint get_random(void)
 {
-	return (rand() % 200 - 100) / 1000.0;
+	uint64_t val;
+
+	__connman_util_get_random(&val);
+
+	/* Make sure the value is always positive so strip MSB */
+	return ((uint32_t)val) >> 1;
+}
+
+static guint compute_random(guint val)
+{
+	return val - val / 10 +
+		(get_random() % (2 * 1000)) * val / 10 / 1000;
 }
 
 /* Calculate a random delay, RFC 3315 chapter 14 */
 /* RT and MRT are milliseconds */
 static guint calc_delay(guint RT, guint MRT)
 {
-	float delay = get_random();
-	float rt = RT * (2 + delay);
+	if (MRT && (RT > MRT / 2))
+		RT = compute_random(MRT);
+	else
+		RT += compute_random(RT);
 
-	if (rt > MRT)
-		rt = MRT * (1 + delay);
+	return RT;
+}
 
-	if (rt < 0)
-		rt = MRT;
-
-	return (guint)rt;
+static guint initial_rt(guint timeout)
+{
+	return compute_random(timeout);
 }
 
 static void free_prefix(gpointer data)
@@ -631,6 +643,7 @@ static void set_address(int ifindex, struct connman_ipconfig *ipconfig,
 		/* Is this prefix part of the subnet we are suppose to use? */
 		prefix_len = check_ipv6_addr_prefix(prefixes, address);
 
+		__connman_ipconfig_address_remove(ipconfig);
 		__connman_ipconfig_set_local(ipconfig, address);
 		__connman_ipconfig_set_prefixlen(ipconfig, prefix_len);
 
@@ -804,7 +817,8 @@ static void dad_reply(struct nd_neighbor_advert *reply,
 			service = __connman_service_lookup_from_index(
 								data->ifindex);
 			network = __connman_service_get_network(service);
-			data->callback(network, status, NULL);
+			if (network)
+				data->callback(network, status, NULL);
 		}
 	}
 
@@ -1118,6 +1132,7 @@ static void rebind_cb(GDHCPClient *dhcp_client, gpointer user_data)
 {
 	DBG("");
 
+	g_dhcpv6_client_reset_request(dhcp_client);
 	g_dhcpv6_client_clear_retransmit(dhcp_client);
 
 	re_cb(REQ_REBIND, dhcp_client, user_data);
@@ -1217,7 +1232,7 @@ static gboolean start_rebind(gpointer user_data)
 	if (check_restart(dhcp) < 0)
 		return FALSE;
 
-	dhcp->RT = REB_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REB_TIMEOUT);
 
 	DBG("rebind initial RT timeout %d msec", dhcp->RT);
 
@@ -1305,6 +1320,7 @@ static void renew_cb(GDHCPClient *dhcp_client, gpointer user_data)
 {
 	DBG("");
 
+	g_dhcpv6_client_reset_request(dhcp_client);
 	g_dhcpv6_client_clear_retransmit(dhcp_client);
 
 	re_cb(REQ_RENEW, dhcp_client, user_data);
@@ -1383,7 +1399,7 @@ static gboolean start_renew(gpointer user_data)
 {
 	struct connman_dhcpv6 *dhcp = user_data;
 
-	dhcp->RT = REN_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REN_TIMEOUT);
 
 	DBG("renew initial RT timeout %d msec", dhcp->RT);
 
@@ -1398,7 +1414,7 @@ int __connman_dhcpv6_start_renew(struct connman_network *network,
 							dhcpv6_cb callback)
 {
 	struct connman_dhcpv6 *dhcp;
-	uint32_t T1, T2;
+	uint32_t T1, T2, delta;
 	time_t started, current, expired;
 
 	dhcp = g_hash_table_lookup(network_table, network);
@@ -1421,11 +1437,13 @@ int __connman_dhcpv6_start_renew(struct connman_network *network,
 		/* RFC 3315, 22.4 */
 		return 0;
 
-	if (T1 == 0)
+	if (T1 == 0) {
 		/* RFC 3315, 22.4
 		 * Client can choose the timeout.
 		 */
-		T1 = 1800;
+		T1 = (expired - started) / 2;
+		T2 = (expired - started) / 10 * 8;
+	}
 
 	dhcp->callback = callback;
 
@@ -1436,22 +1454,23 @@ int __connman_dhcpv6_start_renew(struct connman_network *network,
 	if (T2 != 0xffffffff && T2 > 0) {
 		if ((unsigned)current >= (unsigned)started + T2) {
 			/* RFC 3315, chapter 18.1.3, start rebind */
-			DBG("rebind after %d secs", T2);
+			DBG("start rebind immediately");
 
-			dhcp->timeout = g_timeout_add_seconds(T2, start_rebind,
+			dhcp->timeout = g_timeout_add_seconds(0, start_rebind,
 							dhcp);
 
 		} else if ((unsigned)current < (unsigned)started + T1) {
-			DBG("renew after %d secs", T1);
+			delta = started + T1 - current;
+			DBG("renew after %d secs", delta);
 
-			dhcp->timeout = g_timeout_add_seconds(T1, start_renew,
-							dhcp);
+			dhcp->timeout = g_timeout_add_seconds(delta,
+					start_renew, dhcp);
 		} else {
-			DBG("rebind after %d secs", T2 - T1);
+			delta = started + T2 - current;
+			DBG("rebind after %d secs", delta);
 
-			dhcp->timeout = g_timeout_add_seconds(T2 - T1,
-							start_rebind,
-							dhcp);
+			dhcp->timeout = g_timeout_add_seconds(delta,
+					start_rebind, dhcp);
 		}
 	}
 
@@ -1578,7 +1597,7 @@ static gboolean start_info_req(gpointer user_data)
 	struct connman_dhcpv6 *dhcp = user_data;
 
 	/* Set the retransmission timeout, RFC 3315 chapter 14 */
-	dhcp->RT = INF_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(INF_TIMEOUT);
 
 	DBG("info initial RT timeout %d msec", dhcp->RT);
 
@@ -1594,6 +1613,7 @@ int __connman_dhcpv6_start_info(struct connman_network *network,
 {
 	struct connman_dhcpv6 *dhcp;
 	int delay;
+	uint64_t rand;
 
 	DBG("");
 
@@ -1619,7 +1639,8 @@ int __connman_dhcpv6_start_info(struct connman_network *network,
 	g_hash_table_replace(network_table, network, dhcp);
 
 	/* Initial timeout, RFC 3315, 18.1.5 */
-	delay = rand() % 1000;
+	__connman_util_get_random(&rand);
+	delay = rand % 1000;
 
 	dhcp->timeout = g_timeout_add(delay, start_info_req, dhcp);
 
@@ -1643,7 +1664,7 @@ static void advertise_cb(GDHCPClient *dhcp_client, gpointer user_data)
 		return;
 	}
 
-	dhcp->RT = REQ_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REQ_TIMEOUT);
 	DBG("request initial RT timeout %d msec", dhcp->RT);
 	dhcp->timeout = g_timeout_add(dhcp->RT, timeout_request, dhcp);
 
@@ -1754,7 +1775,7 @@ static gboolean start_solicitation(gpointer user_data)
 	struct connman_dhcpv6 *dhcp = user_data;
 
 	/* Set the retransmission timeout, RFC 3315 chapter 14 */
-	dhcp->RT = SOL_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(SOL_TIMEOUT);
 
 	DBG("solicit initial RT timeout %d msec", dhcp->RT);
 
@@ -1765,146 +1786,13 @@ static gboolean start_solicitation(gpointer user_data)
 	return FALSE;
 }
 
-static void confirm_cb(GDHCPClient *dhcp_client, gpointer user_data)
-{
-	struct connman_dhcpv6 *dhcp = user_data;
-	int status = g_dhcpv6_client_get_status(dhcp_client);
-
-	DBG("dhcpv6 confirm msg %p status %d", dhcp, status);
-
-	clear_timer(dhcp);
-
-	g_dhcpv6_client_clear_retransmit(dhcp_client);
-
-	/*
-	 * If confirm fails, start from scratch.
-	 */
-	if (status != 0) {
-		g_dhcp_client_unref(dhcp->dhcp_client);
-		start_solicitation(dhcp);
-	} else {
-		do_dad(dhcp_client, dhcp);
-	}
-}
-
-static int dhcpv6_confirm(struct connman_dhcpv6 *dhcp)
-{
-	GDHCPClient *dhcp_client;
-	GDHCPClientError error;
-	struct connman_service *service;
-	struct connman_ipconfig *ipconfig_ipv6;
-	int index, ret;
-
-	DBG("dhcp %p", dhcp);
-
-	index = connman_network_get_index(dhcp->network);
-
-	dhcp_client = g_dhcp_client_new(G_DHCP_IPV6, index, &error);
-	if (error != G_DHCP_CLIENT_ERROR_NONE) {
-		clear_timer(dhcp);
-		return -EINVAL;
-	}
-
-	if (getenv("CONNMAN_DHCPV6_DEBUG"))
-		g_dhcp_client_set_debug(dhcp_client, dhcpv6_debug, "DHCPv6");
-
-	service = connman_service_lookup_from_network(dhcp->network);
-	if (!service) {
-		clear_timer(dhcp);
-		g_dhcp_client_unref(dhcp_client);
-		return -EINVAL;
-	}
-
-	ret = set_duid(service, dhcp->network, dhcp_client, index);
-	if (ret < 0) {
-		clear_timer(dhcp);
-		g_dhcp_client_unref(dhcp_client);
-		return ret;
-	}
-
-	g_dhcp_client_set_request(dhcp_client, G_DHCPV6_CLIENTID);
-	g_dhcp_client_set_request(dhcp_client, G_DHCPV6_RAPID_COMMIT);
-
-	ipconfig_ipv6 = __connman_service_get_ip6config(service);
-	dhcp->use_ta = __connman_ipconfig_ipv6_privacy_enabled(ipconfig_ipv6);
-
-	g_dhcpv6_client_set_ia(dhcp_client, index,
-			dhcp->use_ta ? G_DHCPV6_IA_TA : G_DHCPV6_IA_NA,
-			NULL, NULL, TRUE,
-			__connman_ipconfig_get_dhcp_address(ipconfig_ipv6));
-
-	clear_callbacks(dhcp_client);
-
-	g_dhcp_client_register_event(dhcp_client,
-				G_DHCP_CLIENT_EVENT_CONFIRM,
-				confirm_cb, dhcp);
-
-	dhcp->dhcp_client = dhcp_client;
-
-	return g_dhcp_client_start(dhcp_client, NULL);
-}
-
-static gboolean timeout_confirm(gpointer user_data)
-{
-	struct connman_dhcpv6 *dhcp = user_data;
-
-	dhcp->RT = calc_delay(dhcp->RT, CNF_MAX_RT);
-
-	DBG("confirm RT timeout %d msec", dhcp->RT);
-
-	dhcp->timeout = g_timeout_add(dhcp->RT, timeout_confirm, dhcp);
-
-	g_dhcpv6_client_set_retransmit(dhcp->dhcp_client);
-
-	g_dhcp_client_start(dhcp->dhcp_client, NULL);
-
-	return FALSE;
-}
-
-static gboolean timeout_max_confirm(gpointer user_data)
-{
-	struct connman_dhcpv6 *dhcp = user_data;
-
-	dhcp->MRD = 0;
-
-	clear_timer(dhcp);
-
-	DBG("confirm max retransmit duration timeout");
-
-	g_dhcpv6_client_clear_retransmit(dhcp->dhcp_client);
-
-	if (dhcp->callback)
-		dhcp->callback(dhcp->network, CONNMAN_DHCPV6_STATUS_FAIL,
-								NULL);
-
-	return FALSE;
-}
-
-static gboolean start_confirm(gpointer user_data)
-{
-	struct connman_dhcpv6 *dhcp = user_data;
-
-	/* Set the confirm timeout, RFC 3315 chapter 14 */
-	dhcp->RT = CNF_TIMEOUT * (1 + get_random());
-
-	DBG("confirm initial RT timeout %d msec", dhcp->RT);
-
-	dhcp->timeout = g_timeout_add(dhcp->RT, timeout_confirm, dhcp);
-	dhcp->MRD = g_timeout_add(CNF_MAX_RD, timeout_max_confirm, dhcp);
-
-	dhcpv6_confirm(dhcp);
-
-	return FALSE;
-}
-
 int __connman_dhcpv6_start(struct connman_network *network,
 				GSList *prefixes, dhcpv6_cb callback)
 {
 	struct connman_service *service;
-	struct connman_ipconfig *ipconfig_ipv6;
 	struct connman_dhcpv6 *dhcp;
-	char *last_address;
 	int delay;
+	uint64_t rand;
 
 	DBG("");
 
@@ -1934,26 +1822,21 @@ int __connman_dhcpv6_start(struct connman_network *network,
 	g_hash_table_replace(network_table, network, dhcp);
 
 	/* Initial timeout, RFC 3315, 17.1.2 */
-	delay = rand() % 1000;
+	__connman_util_get_random(&rand);
+	delay = rand % 1000;
 
-	ipconfig_ipv6 = __connman_service_get_ip6config(service);
-	last_address = __connman_ipconfig_get_dhcp_address(ipconfig_ipv6);
-
-	if (prefixes && last_address &&
-			check_ipv6_addr_prefix(prefixes,
-						last_address) != 128) {
-		/*
-		 * So we are in the same subnet
-		 * RFC 3315, chapter 18.1.2 Confirm message
-		 */
-		dhcp->timeout = g_timeout_add(delay, start_confirm, dhcp);
-	} else {
-		/*
-		 * Start from scratch.
-		 * RFC 3315, chapter 17.1.2 Solicitation message
-		 */
-		dhcp->timeout = g_timeout_add(delay, start_solicitation, dhcp);
-	}
+	/*
+	 * Start from scratch.
+	 * RFC 3315, chapter 17.1.2 Solicitation message
+	 *
+	 * Note that we do not send CONFIRM message here as it does
+	 * not make much sense because we do not save expiration time
+	 * so we cannot really know how long the saved address is valid
+	 * anyway. The reply to CONFIRM message does not send
+	 * expiration times back to us. Because of this we need to
+	 * start using SOLICITATION anyway.
+	 */
+	dhcp->timeout = g_timeout_add(delay, start_solicitation, dhcp);
 
 	return 0;
 }
@@ -2304,7 +2187,7 @@ static gboolean start_pd_rebind(gpointer user_data)
 	if (check_pd_restart(dhcp) < 0)
 		return FALSE;
 
-	dhcp->RT = REB_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REB_TIMEOUT);
 
 	DBG("rebind initial RT timeout %d msec", dhcp->RT);
 
@@ -2356,7 +2239,7 @@ static gboolean start_pd_rebind_with_confirm(gpointer user_data)
 {
 	struct connman_dhcpv6 *dhcp = user_data;
 
-	dhcp->RT = CNF_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(CNF_TIMEOUT);
 
 	DBG("rebind with confirm initial RT timeout %d msec", dhcp->RT);
 
@@ -2393,7 +2276,7 @@ static gboolean start_pd_renew(gpointer user_data)
 {
 	struct connman_dhcpv6 *dhcp = user_data;
 
-	dhcp->RT = REN_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REN_TIMEOUT);
 
 	DBG("renew initial RT timeout %d msec", dhcp->RT);
 
@@ -2609,7 +2492,7 @@ static void advertise_pd_cb(GDHCPClient *dhcp_client, gpointer user_data)
 		return;
 	}
 
-	dhcp->RT = REQ_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(REQ_TIMEOUT);
 	DBG("request initial RT timeout %d msec", dhcp->RT);
 	dhcp->timeout = g_timeout_add(dhcp->RT, timeout_pd_request, dhcp);
 
@@ -2664,7 +2547,7 @@ static gboolean start_pd_solicitation(gpointer user_data)
 	struct connman_dhcpv6 *dhcp = user_data;
 
 	/* Set the retransmission timeout, RFC 3315 chapter 14 */
-	dhcp->RT = SOL_TIMEOUT * (1 + get_random());
+	dhcp->RT = initial_rt(SOL_TIMEOUT);
 
 	DBG("solicit initial RT timeout %d msec", dhcp->RT);
 
@@ -2772,8 +2655,6 @@ void __connman_dhcpv6_stop_pd(int index)
 int __connman_dhcpv6_init(void)
 {
 	DBG("");
-
-	srand(time(NULL));
 
 	network_table = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 							NULL, remove_network);

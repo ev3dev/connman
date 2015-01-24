@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -402,7 +402,6 @@ static void process_newlink(unsigned short type, int index, unsigned flags,
 			unsigned change, struct ifinfomsg *msg, int bytes)
 {
 	struct ether_addr address = {{ 0, 0, 0, 0, 0, 0 }};
-	struct ether_addr compare = {{ 0, 0, 0, 0, 0, 0 }};
 	struct rtnl_link_stats stats;
 	unsigned char operstate = 0xff;
 	struct interface_data *interface;
@@ -431,6 +430,12 @@ static void process_newlink(unsigned short type, int index, unsigned flags,
 						address.ether_addr_octet[4],
 						address.ether_addr_octet[5]);
 
+	if (flags & IFF_SLAVE) {
+		connman_info("%s {newlink} ignoring slave, index %d address %s",
+						ifname, index, str);
+		return;
+	}
+
 	switch (type) {
 	case ARPHRD_ETHER:
 	case ARPHRD_LOOPBACK:
@@ -442,9 +447,8 @@ static void process_newlink(unsigned short type, int index, unsigned flags,
 		break;
 	}
 
-	if (memcmp(&address, &compare, ETH_ALEN) != 0)
-		connman_info("%s {newlink} index %d address %s mtu %u",
-						ifname, index, str, mtu);
+	connman_info("%s {newlink} index %d address %s mtu %u",
+					ifname, index, str, mtu);
 
 	if (operstate != 0xff)
 		connman_info("%s {newlink} index %d operstate %u <%s>",
@@ -520,6 +524,8 @@ static void process_dellink(unsigned short type, int index, unsigned flags,
 	switch (type) {
 	case ARPHRD_ETHER:
 	case ARPHRD_LOOPBACK:
+	case ARPHDR_PHONET_PIPE:
+	case ARPHRD_PPP:
 	case ARPHRD_NONE:
 		__connman_ipconfig_dellink(index, &stats);
 		break;
@@ -1285,6 +1291,7 @@ static const char *type2string(uint16_t type)
 }
 
 static GIOChannel *channel = NULL;
+static guint channel_watch = 0;
 
 struct rtnl_request {
 	struct nlmsghdr hdr;
@@ -1615,8 +1622,9 @@ int __connman_rtnl_init(void)
 	g_io_channel_set_encoding(channel, NULL, NULL);
 	g_io_channel_set_buffered(channel, FALSE);
 
-	g_io_add_watch(channel, G_IO_IN | G_IO_NVAL | G_IO_HUP | G_IO_ERR,
-							netlink_event, NULL);
+	channel_watch = g_io_add_watch(channel,
+				G_IO_IN | G_IO_NVAL | G_IO_HUP | G_IO_ERR,
+				netlink_event, NULL);
 
 	return 0;
 }
@@ -1665,6 +1673,11 @@ void __connman_rtnl_cleanup(void)
 
 	g_slist_free(request_list);
 	request_list = NULL;
+
+	if (channel_watch) {
+		g_source_remove(channel_watch);
+		channel_watch = 0;
+	}
 
 	g_io_channel_shutdown(channel, TRUE, NULL);
 	g_io_channel_unref(channel);

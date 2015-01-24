@@ -368,6 +368,36 @@ static DBusMessage *agent_report_error(DBusConnection *connection,
 	return NULL;
 }
 
+static DBusMessage *agent_report_peer_error(DBusConnection *connection,
+					DBusMessage *message, void *user_data)
+{
+	struct agent_data *request = user_data;
+	char *path, *peer, *error;
+	DBusMessageIter iter;
+
+	if (handle_message(message, request,
+				agent_report_peer_error) == false)
+		return NULL;
+
+	dbus_message_iter_init(message, &iter);
+
+	dbus_message_iter_get_basic(&iter, &path);
+	peer = strip_path(path);
+
+	dbus_message_iter_next(&iter);
+	dbus_message_iter_get_basic(&iter, &error);
+
+	__connmanctl_save_rl();
+	fprintf(stdout, "Agent ReportPeerError %s\n", peer);
+	fprintf(stdout, "  %s\n", error);
+	__connmanctl_redraw_rl();
+
+	request->message = dbus_message_ref(message);
+	__connmanctl_agent_mode("Retry (yes/no)? ",
+				report_error_return, request);
+	return NULL;
+}
+
 static void request_input_next(struct agent_data *request)
 {
 	int i;
@@ -462,37 +492,16 @@ static void request_input_string_return(char *input, void *user_data)
 	request_input_next(request);
 }
 
-static DBusMessage *agent_request_input(DBusConnection *connection,
-		DBusMessage *message, void *user_data)
+static void parse_agent_request(struct agent_data *request,
+						DBusMessageIter *iter)
 {
-	struct agent_data *request = user_data;
-	DBusMessageIter iter, dict, entry, variant;
-	char *service, *str, *field;
-	DBusMessageIter dict_entry, field_entry, field_value;
-	char *argument, *value, *attr_type = NULL;
-
+	DBusMessageIter dict, entry, variant, dict_entry;
+	DBusMessageIter field_entry, field_value;
+	char *field, *argument, *value;
+	char *attr_type = NULL;
 	int i;
 
-	if (handle_message(message, request, agent_request_input) == false)
-		return NULL;
-
-	dbus_message_iter_init(message, &iter);
-
-	dbus_message_iter_get_basic(&iter, &str);
-	service = strip_path(str);
-
-	dbus_message_iter_next(&iter);
-	dbus_message_iter_recurse(&iter, &dict);
-
-	__connmanctl_save_rl();
-	if (strcmp(request->interface, AGENT_INTERFACE) == 0)
-		fprintf(stdout, "Agent RequestInput %s\n", service);
-	else
-		fprintf(stdout, "VPN Agent RequestInput %s\n", service);
-	__connmanctl_dbus_print(&dict, "  ", " = ", "\n");
-	fprintf(stdout, "\n");
-
-	dbus_message_iter_recurse(&iter, &dict);
+	dbus_message_iter_recurse(iter, &dict);
 
 	while (dbus_message_iter_get_arg_type(&dict) == DBUS_TYPE_DICT_ENTRY) {
 
@@ -536,6 +545,128 @@ static DBusMessage *agent_request_input(DBusConnection *connection,
 
 		dbus_message_iter_next(&dict);
 	}
+}
+
+static DBusMessage *agent_request_input(DBusConnection *connection,
+		DBusMessage *message, void *user_data)
+{
+	struct agent_data *request = user_data;
+	DBusMessageIter iter, dict;
+	char *service, *str;
+
+	if (handle_message(message, request, agent_request_input) == false)
+		return NULL;
+
+	dbus_message_iter_init(message, &iter);
+
+	dbus_message_iter_get_basic(&iter, &str);
+	service = strip_path(str);
+
+	dbus_message_iter_next(&iter);
+	dbus_message_iter_recurse(&iter, &dict);
+
+	__connmanctl_save_rl();
+	if (strcmp(request->interface, AGENT_INTERFACE) == 0)
+		fprintf(stdout, "Agent RequestInput %s\n", service);
+	else
+		fprintf(stdout, "VPN Agent RequestInput %s\n", service);
+	__connmanctl_dbus_print(&dict, "  ", " = ", "\n");
+	fprintf(stdout, "\n");
+
+	parse_agent_request(request, &iter);
+
+	request->reply = dbus_message_new_method_return(message);
+	dbus_message_iter_init_append(request->reply, &request->iter);
+
+	dbus_message_iter_open_container(&request->iter, DBUS_TYPE_ARRAY,
+                        DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+                        DBUS_TYPE_STRING_AS_STRING DBUS_TYPE_VARIANT_AS_STRING
+                        DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
+			&request->dict);
+
+	request_input_next(request);
+
+	return NULL;
+}
+
+static void request_authorization_return(char *input, void *user_data)
+{
+	struct agent_data *request = user_data;
+
+	switch (confirm_input(input)) {
+	case 1:
+		request->reply = dbus_message_new_method_return(
+							request->message);
+		dbus_message_iter_init_append(request->reply, &request->iter);
+
+		dbus_message_iter_open_container(&request->iter,
+				DBUS_TYPE_ARRAY,
+				DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+				DBUS_TYPE_STRING_AS_STRING
+				DBUS_TYPE_VARIANT_AS_STRING
+				DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
+				&request->dict);
+		dbus_message_iter_close_container(&request->iter,
+							&request->dict);
+		g_dbus_send_message(agent_connection, request->reply);
+		request->reply = NULL;
+		break;
+	case 0:
+		 g_dbus_send_error(agent_connection, request->message,
+				 "net.connman.Agent.Error.Rejected", NULL);
+		 break;
+	default:
+		 g_dbus_send_error(agent_connection, request->message,
+				 "net.connman.Agent.Error.Canceled", NULL);
+		 break;
+	}
+
+	pending_message_remove(request);
+	pending_command_complete("");
+}
+
+static DBusMessage *
+agent_request_peer_authorization(DBusConnection *connection,
+					DBusMessage *message, void *user_data)
+{
+	struct agent_data *request = user_data;
+	DBusMessageIter iter, dict;
+	char *peer, *str;
+	bool input;
+	int i;
+
+	if (handle_message(message, request, agent_request_peer_authorization)
+								== false)
+		return NULL;
+
+	dbus_message_iter_init(message, &iter);
+
+	dbus_message_iter_get_basic(&iter, &str);
+	peer = strip_path(str);
+
+	dbus_message_iter_next(&iter);
+	dbus_message_iter_recurse(&iter, &dict);
+
+	__connmanctl_save_rl();
+	fprintf(stdout, "Agent RequestPeerAuthorization %s\n", peer);
+	__connmanctl_dbus_print(&dict, "  ", " = ", "\n");
+	fprintf(stdout, "\n");
+
+	parse_agent_request(request, &iter);
+
+	for (input = false, i = 0; request->input[i].attribute; i++) {
+		if (request->input[i].requested == true) {
+			input = true;
+			break;
+		}
+	}
+
+	if (!input) {
+		request->message = dbus_message_ref(message);
+		__connmanctl_agent_mode("Accept connection (yes/no)? ",
+					request_authorization_return, request);
+		return NULL;
+	}
 
 	request->reply = dbus_message_new_method_return(message);
 	dbus_message_iter_init_append(request->reply, &request->iter);
@@ -562,11 +693,20 @@ static const GDBusMethodTable agent_methods[] = {
 				GDBUS_ARGS({ "service", "o" },
 					{ "error", "s" }),
 				NULL, agent_report_error) },
+	{ GDBUS_ASYNC_METHOD("ReportPeerError",
+				GDBUS_ARGS({ "peer", "o" },
+					{ "error", "s" }),
+				NULL, agent_report_peer_error) },
 	{ GDBUS_ASYNC_METHOD("RequestInput",
 				GDBUS_ARGS({ "service", "o" },
 					{ "fields", "a{sv}" }),
 				GDBUS_ARGS({ "fields", "a{sv}" }),
 				agent_request_input) },
+	{ GDBUS_ASYNC_METHOD("RequestPeerAuthorization",
+				GDBUS_ARGS({ "peer", "o" },
+					{ "fields", "a{sv}" }),
+				GDBUS_ARGS({ "fields", "a{sv}" }),
+				agent_request_peer_authorization) },
 	{ },
 };
 

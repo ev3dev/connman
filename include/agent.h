@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -52,6 +52,10 @@ void connman_agent_driver_unregister(struct connman_agent_driver *driver);
 typedef void (* report_error_cb_t) (void *user_context,
 				bool retry, void *user_data);
 
+int connman_agent_report_error_full(void *user_context, const char *path,
+				const char *method, const char *error,
+				report_error_cb_t callback,
+				const char *dbus_sender, void *user_data);
 int connman_agent_report_error(void *user_context, const char *path,
 				const char *error,
 				report_error_cb_t callback,

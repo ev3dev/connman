@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -582,7 +582,8 @@ static gboolean adapter_changed(DBusConnection *conn,
 		dbus_bool_t val;
 
 		dbus_message_iter_get_basic(&value, &val);
-		connman_device_set_scanning(device, val);
+		connman_device_set_scanning(device,
+				CONNMAN_SERVICE_TYPE_BLUETOOTH, val);
 	} else if (g_str_equal(key, "Devices")) {
 		check_networks(&value);
 	}
@@ -763,7 +764,8 @@ update:
 	connman_device_set_string(device, "Path", path);
 
 	connman_device_set_powered(device, powered);
-	connman_device_set_scanning(device, scanning);
+	connman_device_set_scanning(device,
+			CONNMAN_SERVICE_TYPE_BLUETOOTH, scanning);
 
 	if (!powered) {
 		remove_device_networks(device);
@@ -1240,6 +1242,9 @@ static int tech_set_tethering(struct connman_technology *technology,
 	};
 
 	DBG("bridge %s", bridge);
+
+	if (!bluetooth_devices)
+		return -ENOTCONN;
 
 	if (enabled)
 		g_hash_table_foreach(bluetooth_devices, enable_nap, &info);

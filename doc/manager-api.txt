@@ -39,6 +39,13 @@ Methods		dict GetProperties()
 
 			Possible Errors: [service].Error.InvalidArguments
 
+		array{object,dict} GetPeers() [experimental]
+
+			Returns a sorted list of tuples with peer object path
+			and dictionary of peer properties
+
+			Possible Errors: [service].Error.InvalidArguments
+
 		object ConnectProvider(dict provider)	[deprecated]
 
 			Connect to a VPN specified by the given provider
@@ -149,6 +156,44 @@ Methods		dict GetProperties()
 
 			Possible Errors: [service].Error.InvalidArguments
 
+		void RegisterPeerService(dict specification, boolean master)
+			   [experimental]
+
+			Registers a local P2P Peer service
+
+			Even if p2p techonology is not available, it will be
+			possible to register peer services, since a p2p
+			enabled WiFi device might appear at anytime. The
+			registered peer services will automatically be enabled
+			for the p2p WiFi device; the application does not need
+			to do any re-registration.
+
+			A Peer service belongs to the process that registers
+			it, thus if that process dies, its Peer services will
+			be destroyed as well.
+
+			The specification dict follows the format described
+			in the Peer API document.
+
+			ConnMan will be able to determine in most cases
+			whether to be the P2P Group Owner or not. If the
+			service for some reason must belong to a group that
+			this device manages, the "master" property can be
+			set. Do not enable the "master" property unless it
+			is absolutely sure that this is needed for the
+			provided peer service.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.AlreadyExists
+					 [service].Error.NotSupported
+
+		void UnregisterPeerService(dict specification) [experimental]
+
+			Unregisters an existing local P2P Peer service
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.NotRegistered
+
 Signals		TechnologyAdded(object path, dict properties)
 
 			Signal that is sent when a new technology is added.
@@ -185,6 +230,28 @@ Signals		TechnologyAdded(object path, dict properties)
 			of the service object changes. For that it is
 			required to watch the PropertyChanged signal of
 			the service object.
+
+		PeersChanged(array{object, dict}, array{object}) [experimental]
+
+			Signals a list of peers that have been changed via the
+			first array. And a list of peer that have been removed
+			via the second array.
+
+			The list of changed peers is sorted. The dictionary
+			with the properties might be empty in case none of the
+			properties have changed. Or only contains the
+			properties that have changed.
+
+			For newly added peers the whole set of properties will
+			be present.
+
+			The list of removed peers can be empty.
+
+			This signal will only be triggered when the sort order
+			of the peer list or the number of peers changes. It
+			will not be emitted if only a property of the peer
+			object changes. For that it is required to watch the
+			PropertyChanged signal of the peer object.
 
 		PropertyChanged(string name, variant value)
 

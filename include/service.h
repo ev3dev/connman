@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -44,8 +44,9 @@ enum connman_service_type {
 	CONNMAN_SERVICE_TYPE_GPS       = 6,
 	CONNMAN_SERVICE_TYPE_VPN       = 7,
 	CONNMAN_SERVICE_TYPE_GADGET    = 8,
+	CONNMAN_SERVICE_TYPE_P2P       = 9,
 };
-#define	MAX_CONNMAN_SERVICE_TYPES        9
+#define	MAX_CONNMAN_SERVICE_TYPES        10
 
 
 enum connman_service_security {
@@ -87,6 +88,13 @@ enum connman_service_proxy_method {
 	CONNMAN_SERVICE_PROXY_METHOD_AUTO        = 3,
 };
 
+enum connman_service_connect_reason {
+	CONNMAN_SERVICE_CONNECT_REASON_NONE	= 0,
+	CONNMAN_SERVICE_CONNECT_REASON_AUTO	= 1,
+	CONNMAN_SERVICE_CONNECT_REASON_USER	= 2,
+	CONNMAN_SERVICE_CONNECT_REASON_SESSION	= 3,
+};
+
 struct connman_service;
 struct connman_network;
 
@@ -118,6 +126,7 @@ char **connman_service_get_proxy_excludes(struct connman_service *service);
 const char *connman_service_get_proxy_url(struct connman_service *service);
 const char *connman_service_get_proxy_autoconfig(struct connman_service *service);
 bool connman_service_get_favorite(struct connman_service *service);
+bool connman_service_get_autoconnect(struct connman_service *service);
 
 struct connman_service *connman_service_lookup_from_network(struct connman_network *network);
 

@@ -5,56 +5,14 @@ Session API
 Connection management algorithm basics
 ======================================
 
-When a session is created, a sorted list of services is added to the
-session. The services are filtered and sorted according AllowedBearers.
+The Session core uses the normal auto-connect algorithm for selecting
+which services will be connected or disconnected. That means only
+Services with AutoConnect set to true will be used. The Session
+core will assign a connected Service to a Session if the Service
+is matching the AllowedBearer filter.
 
-There are two triggers which lead to evaluate the connect
-algorithm:
-
- - Session.Connect()
- - Offline
-
-Connect algorithm:
-
-              Session.Connect()
-                       |
-                +------+-------+
-          +-----+ECall Session ?+-----+
-       Yes|     +--------------+      |No
-          |                           |
-        Connect to            +--------------+
-        first available   +---+AvoidHandover?+---+
-        Service           |   +--------------+   |
-                       Yes|                      |No
-                 +----------------+              |
-             +---+In service_list +---+          |
-          Yes|   |and online?     |   |No        |
-             |   +----------------+   |          |
-             |                        |          |
-         Take that one                Take first in
-                                      the service list
-				      and try to connect
-
-Disconnect algorithm
-
- - Session.Disconnect()
-
-Disconnect algorithm:
-
-  Session.Disconnect()
-       |
-       +--- Session.Change()
-       |
-+-----------------+    Yes
-|service not used +-------------+
-|by other session?|             |
-+------.----------+             |
-       |No                      |
-       |                        |
-    Service.Disconnect()   Do nothing
-
-Session.Disconnect() will be blocked whenever a ongoing
-emergency call is active.
+By using the normal auto-connect algorithm, it is possible to
+use the Session API and the Service API at the same time.
 
 
 Session States and Transitions
@@ -110,36 +68,27 @@ match the policy to a session.
 See session-policy-format.txt for more details.
 
 
-Per application routing and statistics
-======================================
+Per application routing
+=======================
 
-For each session a policy routing table is maintained. Each
-policy routing table contains a default route to the
-selected service.
-
-Furthermore a few iptables rules inserted into the kernel to gather
-statistics via NFACCT.
+For each session a policy routing table is maintained. Each policy
+routing table contains a default route to the selected service.
 
 Per session iptables rules:
 
 iptables -t mangle -A OUTPUT -m owner [--uid-owner|--gid-owner] $OWNER \
 	  -j MARK --set-mark $MARK
 
-iptables -t filter -A INPUT -m mark --mark $MARK \
-	 -m nfacct --nfacct-name session-input-$MARK
-iptables -t filter -A OUTPUT -m mark --mark $MARK \
-	 -m nfacct --nfacct-name session-output-$MARK
-
 Global rules for all sessions:
 
 iptables -t mangle -A INPUT -j CONNMARK --restore-mark
 iptables -t mangle -A POSTROUTING -j CONNMARK --save-mark
 
-Per application routing and statistics is only available when policy
-files are used. Without the policy plugin or a valid configuration,
-the default session configuration is applied.
+Per application routing is only available when policy files are
+used. Without the policy plugin or a valid configuration, the default
+session configuration is applied.
 
 The default session configuration does not enable the per application
-routing and statistics. Sessions are still useful in this setup,
-because the notification of sessions is still available, e.g. the
-online/offline notification.
+routing. Sessions are still useful in this setup, because the
+notification of sessions is still available, e.g. the online/offline
+notification.

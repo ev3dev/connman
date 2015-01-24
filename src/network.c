@@ -99,6 +99,8 @@ static const char *type2string(enum connman_network_type type)
 		break;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
 		return "ethernet";
+	case CONNMAN_NETWORK_TYPE_GADGET:
+		return "gadget";
 	case CONNMAN_NETWORK_TYPE_WIFI:
 		return "wifi";
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
@@ -156,6 +158,12 @@ static void dhcp_success(struct connman_network *network)
 	network->connecting = false;
 
 	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+
+	DBG("lease acquired for ipconfig %p", ipconfig_ipv4);
+
+	if (!ipconfig_ipv4)
+		return;
+
 	err = __connman_ipconfig_address_add(ipconfig_ipv4);
 	if (err < 0)
 		goto err;
@@ -173,14 +181,31 @@ err:
 
 static void dhcp_failure(struct connman_network *network)
 {
-	__connman_dhcp_stop(network);
+	struct connman_service *service;
+	struct connman_ipconfig *ipconfig_ipv4;
+
+	service = connman_service_lookup_from_network(network);
+	if (!service)
+		return;
+
+	connman_network_set_associating(network, false);
+	network->connecting = false;
+
+	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+
+	DBG("lease lost for ipconfig %p", ipconfig_ipv4);
+
+	if (!ipconfig_ipv4)
+		return;
+
+	__connman_ipconfig_address_remove(ipconfig_ipv4);
+	__connman_ipconfig_gateway_remove(ipconfig_ipv4);
 }
 
-static void dhcp_callback(struct connman_network *network,
+static void dhcp_callback(struct connman_ipconfig *ipconfig,
+			struct connman_network *network,
 			bool success, gpointer data)
 {
-	DBG("success %d", success);
-
 	if (success)
 		dhcp_success(network);
 	else
@@ -261,13 +286,19 @@ err:
 
 static int set_connected_dhcp(struct connman_network *network)
 {
+	struct connman_service *service;
+	struct connman_ipconfig *ipconfig_ipv4;
 	int err;
 
 	DBG("network %p", network);
 
 	set_configuration(network, CONNMAN_IPCONFIG_TYPE_IPV4);
 
-	err = __connman_dhcp_start(network, dhcp_callback);
+	service = connman_service_lookup_from_network(network);
+	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+
+	err = __connman_dhcp_start(ipconfig_ipv4, network,
+							dhcp_callback, NULL);
 	if (err < 0) {
 		connman_error("Can not request DHCP lease");
 		return err;
@@ -433,6 +464,7 @@ static void check_dhcpv6(struct nd_router_advert *reply,
 			unsigned int length, void *user_data)
 {
 	struct connman_network *network = user_data;
+	struct connman_service *service;
 	GSList *prefixes;
 
 	DBG("reply %p", reply);
@@ -466,6 +498,23 @@ static void check_dhcpv6(struct nd_router_advert *reply,
 	}
 
 	prefixes = __connman_inet_ipv6_get_prefixes(reply, length);
+
+	/*
+	 * If IPv6 config is missing from service, then create it.
+	 * The ipconfig might be missing if we got a rtnl message
+	 * that disabled IPv6 config and thus removed it. This
+	 * can happen if we are switching from one service to
+	 * another in the same interface. The only way to get IPv6
+	 * config back is to re-create it here.
+	 */
+	service = connman_service_lookup_from_network(network);
+	if (service) {
+		connman_service_create_ip6config(service, network->index);
+
+		__connman_service_ipconfig_indicate_state(service,
+					CONNMAN_SERVICE_STATE_CONFIGURATION,
+					CONNMAN_IPCONFIG_TYPE_IPV6);
+	}
 
 	/*
 	 * We do stateful/stateless DHCPv6 if router advertisement says so.
@@ -562,6 +611,8 @@ static void autoconf_ipv6_set(struct connman_network *network)
 	ipconfig = __connman_service_get_ip6config(service);
 	if (!ipconfig)
 		return;
+
+	__connman_ipconfig_address_remove(ipconfig);
 
 	index = __connman_ipconfig_get_index(ipconfig);
 
@@ -693,7 +744,7 @@ static void set_disconnected(struct connman_network *network)
 		case CONNMAN_IPCONFIG_METHOD_MANUAL:
 			break;
 		case CONNMAN_IPCONFIG_METHOD_DHCP:
-			__connman_dhcp_stop(network);
+			__connman_dhcp_stop(ipconfig_ipv4);
 			break;
 		}
 	}
@@ -791,6 +842,7 @@ static int network_probe(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return 0;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -820,6 +872,7 @@ static void network_remove(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		break;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1086,14 +1139,21 @@ void connman_network_set_index(struct connman_network *network, int index)
 		goto done;
 
 	ipconfig = __connman_service_get_ip4config(service);
-	if (!ipconfig)
-		goto done;
+	if (ipconfig) {
+		__connman_ipconfig_set_index(ipconfig, index);
 
-	/* If index changed, the index of ipconfig must be reset. */
-	__connman_ipconfig_set_index(ipconfig, index);
+		DBG("index %d service %p ip4config %p", network->index,
+			service, ipconfig);
+	}
 
-	DBG("index %d service %p ip4config %p", network->index,
-		service, ipconfig);
+	ipconfig = __connman_service_get_ip6config(service);
+	if (ipconfig) {
+		__connman_ipconfig_set_index(ipconfig, index);
+
+		DBG("index %d service %p ip6config %p", network->index,
+			service, ipconfig);
+	}
+
 done:
 	network->index = index;
 }
@@ -1124,6 +1184,7 @@ void connman_network_set_group(struct connman_network *network,
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1174,6 +1235,7 @@ bool __connman_network_get_weakness(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_UNKNOWN:
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:
@@ -1357,22 +1419,6 @@ void connman_network_set_error(struct connman_network *network,
 	network_change(network);
 }
 
-void connman_network_clear_error(struct connman_network *network)
-{
-	struct connman_service *service;
-
-	DBG("network %p", network);
-
-	if (!network)
-		return;
-
-	if (network->connecting || network->associating)
-		return;
-
-	service = connman_service_lookup_from_network(network);
-	__connman_service_clear_error(service);
-}
-
 /**
  * connman_network_set_connected:
  * @network: network structure
@@ -1441,7 +1487,7 @@ void connman_network_clear_hidden(void *user_data)
 	 * error to the caller telling that we could not find
 	 * any network that we could connect to.
 	 */
-	__connman_service_reply_dbus_pending(user_data, EIO, NULL);
+	connman_dbus_reply_pending(user_data, EIO, NULL);
 }
 
 int connman_network_connect_hidden(struct connman_network *network,
@@ -1461,7 +1507,7 @@ int connman_network_connect_hidden(struct connman_network *network,
 		__connman_service_set_agent_identity(service, identity);
 
 	if (passphrase)
-		err = __connman_service_add_passphrase(service, passphrase);
+		err = __connman_service_set_passphrase(service, passphrase);
 
 	if (err == -ENOKEY) {
 		__connman_service_indicate_error(service,
@@ -1469,9 +1515,9 @@ int connman_network_connect_hidden(struct connman_network *network,
 		goto out;
 	} else {
 		__connman_service_set_hidden(service);
-		__connman_service_set_userconnect(service, true);
 		__connman_service_set_hidden_data(service, user_data);
-		return __connman_service_connect(service);
+		return __connman_service_connect(service,
+					CONNMAN_SERVICE_CONNECT_REASON_USER);
 	}
 
 out:
@@ -1533,7 +1579,7 @@ int __connman_network_connect(struct connman_network *network)
  */
 int __connman_network_disconnect(struct connman_network *network)
 {
-	int err;
+	int err = 0;
 
 	DBG("network %p", network);
 
@@ -1544,13 +1590,12 @@ int __connman_network_disconnect(struct connman_network *network)
 	if (!network->driver)
 		return -EUNATCH;
 
-	if (!network->driver->disconnect)
-		return -ENOSYS;
-
 	network->connecting = false;
 
-	err = network->driver->disconnect(network);
-	if (err == 0)
+	if (network->driver->disconnect)
+		err = network->driver->disconnect(network);
+
+	if (err != -EINPROGRESS)
 		set_disconnected(network);
 
 	return err;
@@ -1580,6 +1625,7 @@ int __connman_network_clear_ipconfig(struct connman_network *network,
 					struct connman_ipconfig *ipconfig)
 {
 	struct connman_service *service;
+	struct connman_ipconfig *ipconfig_ipv4;
 	enum connman_ipconfig_method method;
 	enum connman_ipconfig_type type;
 
@@ -1587,6 +1633,7 @@ int __connman_network_clear_ipconfig(struct connman_network *network,
 	if (!service)
 		return -EINVAL;
 
+	ipconfig_ipv4 = __connman_service_get_ip4config(service);
 	method = __connman_ipconfig_get_method(ipconfig);
 	type = __connman_ipconfig_get_config_type(ipconfig);
 
@@ -1602,7 +1649,7 @@ int __connman_network_clear_ipconfig(struct connman_network *network,
 		__connman_ipconfig_address_remove(ipconfig);
 		break;
 	case CONNMAN_IPCONFIG_METHOD_DHCP:
-		__connman_dhcp_stop(network);
+		__connman_dhcp_stop(ipconfig_ipv4);
 		break;
 	}
 
@@ -1664,7 +1711,8 @@ int __connman_network_set_ipconfig(struct connman_network *network,
 		case CONNMAN_IPCONFIG_METHOD_MANUAL:
 			return manual_ipv4_set(network, ipconfig_ipv4);
 		case CONNMAN_IPCONFIG_METHOD_DHCP:
-			return __connman_dhcp_start(network, dhcp_callback);
+			return __connman_dhcp_start(ipconfig_ipv4,
+						network, dhcp_callback, NULL);
 		}
 	}
 
@@ -2076,6 +2124,7 @@ void connman_network_update(struct connman_network *network)
 	case CONNMAN_NETWORK_TYPE_VENDOR:
 		return;
 	case CONNMAN_NETWORK_TYPE_ETHERNET:
+	case CONNMAN_NETWORK_TYPE_GADGET:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_PAN:
 	case CONNMAN_NETWORK_TYPE_BLUETOOTH_DUN:
 	case CONNMAN_NETWORK_TYPE_CELLULAR:

@@ -46,6 +46,7 @@ extern "C" {
 #define CONNMAN_TECHNOLOGY_INTERFACE	CONNMAN_SERVICE ".Technology"
 #define CONNMAN_SESSION_INTERFACE	CONNMAN_SERVICE ".Session"
 #define CONNMAN_NOTIFICATION_INTERFACE	CONNMAN_SERVICE ".Notification"
+#define CONNMAN_PEER_INTERFACE		CONNMAN_SERVICE ".Peer"
 
 #define CONNMAN_PRIVILEGE_MODIFY	1
 #define CONNMAN_PRIVILEGE_SECRET	2
@@ -186,6 +187,9 @@ int connman_dbus_get_selinux_context(DBusConnection *connection,
                                const char *service,
                                connman_dbus_get_context_cb_t func,
                                void *user_data);
+
+void connman_dbus_reply_pending(DBusMessage *pending,
+					int error, const char *path);
 
 #ifdef __cplusplus
 }

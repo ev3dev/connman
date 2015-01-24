@@ -2,8 +2,8 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
- *  Copyright (C) 2011  BWM CarIT GmbH. All rights reserved.
+ *  Copyright (C) 2007-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2011-2014  BMW Car IT GmbH.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -34,25 +34,10 @@
 
 static DBusConnection *connection;
 static GHashTable *session_hash;
+static GHashTable *service_hash;
 static struct connman_session *ecall_session;
-static GSList *policy_list;
 static uint32_t session_mark = 256;
 static struct firewall_context *global_firewall = NULL;
-
-enum connman_session_trigger {
-	CONNMAN_SESSION_TRIGGER_UNKNOWN		= 0,
-	CONNMAN_SESSION_TRIGGER_SETTING		= 1,
-	CONNMAN_SESSION_TRIGGER_CONNECT		= 2,
-	CONNMAN_SESSION_TRIGGER_DISCONNECT	= 3,
-	CONNMAN_SESSION_TRIGGER_SERVICE		= 4,
-	CONNMAN_SESSION_TRIGGER_ECALL		= 5,
-};
-
-enum connman_session_reason {
-	CONNMAN_SESSION_REASON_UNKNOWN		= 0,
-	CONNMAN_SESSION_REASON_CONNECT		= 1,
-	CONNMAN_SESSION_REASON_FREE_RIDE	= 2,
-};
 
 enum connman_session_state {
 	CONNMAN_SESSION_STATE_DISCONNECTED   = 0,
@@ -63,7 +48,6 @@ enum connman_session_state {
 struct session_info {
 	struct connman_session_config config;
 	enum connman_session_state state;
-	enum connman_session_reason reason;
 };
 
 struct connman_session {
@@ -72,8 +56,7 @@ struct connman_session {
 	char *notify_path;
 	guint notify_watch;
 
-	struct connman_session_policy *policy;
-
+	bool active;
 	bool append_all;
 	struct session_info *info;
 	struct session_info *info_last;
@@ -86,47 +69,28 @@ struct connman_session {
 
 	enum connman_session_id_type id_type;
 	struct firewall_context *fw;
-	struct nfacct_context *nfctx;
 	uint32_t mark;
 	int index;
 	char *gateway;
-
-	GList *service_list;
-	GHashTable *service_hash;
+	bool policy_routing;
 };
 
-static const char *trigger2string(enum connman_session_trigger trigger)
+struct connman_service_info {
+	struct connman_service *service;
+	GSList *sessions;
+};
+
+static struct connman_session_policy *policy;
+static void session_activate(struct connman_session *session);
+static void session_deactivate(struct connman_session *session);
+static void update_session_state(struct connman_session *session);
+
+static void cleanup_service(gpointer data)
 {
-	switch (trigger) {
-	case CONNMAN_SESSION_TRIGGER_UNKNOWN:
-		break;
-	case CONNMAN_SESSION_TRIGGER_SETTING:
-		return "setting";
-	case CONNMAN_SESSION_TRIGGER_CONNECT:
-		return "connect";
-	case CONNMAN_SESSION_TRIGGER_DISCONNECT:
-		return "disconnect";
-	case CONNMAN_SESSION_TRIGGER_SERVICE:
-		return "service";
-	case CONNMAN_SESSION_TRIGGER_ECALL:
-		return "ecall";
-	}
+	struct connman_service_info *info = data;
 
-	return NULL;
-}
-
-static const char *reason2string(enum connman_session_reason reason)
-{
-	switch (reason) {
-	case CONNMAN_SESSION_REASON_UNKNOWN:
-		return "unknown";
-	case CONNMAN_SESSION_REASON_CONNECT:
-		return "connect";
-	case CONNMAN_SESSION_REASON_FREE_RIDE:
-		return "free-ride";
-	}
-
-	return NULL;
+	g_slist_free(info->sessions);
+	g_free(info);
 }
 
 static const char *state2string(enum connman_session_state state)
@@ -193,14 +157,14 @@ static int bearer2service(const char *bearer, enum connman_service_type *type)
 		*type = CONNMAN_SERVICE_TYPE_ETHERNET;
 	else if (g_strcmp0(bearer, "wifi") == 0)
 		*type = CONNMAN_SERVICE_TYPE_WIFI;
+	else if (g_strcmp0(bearer, "gadget") == 0)
+		*type = CONNMAN_SERVICE_TYPE_GADGET;
 	else if (g_strcmp0(bearer, "bluetooth") == 0)
 		*type = CONNMAN_SERVICE_TYPE_BLUETOOTH;
 	else if (g_strcmp0(bearer, "cellular") == 0)
 		*type = CONNMAN_SERVICE_TYPE_CELLULAR;
 	else if (g_strcmp0(bearer, "vpn") == 0)
 		*type = CONNMAN_SERVICE_TYPE_VPN;
-	else if (g_strcmp0(bearer, "*") == 0)
-		*type = CONNMAN_SERVICE_TYPE_UNKNOWN;
 	else
 		return -EINVAL;
 
@@ -212,6 +176,8 @@ static char *service2bearer(enum connman_service_type type)
 	switch (type) {
 	case CONNMAN_SERVICE_TYPE_ETHERNET:
 		return "ethernet";
+	case CONNMAN_SERVICE_TYPE_GADGET:
+		return "gadget";
 	case CONNMAN_SERVICE_TYPE_WIFI:
 		return "wifi";
 	case CONNMAN_SERVICE_TYPE_BLUETOOTH:
@@ -220,11 +186,10 @@ static char *service2bearer(enum connman_service_type type)
 		return "cellular";
 	case CONNMAN_SERVICE_TYPE_VPN:
 		return "vpn";
-	case CONNMAN_SERVICE_TYPE_UNKNOWN:
-		return "*";
 	case CONNMAN_SERVICE_TYPE_SYSTEM:
 	case CONNMAN_SERVICE_TYPE_GPS:
-	case CONNMAN_SERVICE_TYPE_GADGET:
+	case CONNMAN_SERVICE_TYPE_P2P:
+	case CONNMAN_SERVICE_TYPE_UNKNOWN:
 		return "";
 	}
 
@@ -274,25 +239,6 @@ static void cleanup_firewall(void)
 	__connman_firewall_destroy(global_firewall);
 }
 
-static int enable_nfacct(struct firewall_context *fw, uint32_t mark)
-{
-	int err;
-
-	err = __connman_firewall_add_rule(fw, "filter", "INPUT",
-			"-m mark --mark %d -m nfacct "
-			"--nfacct-name session-input-%d",
-			mark, mark);
-	if (err < 0)
-		return err;
-
-	err = __connman_firewall_add_rule(fw, "filter", "OUTPUT",
-			"-m mark --mark %d -m nfacct "
-			"--nfacct-name session-output-%d",
-			mark, mark);
-
-	return err;
-}
-
 static int init_firewall_session(struct connman_session *session)
 {
 	struct firewall_context *fw;
@@ -333,10 +279,6 @@ static int init_firewall_session(struct connman_session *session)
 		goto err;
 
 	session->id_type = session->policy_config->id_type;
-
-	err = enable_nfacct(fw, session->mark);
-	if (err < 0)
-		connman_warn_once("Support for nfacct missing");
 
 	err = __connman_firewall_enable(fw);
 	if (err)
@@ -382,6 +324,7 @@ static int init_routing_table(struct connman_session *session)
 	if (err < 0)
 		__connman_inet_del_fwmark_rule(session->mark,
 						AF_INET, session->mark);
+	session->policy_routing = true;
 
 	return err;
 }
@@ -426,11 +369,14 @@ static void cleanup_routing_table(struct connman_session *session)
 {
 	DBG("");
 
-	__connman_inet_del_fwmark_rule(session->mark,
+	if (session->policy_routing) {
+		__connman_inet_del_fwmark_rule(session->mark,
 					AF_INET6, session->mark);
 
-	__connman_inet_del_fwmark_rule(session->mark,
+		__connman_inet_del_fwmark_rule(session->mark,
 					AF_INET, session->mark);
+		session->policy_routing = false;
+	}
 
 	del_default_route(session);
 }
@@ -443,12 +389,12 @@ static void update_routing_table(struct connman_session *session)
 
 static void destroy_policy_config(struct connman_session *session)
 {
-	if (!session->policy) {
+	if (!policy) {
 		g_free(session->policy_config);
 		return;
 	}
 
-	(*session->policy->destroy)(session);
+	policy->destroy(session);
 }
 
 static void free_session(struct connman_session *session)
@@ -471,34 +417,15 @@ static void free_session(struct connman_session *session)
 	g_free(session);
 }
 
-static void cleanup_session_final(struct connman_session *session)
+static void set_active_session(struct connman_session *session, bool enable)
 {
-	struct session_info *info = session->info;
 
-	DBG("remove %s", session->session_path);
+	if (policy && policy->session_changed)
+		policy->session_changed(session, enable,
+					session->info->config.allowed_bearers);
 
-	if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-		__connman_service_set_active_session(false,
+	__connman_service_set_active_session(enable,
 				session->info->config.allowed_bearers);
-
-	g_slist_free(session->user_allowed_bearers);
-	if (session->service_hash)
-		g_hash_table_destroy(session->service_hash);
-	g_list_free(session->service_list);
-
-	free_session(session);
-}
-
-static void nfacct_cleanup_cb(unsigned int error, struct nfacct_context *ctx,
-				void *user_data)
-{
-	struct connman_session *session = user_data;
-
-	DBG("");
-
-	__connman_nfacct_destroy_context(session->nfctx);
-
-	cleanup_session_final(session);
 }
 
 static void cleanup_session(gpointer user_data)
@@ -510,24 +437,15 @@ static void cleanup_session(gpointer user_data)
 	cleanup_routing_table(session);
 	cleanup_firewall_session(session);
 
-	if (session->nfctx)
-		__connman_nfacct_disable(session->nfctx, nfacct_cleanup_cb,
-						session);
-	else
-		cleanup_session_final(session);
-}
+	if (session->active)
+		set_active_session(session, false);
 
-static int assign_policy_plugin(struct connman_session *session)
-{
-	if (session->policy)
-		return -EALREADY;
+	session_deactivate(session);
+	update_session_state(session);
 
-	if (!policy_list)
-		return 0;
+	g_slist_free(session->user_allowed_bearers);
 
-	session->policy = policy_list->data;
-
-	return 0;
+	free_session(session);
 }
 
 struct creation_data {
@@ -557,7 +475,7 @@ static int create_policy_config(struct connman_session *session,
 {
 	struct connman_session_config *config;
 
-	if (!session->policy) {
+	if (!policy) {
 		config = connman_session_create_default_config();
 		if (!config) {
 			free_session(session);
@@ -568,62 +486,49 @@ static int create_policy_config(struct connman_session *session,
 		return cb(session, config, creation_data, 0);
 	}
 
-	return (*session->policy->create)(session, cb, creation_data);
+	return policy->create(session, cb, creation_data);
 }
 
-static void remove_policy(struct connman_session_policy *policy)
+int connman_session_policy_register(struct connman_session_policy *plugin)
 {
-	GHashTableIter iter;
-	gpointer key, value;
-	struct connman_session *session;
-
-	if (!session_hash)
-		return;
-
-	DBG("policy %p name %s", policy, policy->name);
-
-	g_hash_table_iter_init(&iter, session_hash);
-
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		session = value;
-
-		if (session->policy != policy)
-			continue;
-
-		session->policy = NULL;
-		assign_policy_plugin(session);
-	}
-}
-
-static gint compare_priority(gconstpointer a, gconstpointer b)
-{
-	const struct connman_session_policy *policy1 = a;
-	const struct connman_session_policy *policy2 = b;
-
-	return policy2->priority - policy1->priority;
-}
-
-
-int connman_session_policy_register(struct connman_session_policy *policy)
-{
-	DBG("name %s", policy->name);
-
-	if (!policy->create || !policy->destroy)
+	if (policy)
 		return -EINVAL;
 
-	policy_list = g_slist_insert_sorted(policy_list, policy,
-						compare_priority);
+	if (!plugin->create || !plugin->destroy)
+		return -EINVAL;
+
+	DBG("name %s", plugin->name);
+
+	policy = plugin;
 
 	return 0;
 }
 
-void connman_session_policy_unregister(struct connman_session_policy *policy)
+void connman_session_policy_unregister(struct connman_session_policy *plugin)
 {
+	if (plugin != policy)
+		return;
+
 	DBG("name %s", policy->name);
 
-	policy_list = g_slist_remove(policy_list, policy);
+	policy = NULL;
+}
 
-	remove_policy(policy);
+static int default_bearers[] = {
+	CONNMAN_SERVICE_TYPE_ETHERNET,
+	CONNMAN_SERVICE_TYPE_WIFI,
+	CONNMAN_SERVICE_TYPE_BLUETOOTH,
+	CONNMAN_SERVICE_TYPE_CELLULAR,
+	CONNMAN_SERVICE_TYPE_GADGET,
+};
+
+static void add_default_bearer_types(GSList **list)
+{
+	unsigned int i;
+
+	for (i = 0; i < G_N_ELEMENTS(default_bearers); i++)
+		*list = g_slist_append(*list,
+				GINT_TO_POINTER(default_bearers[i]));
 }
 
 void connman_session_set_default_config(struct connman_session_config *config)
@@ -638,8 +543,7 @@ void connman_session_set_default_config(struct connman_session_config *config)
 	config->ecall = FALSE;
 
 	g_slist_free(config->allowed_bearers);
-	config->allowed_bearers = g_slist_prepend(NULL,
-				GINT_TO_POINTER(CONNMAN_SERVICE_TYPE_UNKNOWN));
+	add_default_bearer_types(&config->allowed_bearers);
 }
 
 struct connman_session_config *connman_session_create_default_config(void)
@@ -675,6 +579,11 @@ int connman_session_parse_bearers(const char *token, GSList **list)
 
 	if (g_strcmp0(token, "") == 0)
 		return 0;
+
+	if (g_strcmp0(token, "*") == 0) {
+		add_default_bearer_types(list);
+		return 0;
+	}
 
 	err = bearer2service(token, &bearer);
 	if (err < 0)
@@ -719,7 +628,7 @@ static int parse_bearers(DBusMessageIter *iter, GSList **list)
 	return 0;
 }
 
-static int filter_bearer(GSList *policy_bearers,
+static void filter_bearer(GSList *policy_bearers,
 				enum connman_service_type bearer,
 				GSList **list)
 {
@@ -727,50 +636,32 @@ static int filter_bearer(GSList *policy_bearers,
 	GSList *it;
 
 	if (!policy_bearers)
-		return 0;
+		return;
 
 	for (it = policy_bearers; it; it = it->next) {
 		policy = GPOINTER_TO_INT(it->data);
 
-		if (bearer == CONNMAN_SERVICE_TYPE_UNKNOWN) {
-			bearer = policy;
-			goto clone;
-		}
-
-		if (policy != CONNMAN_SERVICE_TYPE_UNKNOWN && policy != bearer)
+		if (policy != bearer)
 			continue;
 
-		goto clone;
+		*list = g_slist_append(*list, GINT_TO_POINTER(bearer));
+		return;
 	}
-
-	*list = NULL;
-
-	return 0;
-
-clone:
-	*list = g_slist_append(*list, GINT_TO_POINTER(bearer));
-
-	return 0;
 }
 
-static int apply_policy_on_bearers(GSList *policy_bearers, GSList *bearers,
+static void apply_policy_on_bearers(GSList *policy_bearers, GSList *bearers,
 				GSList **list)
 {
 	enum connman_service_type bearer;
 	GSList *it;
-	int err;
 
 	*list = NULL;
 
 	for (it = bearers; it; it = it->next) {
 		bearer = GPOINTER_TO_INT(it->data);
 
-		err = filter_bearer(policy_bearers, bearer, list);
-		if (err < 0)
-			return err;
+		filter_bearer(policy_bearers, bearer, list);
 	}
-
-	return 0;
 }
 
 const char *connman_session_get_owner(struct connman_session *session)
@@ -789,7 +680,7 @@ static void append_allowed_bearers(DBusMessageIter *iter, void *user_data)
 		const char *name = __connman_service_type2string(bearer);
 
 		if (!name)
-			name = "*";
+			name = "";
 
 		dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
 						&name);
@@ -921,30 +812,6 @@ static void append_notify(DBusMessageIter *dict,
 	session->append_all = false;
 }
 
-static bool is_type_matching_state(enum connman_session_state *state,
-						enum connman_session_type type)
-{
-	switch (type) {
-	case CONNMAN_SESSION_TYPE_UNKNOWN:
-		return false;
-	case CONNMAN_SESSION_TYPE_ANY:
-		return true;
-	case CONNMAN_SESSION_TYPE_LOCAL:
-		if (*state >= CONNMAN_SESSION_STATE_CONNECTED) {
-			*state = CONNMAN_SESSION_STATE_CONNECTED;
-			return true;
-		}
-
-		break;
-	case CONNMAN_SESSION_TYPE_INTERNET:
-		if (*state == CONNMAN_SESSION_STATE_ONLINE)
-			return true;
-		break;
-	}
-
-	return false;
-}
-
 static bool compute_notifiable_changes(struct connman_session *session)
 {
 	struct session_info *info_last = session->info_last;
@@ -1011,465 +878,6 @@ static void ipconfig_ipv6_changed(struct connman_session *session)
 						session->service);
 }
 
-static bool service_type_match(struct connman_session *session,
-					struct connman_service *service)
-{
-	struct session_info *info = session->info;
-	GSList *list;
-
-	for (list = info->config.allowed_bearers;
-			list; list = list->next) {
-		enum connman_service_type bearer = GPOINTER_TO_INT(list->data);
-		enum connman_service_type service_type;
-
-		if (bearer == CONNMAN_SERVICE_TYPE_UNKNOWN)
-			return true;
-
-		service_type = connman_service_get_type(service);
-		if (bearer == service_type)
-			return true;
-	}
-
-	return false;
-}
-
-static bool service_match(struct connman_session *session,
-					struct connman_service *service)
-{
-	if (!service_type_match(session, service))
-		return false;
-
-	return true;
-}
-
-static int service_type_weight(enum connman_service_type type)
-{
-	/*
-	 * The session doesn't care which service
-	 * to use. Nevertheless we have to sort them
-	 * according their type. The ordering is
-	 *
-	 * 1. Ethernet
-	 * 2. Bluetooth
-	 * 3. WiFi
-	 * 4. Cellular
-	 */
-
-	switch (type) {
-	case CONNMAN_SERVICE_TYPE_ETHERNET:
-		return 4;
-	case CONNMAN_SERVICE_TYPE_BLUETOOTH:
-		return 3;
-	case CONNMAN_SERVICE_TYPE_WIFI:
-		return 2;
-	case CONNMAN_SERVICE_TYPE_CELLULAR:
-		return 1;
-	case CONNMAN_SERVICE_TYPE_UNKNOWN:
-	case CONNMAN_SERVICE_TYPE_SYSTEM:
-	case CONNMAN_SERVICE_TYPE_GPS:
-	case CONNMAN_SERVICE_TYPE_VPN:
-	case CONNMAN_SERVICE_TYPE_GADGET:
-		break;
-	}
-
-	return 0;
-}
-
-static gint sort_allowed_bearers(struct connman_service *service_a,
-					struct connman_service *service_b,
-					struct connman_session *session)
-{
-	struct session_info *info = session->info;
-	GSList *list;
-	enum connman_service_type type_a, type_b;
-	int weight_a, weight_b;
-
-	type_a = connman_service_get_type(service_a);
-	type_b = connman_service_get_type(service_b);
-
-	for (list = info->config.allowed_bearers;
-			list; list = list->next) {
-		enum connman_service_type bearer = GPOINTER_TO_INT(list->data);
-
-		if (bearer == CONNMAN_SERVICE_TYPE_UNKNOWN) {
-			if (type_a != type_b) {
-				weight_a = service_type_weight(type_a);
-				weight_b = service_type_weight(type_b);
-
-				if (weight_a > weight_b)
-					return -1;
-
-				if (weight_a < weight_b)
-					return 1;
-
-				return 0;
-			}
-		}
-
-		if (type_a == bearer && type_b == bearer)
-			return 0;
-
-		if (type_a == bearer &&	type_b != bearer)
-			return -1;
-
-		if (type_a != bearer &&	type_b == bearer)
-			return 1;
-	}
-
-	return 0;
-}
-
-static gint sort_services(gconstpointer a, gconstpointer b, gpointer user_data)
-{
-	struct connman_service *service_a = (void *)a;
-	struct connman_service *service_b = (void *)b;
-	struct connman_session *session = user_data;
-
-	return sort_allowed_bearers(service_a, service_b, session);
-}
-
-static enum connman_session_state service_to_session_state(enum connman_service_state state)
-{
-	switch (state) {
-	case CONNMAN_SERVICE_STATE_UNKNOWN:
-	case CONNMAN_SERVICE_STATE_IDLE:
-	case CONNMAN_SERVICE_STATE_ASSOCIATION:
-	case CONNMAN_SERVICE_STATE_CONFIGURATION:
-	case CONNMAN_SERVICE_STATE_DISCONNECT:
-	case CONNMAN_SERVICE_STATE_FAILURE:
-		break;
-	case CONNMAN_SERVICE_STATE_READY:
-		return CONNMAN_SESSION_STATE_CONNECTED;
-	case CONNMAN_SERVICE_STATE_ONLINE:
-		return CONNMAN_SESSION_STATE_ONLINE;
-	}
-
-	return CONNMAN_SESSION_STATE_DISCONNECTED;
-}
-
-static bool is_connected(enum connman_service_state state)
-{
-	switch (state) {
-	case CONNMAN_SERVICE_STATE_UNKNOWN:
-	case CONNMAN_SERVICE_STATE_IDLE:
-	case CONNMAN_SERVICE_STATE_ASSOCIATION:
-	case CONNMAN_SERVICE_STATE_CONFIGURATION:
-	case CONNMAN_SERVICE_STATE_DISCONNECT:
-	case CONNMAN_SERVICE_STATE_FAILURE:
-		break;
-	case CONNMAN_SERVICE_STATE_READY:
-	case CONNMAN_SERVICE_STATE_ONLINE:
-		return true;
-	}
-
-	return false;
-}
-
-static bool is_connecting(enum connman_service_state state)
-{
-	switch (state) {
-	case CONNMAN_SERVICE_STATE_UNKNOWN:
-	case CONNMAN_SERVICE_STATE_IDLE:
-		break;
-	case CONNMAN_SERVICE_STATE_ASSOCIATION:
-	case CONNMAN_SERVICE_STATE_CONFIGURATION:
-		return true;
-	case CONNMAN_SERVICE_STATE_DISCONNECT:
-	case CONNMAN_SERVICE_STATE_FAILURE:
-	case CONNMAN_SERVICE_STATE_READY:
-	case CONNMAN_SERVICE_STATE_ONLINE:
-		break;
-	}
-
-	return false;
-}
-
-static bool is_disconnected(enum connman_service_state state)
-{
-	if (is_connected(state) || is_connecting(state))
-		return false;
-
-	return true;
-}
-
-static bool explicit_connect(enum connman_session_reason reason)
-{
-	switch (reason) {
-	case CONNMAN_SESSION_REASON_UNKNOWN:
-	case CONNMAN_SESSION_REASON_FREE_RIDE:
-		break;
-	case CONNMAN_SESSION_REASON_CONNECT:
-		return true;
-	}
-
-	return false;
-}
-
-static void deselect_and_disconnect(struct connman_session *session)
-{
-	struct session_info *info = session->info;
-
-	if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-		__connman_service_set_active_session(false,
-				info->config.allowed_bearers);
-
-	info->reason = CONNMAN_SESSION_REASON_FREE_RIDE;
-
-	info->state = CONNMAN_SESSION_STATE_DISCONNECTED;
-
-	if (!session->service)
-		return;
-
-	session->service = NULL;
-
-	update_routing_table(session);
-}
-
-static void select_connected_service(struct connman_session *session,
-					struct connman_service *service)
-{
-	struct session_info *info = session->info;
-	enum connman_service_state service_state;
-	enum connman_session_state state;
-
-	service_state = __connman_service_get_state(service);
-	state = service_to_session_state(service_state);
-	if (!is_type_matching_state(&state, info->config.type))
-		return;
-
-	info->state = state;
-
-	session->service = service;
-}
-
-static void select_offline_service(struct connman_session *session,
-					struct connman_service *service)
-{
-	struct session_info *info = session->info;
-	enum connman_service_state service_state;
-
-	if (!explicit_connect(info->reason))
-		return;
-
-	service_state = __connman_service_get_state(service);
-	info->state = service_to_session_state(service_state);
-
-	session->service = service;
-}
-
-static void select_service(struct connman_session *session,
-				struct connman_service *service)
-{
-	enum connman_service_state service_state;
-
-	DBG("service %p", service);
-
-	service_state = __connman_service_get_state(service);
-	if (is_connected(service_state))
-		select_connected_service(session, service);
-	else
-		select_offline_service(session, service);
-}
-
-static void select_and_connect(struct connman_session *session,
-				enum connman_session_reason reason)
-{
-	struct session_info *info = session->info;
-	struct connman_service *service = NULL;
-	enum connman_service_state service_state;
-	GList *list;
-
-	DBG("session %p reason %s", session, reason2string(reason));
-
-	if (info->reason != reason &&
-			reason == CONNMAN_SESSION_REASON_CONNECT) {
-		__connman_service_set_active_session(true,
-				info->config.allowed_bearers);
-
-		__connman_service_auto_connect();
-	}
-
-	info->reason = reason;
-
-	for (list = session->service_list; list; list = list->next) {
-		service = list->data;
-
-		service_state = __connman_service_get_state(service);
-		switch (service_state) {
-		case CONNMAN_SERVICE_STATE_ASSOCIATION:
-		case CONNMAN_SERVICE_STATE_CONFIGURATION:
-		case CONNMAN_SERVICE_STATE_READY:
-		case CONNMAN_SERVICE_STATE_ONLINE:
-		case CONNMAN_SERVICE_STATE_IDLE:
-		case CONNMAN_SERVICE_STATE_DISCONNECT:
-			select_service(session, service);
-			update_routing_table(session);
-			return;
-		case CONNMAN_SERVICE_STATE_UNKNOWN:
-		case CONNMAN_SERVICE_STATE_FAILURE:
-			break;
-		}
-	}
-}
-
-static void iterate_service_cb(struct connman_service *service,
-				void *user_data)
-{
-	struct connman_session *session = user_data;
-	enum connman_service_state service_state;
-
-	service_state = __connman_service_get_state(service);
-	if (!is_connected(service_state))
-		return;
-
-	if (!service_match(session, service))
-		return;
-
-	g_hash_table_replace(session->service_hash, service, NULL);
-}
-
-static void populate_service_list(struct connman_session *session)
-{
-	GHashTableIter iter;
-	gpointer key, value;
-
-	session->service_hash =
-		g_hash_table_new_full(g_direct_hash, g_direct_equal,
-					NULL, NULL);
-	__connman_service_iterate_services(iterate_service_cb, session);
-
-	g_hash_table_iter_init(&iter, session->service_hash);
-
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		struct connman_service *service = key;
-
-		DBG("service %p type %s name %s", service,
-			service2bearer(connman_service_get_type(service)),
-			__connman_service_get_name(service));
-		session->service_list = g_list_prepend(session->service_list,
-							service);
-	}
-
-	session->service_list = g_list_sort_with_data(session->service_list,
-						sort_services, session);
-}
-
-static void session_changed(struct connman_session *session,
-				enum connman_session_trigger trigger)
-{
-	struct session_info *info = session->info;
-	struct session_info *info_last = session->info_last;
-	struct connman_service *service = NULL, *service_last = NULL;
-	enum connman_service_state service_state;
-	GHashTable *service_hash_last;
-
-	/*
-	 * TODO: This only a placeholder for the 'real' algorithm to
-	 * play a bit around. So we are going to improve it step by step.
-	 */
-
-	DBG("session %p trigger %s reason %s", session, trigger2string(trigger),
-						reason2string(info->reason));
-
-
-	if (session->service) {
-		enum connman_session_state state;
-
-		service_state = __connman_service_get_state(session->service);
-		state = service_to_session_state(service_state);
-
-		if (is_type_matching_state(&state, info->config.type))
-			info->state = state;
-	}
-
-	switch (trigger) {
-	case CONNMAN_SESSION_TRIGGER_UNKNOWN:
-		DBG("ignore session changed event");
-		return;
-	case CONNMAN_SESSION_TRIGGER_SETTING:
-		if (info->config.allowed_bearers != info_last->config.allowed_bearers) {
-
-			service_hash_last = session->service_hash;
-			g_list_free(session->service_list);
-			session->service_list = NULL;
-
-			service = session->service;
-
-			populate_service_list(session);
-
-			if (service) {
-				service_last = g_hash_table_lookup(
-							service_hash_last,
-							service);
-			}
-
-			if (service_last &&
-				!g_hash_table_lookup(session->service_hash,
-							service)) {
-
-				/*
-				 * The currently selected service is
-				 * not part of this session anymore.
-				 */
-				deselect_and_disconnect(session);
-			}
-
-			g_hash_table_destroy(service_hash_last);
-		}
-
-		if (info->config.type != info_last->config.type) {
-			if (info->state >= CONNMAN_SESSION_STATE_CONNECTED &&
-					!is_type_matching_state(&info->state,
-							info->config.type))
-				deselect_and_disconnect(session);
-		}
-
-		if (info->state == CONNMAN_SESSION_STATE_DISCONNECTED) {
-			select_and_connect(session,
-					CONNMAN_SESSION_REASON_FREE_RIDE);
-		}
-
-		break;
-	case CONNMAN_SESSION_TRIGGER_ECALL:
-		/*
-		 * For the time beeing we fallback to normal connect
-		 * strategy.
-		 */
-	case CONNMAN_SESSION_TRIGGER_CONNECT:
-		if (info->state >= CONNMAN_SESSION_STATE_CONNECTED)
-			break;
-
-		if (session->service) {
-			service_state = __connman_service_get_state(
-						session->service);
-			if (is_connecting(service_state))
-				break;
-		}
-
-		select_and_connect(session, CONNMAN_SESSION_REASON_CONNECT);
-
-		break;
-	case CONNMAN_SESSION_TRIGGER_DISCONNECT:
-		deselect_and_disconnect(session);
-
-		break;
-	case CONNMAN_SESSION_TRIGGER_SERVICE:
-		if (session->service) {
-			service_state = __connman_service_get_state(
-						session->service);
-			if (is_connecting(service_state) ||
-				is_connected(service_state))
-			break;
-		}
-
-		select_and_connect(session, info->reason);
-
-		break;
-	}
-
-	session_notify(session);
-}
-
 int connman_session_config_update(struct connman_session *session)
 {
 	struct session_info *info = session->info;
@@ -1494,23 +902,21 @@ int connman_session_config_update(struct connman_session *session)
 		session->id_type = session->policy_config->id_type;
 	}
 
-	err = apply_policy_on_bearers(
+	apply_policy_on_bearers(
 		session->policy_config->allowed_bearers,
 		session->user_allowed_bearers,
 		&allowed_bearers);
-	if (err < 0)
-		return err;
 
-	if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-		__connman_service_set_active_session(false,
-				info->config.allowed_bearers);
+	if (session->active)
+		set_active_session(session, false);
+
+	session->active = false;
+	session_deactivate(session);
 
 	g_slist_free(info->config.allowed_bearers);
 	info->config.allowed_bearers = allowed_bearers;
 
-	if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-		__connman_service_set_active_session(true,
-				info->config.allowed_bearers);
+	session_activate(session);
 
 	info->config.type = apply_policy_on_type(
 				session->policy_config->type,
@@ -1524,7 +930,7 @@ int connman_session_config_update(struct connman_session *session)
 
 	info->config.priority = session->policy_config->priority;
 
-	session_changed(session, CONNMAN_SESSION_TRIGGER_SETTING);
+	session_notify(session);
 
 	return 0;
 }
@@ -1541,9 +947,16 @@ static DBusMessage *connect_session(DBusConnection *conn,
 			return __connman_error_failed(msg, EBUSY);
 
 		session->ecall = true;
-		session_changed(session, CONNMAN_SESSION_TRIGGER_ECALL);
-	} else
-		session_changed(session, CONNMAN_SESSION_TRIGGER_CONNECT);
+	}
+
+	if (!session->active) {
+		session->active = true;
+		set_active_session(session, true);
+	}
+
+	session_activate(session);
+
+	__connman_service_auto_connect(CONNMAN_SERVICE_CONNECT_REASON_SESSION);
 
 	return g_dbus_create_reply(msg, DBUS_TYPE_INVALID);
 }
@@ -1562,7 +975,13 @@ static DBusMessage *disconnect_session(DBusConnection *conn,
 		session->ecall = false;
 	}
 
-	session_changed(session, CONNMAN_SESSION_TRIGGER_DISCONNECT);
+	if (session->active) {
+		session->active = false;
+		set_active_session(session, false);
+	}
+
+	session_deactivate(session);
+	update_session_state(session);
 
 	return g_dbus_create_reply(msg, DBUS_TYPE_INVALID);
 }
@@ -1600,25 +1019,21 @@ static DBusMessage *change_session(DBusConnection *conn,
 			if (err < 0)
 				return __connman_error_failed(msg, -err);
 
-			if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-				__connman_service_set_active_session(false,
-						info->config.allowed_bearers);
+			if (session->active)
+				set_active_session(session, false);
+
+			session->active = false;
+			session_deactivate(session);
 
 			g_slist_free(info->config.allowed_bearers);
 			session->user_allowed_bearers = allowed_bearers;
 
-			err = apply_policy_on_bearers(
+			apply_policy_on_bearers(
 					session->policy_config->allowed_bearers,
 					session->user_allowed_bearers,
 					&info->config.allowed_bearers);
 
-			if (err < 0)
-				return __connman_error_failed(msg, -err);
-
-			if (info->reason == CONNMAN_SESSION_REASON_CONNECT)
-				__connman_service_set_active_session(true,
-						info->config.allowed_bearers);
-
+			session_activate(session);
 		} else {
 			goto err;
 		}
@@ -1637,7 +1052,7 @@ static DBusMessage *change_session(DBusConnection *conn,
 		goto err;
 	}
 
-	session_changed(session, CONNMAN_SESSION_TRIGGER_SETTING);
+	session_notify(session);
 
 	return g_dbus_create_reply(msg, DBUS_TYPE_INVALID);
 
@@ -1680,8 +1095,6 @@ static int session_disconnect(struct connman_session *session)
 	g_dbus_unregister_interface(connection, session->session_path,
 						CONNMAN_SESSION_INTERFACE);
 
-	deselect_and_disconnect(session);
-
 	g_hash_table_remove(session_hash, session->session_path);
 
 	return 0;
@@ -1722,25 +1135,31 @@ static const GDBusMethodTable session_methods[] = {
 	{ },
 };
 
-static void session_nfacct_stats_cb(struct nfacct_context *ctx,
-					uint64_t packets, uint64_t bytes,
-					void *user_data)
+static int session_policy_config_cb(struct connman_session *session,
+				struct connman_session_config *config,
+				void *user_data, int err)
 {
-	struct connman_session *session = user_data;
-
-	DBG("session %p", session);
-
-	/* XXX add accounting code here */
-}
-
-static int session_create_final(struct creation_data *creation_data,
-				struct connman_session *session)
-{
+	struct creation_data *creation_data = user_data;
 	struct session_info *info, *info_last;
 	DBusMessage *reply;
-	int err;
 
-	DBG("");
+	DBG("session %p config %p", session, config);
+
+	if (err < 0)
+		goto err;
+
+	session->policy_config = config;
+
+	session->mark = session_mark++;
+	session->index = -1;
+
+	err = init_firewall_session(session);
+	if (err < 0)
+		goto err;
+
+	err = init_routing_table(session);
+	if (err < 0)
+		goto err;
 
 	info = session->info;
 	info_last = session->info_last;
@@ -1758,12 +1177,10 @@ static int session_create_final(struct creation_data *creation_data,
 	session->user_allowed_bearers = creation_data->allowed_bearers;
 	creation_data->allowed_bearers = NULL;
 
-	err = apply_policy_on_bearers(
+	apply_policy_on_bearers(
 			session->policy_config->allowed_bearers,
 			session->user_allowed_bearers,
 			&info->config.allowed_bearers);
-	if (err < 0)
-		goto err;
 
 	g_hash_table_replace(session_hash, session->session_path, session);
 
@@ -1785,8 +1202,6 @@ static int session_create_final(struct creation_data *creation_data,
 	g_dbus_send_message(connection, reply);
 	creation_data->pending = NULL;
 
-	populate_service_list(session);
-
 	info_last->state = info->state;
 	info_last->config.priority = info->config.priority;
 	info_last->config.roaming_policy = info->config.roaming_policy;
@@ -1794,100 +1209,11 @@ static int session_create_final(struct creation_data *creation_data,
 
 	session->append_all = true;
 
-	session_changed(session, CONNMAN_SESSION_TRIGGER_SETTING);
-
 	cleanup_creation_data(creation_data);
 
-err:
-	return err;
-}
+	session_activate(session);
 
-static void session_nfacct_enable_cb(unsigned int error,
-					struct nfacct_context *ctx,
-					void *user_data)
-{
-	struct creation_data *creation_data = user_data;
-	struct connman_session *session = creation_data->session;
-	DBusMessage *reply;
-	int err;
-
-	DBG("");
-
-	if (error != 0) {
-		err = -error;
-		goto err;
-	}
-
-	err = init_firewall_session(session);
-	if (err < 0)
-		goto err;
-
-	err = init_routing_table(session);
-	if (err < 0)
-		goto err;
-
-	err = session_create_final(creation_data, session);
-	if (err < 0)
-		goto err;
-
-	return;
-
-err:
-	reply = __connman_error_failed(creation_data->pending, -err);
-	g_dbus_send_message(connection, reply);
-	creation_data->pending = NULL;
-
-	cleanup_session(creation_data->session);
-	cleanup_creation_data(creation_data);
-}
-
-static int session_policy_config_cb(struct connman_session *session,
-				struct connman_session_config *config,
-				void *user_data, int err)
-{
-	struct creation_data *creation_data = user_data;
-	char *input, *output;
-	DBusMessage *reply;
-
-	DBG("session %p config %p", session, config);
-
-	if (err < 0)
-		goto err;
-
-	session->policy_config = config;
-
-	session->mark = session_mark++;
-	session->index = -1;
-
-	session->nfctx = __connman_nfacct_create_context();
-	if (!session->nfctx) {
-		err = -ENOMEM;
-		goto err;
-	}
-
-	input = g_strdup_printf("session-input-%d", session->mark);
-	err = __connman_nfacct_add(session->nfctx, input,
-					session_nfacct_stats_cb,
-					session);
-	g_free(input);
-	if (err < 0)
-		goto err;
-
-	output = g_strdup_printf("session-output-%d", session->mark);
-	err = __connman_nfacct_add(session->nfctx, output,
-					session_nfacct_stats_cb,
-					session);
-	g_free(output);
-	if (err < 0)
-		goto err;
-
-	err = __connman_nfacct_enable(session->nfctx,
-					session_nfacct_enable_cb,
-					creation_data);
-	if (err < 0)
-		goto err;
-
-	return -EINPROGRESS;
+	return 0;
 
 err:
 	reply = __connman_error_failed(creation_data->pending, -err);
@@ -1982,9 +1308,7 @@ int __connman_session_create(DBusMessage *msg)
 	 * For AllowedBearers this is '*', ...
 	 */
 	if (!user_allowed_bearers) {
-		creation_data->allowed_bearers =
-			g_slist_append(NULL,
-				GINT_TO_POINTER(CONNMAN_SERVICE_TYPE_UNKNOWN));
+		add_default_bearer_types(&creation_data->allowed_bearers);
 		if (!creation_data->allowed_bearers) {
 			err = -ENOMEM;
 			goto err;
@@ -2051,10 +1375,6 @@ int __connman_session_create(DBusMessage *msg)
 		g_dbus_add_disconnect_watch(connection, session->owner,
 					owner_disconnect, session, NULL);
 
-	err = assign_policy_plugin(session);
-	if (err < 0)
-		goto err;
-
 	err = create_policy_config(session, session_policy_config_cb,
 					creation_data);
 	if (err < 0 && err != -EINPROGRESS)
@@ -2069,6 +1389,14 @@ err:
 
 	cleanup_creation_data(creation_data);
 	return err;
+}
+
+bool __connman_session_policy_autoconnect(enum connman_service_connect_reason reason)
+{
+	if (!policy || !policy->autoconnect)
+		return true;
+
+	return policy->autoconnect(reason);
 }
 
 void connman_session_destroy(struct connman_session *session)
@@ -2104,75 +1432,242 @@ int __connman_session_destroy(DBusMessage *msg)
 	return 0;
 }
 
-static void service_add(struct connman_service *service, const char *name)
+int connman_session_connect(struct connman_service *service)
 {
-	GHashTableIter iter;
-	gpointer key, value;
-	struct connman_session *session;
+	DBG("service %p name %s", service, __connman_service_get_name(service));
 
-	DBG("service %p", service);
-
-	g_hash_table_iter_init(&iter, session_hash);
-
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		session = value;
-
-		if (!service_match(session, service))
-			continue;
-
-		if (g_hash_table_lookup(session->service_hash, service)) {
-			session->service_list =
-				g_list_sort_with_data(session->service_list,
-						sort_services, session);
-		} else {
-			session->service_list =
-				g_list_insert_sorted_with_data(
-				session->service_list, service,
-				sort_services, session);
-
-			g_hash_table_replace(session->service_hash,
-						service, service);
-		}
-
-		session_changed(session, CONNMAN_SESSION_TRIGGER_SERVICE);
-	}
+	return __connman_service_connect(service,
+				CONNMAN_SERVICE_CONNECT_REASON_SESSION);
 }
 
-static void service_remove(struct connman_service *service)
+int connman_session_disconnect(struct connman_service *service)
 {
-	GHashTableIter iter;
-	gpointer key, value;
-
 	DBG("service %p", service);
 
-	g_hash_table_iter_init(&iter, session_hash);
-
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		struct connman_session *session = value;
-
-		if (!g_hash_table_lookup(session->service_hash, service))
-			continue;
-
-		session->service_list = g_list_remove(session->service_list,
-							service);
-
-		g_hash_table_remove(session->service_hash, service);
-
-		if (session->service && session->service == service)
-			session->service = NULL;
-		session_changed(session, CONNMAN_SESSION_TRIGGER_SERVICE);
-	}
+	return __connman_service_disconnect(service);
 }
 
-static void service_state_changed(struct connman_service *service,
+static enum connman_session_state service_to_session_state(
 					enum connman_service_state state)
 {
+	switch (state) {
+	case CONNMAN_SERVICE_STATE_UNKNOWN:
+	case CONNMAN_SERVICE_STATE_IDLE:
+	case CONNMAN_SERVICE_STATE_ASSOCIATION:
+	case CONNMAN_SERVICE_STATE_CONFIGURATION:
+	case CONNMAN_SERVICE_STATE_DISCONNECT:
+	case CONNMAN_SERVICE_STATE_FAILURE:
+		break;
+	case CONNMAN_SERVICE_STATE_READY:
+		return CONNMAN_SESSION_STATE_CONNECTED;
+	case CONNMAN_SERVICE_STATE_ONLINE:
+		return CONNMAN_SESSION_STATE_ONLINE;
+	}
+
+	return CONNMAN_SESSION_STATE_DISCONNECTED;
+}
+
+static void update_session_state(struct connman_session *session)
+{
+	enum connman_service_state service_state;
+	enum connman_session_state state = CONNMAN_SESSION_STATE_DISCONNECTED;
+
+	if (session->service) {
+		service_state = __connman_service_get_state(session->service);
+		state = service_to_session_state(service_state);
+		session->info->state = state;
+	}
+	session->info->state = state;
+
+	DBG("session %p state %s", session, state2string(state));
+
+	update_routing_table(session);
+	session_notify(session);
+}
+
+static bool session_match_service(struct connman_session *session,
+				struct connman_service *service)
+{
+	enum connman_service_type bearer_type;
+	enum connman_service_type service_type;
+	GSList *list;
+
+	if (policy && policy->allowed)
+		return policy->allowed(session, service);
+
+	for (list = session->info->config.allowed_bearers; list; list = list->next) {
+		bearer_type = GPOINTER_TO_INT(list->data);
+		service_type = connman_service_get_type(service);
+
+		if (bearer_type == service_type)
+			return true;
+	}
+
+	return false;
+}
+
+static bool is_session_connected(struct connman_session *session,
+				enum connman_service_state state)
+
+{
+	switch (state) {
+	case CONNMAN_SERVICE_STATE_UNKNOWN:
+	case CONNMAN_SERVICE_STATE_IDLE:
+	case CONNMAN_SERVICE_STATE_ASSOCIATION:
+	case CONNMAN_SERVICE_STATE_CONFIGURATION:
+	case CONNMAN_SERVICE_STATE_DISCONNECT:
+	case CONNMAN_SERVICE_STATE_FAILURE:
+			  break;
+	case CONNMAN_SERVICE_STATE_READY:
+		if (session->info->config.type == CONNMAN_SESSION_TYPE_INTERNET)
+			return false;
+	case CONNMAN_SERVICE_STATE_ONLINE:
+		return true;
+	}
+
+	return false;
+}
+
+static void session_activate(struct connman_session *session)
+{
+	GHashTableIter iter;
+	gpointer key, value;
+
+	if (!service_hash)
+		return;
+
+	g_hash_table_iter_init(&iter, service_hash);
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		struct connman_service_info *info = value;
+		enum connman_service_state state;
+
+		state = __connman_service_get_state(info->service);
+
+		if (is_session_connected(session, state) &&
+				session_match_service(session, info->service)) {
+			DBG("session %p add service %p", session, info->service);
+
+			info->sessions = g_slist_prepend(info->sessions,
+							session);
+			session->service = info->service;
+			update_session_state(session);
+
+			return;
+		}
+	}
+
+	session_notify(session);
+}
+
+static void session_deactivate(struct connman_session *session)
+{
+	struct connman_service_info *info;
+
+	if (!service_hash)
+		return;
+
+	if (!session->service)
+		return;
+
+	info = g_hash_table_lookup(service_hash, session->service);
+	if (!info)
+		return;
+
+	info->sessions = g_slist_remove(info->sessions, session);
+	session->service = NULL;
+
+	session->info->state = CONNMAN_SESSION_STATE_DISCONNECTED;
+}
+
+static void handle_service_state_online(struct connman_service *service,
+					enum connman_service_state state,
+					struct connman_service_info *info)
+{
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&iter, session_hash);
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		struct connman_session *session = value;
+		bool connected;
+
+		connected = is_session_connected(session, state);
+
+		if (session->service == service) {
+			if (!connected) {
+				DBG("session %p remove service %p", session, service);
+				info->sessions = g_slist_remove(info->sessions,
+							session);
+				session->service = NULL;
+				update_session_state(session);
+			}
+		} else if (connected && session_match_service(session, service)) {
+			DBG("session %p add service %p", session, service);
+
+			info->sessions = g_slist_prepend(info->sessions,
+							session);
+			session->service = service;
+			update_session_state(session);
+		}
+	}
+}
+
+static void handle_service_state_offline(struct connman_service *service,
+					struct connman_service_info *info)
+{
+	GSList *list;
+
+	for (list = info->sessions; list; list = list->next) {
+		struct connman_session *session = list->data;
+
+		if (session->service != service) {
+			connman_warn("session %p should have session %p assigned",
+					session, service);
+			continue;
+		}
+
+		DBG("session %p remove service %p", session, service);
+
+		session->service = NULL;
+		update_session_state(session);
+	}
+}
+
+
+static void service_state_changed(struct connman_service *service,
+				enum connman_service_state state)
+{
+	struct connman_service_info *info;
+
 	DBG("service %p state %d", service, state);
 
-	if (is_connected(state))
-		service_add(service, __connman_service_get_name(service));
-	else if (is_disconnected(state))
-		service_remove(service);
+	info = g_hash_table_lookup(service_hash, service);
+
+	switch (state) {
+	case CONNMAN_SERVICE_STATE_UNKNOWN:
+	case CONNMAN_SERVICE_STATE_IDLE:
+	case CONNMAN_SERVICE_STATE_ASSOCIATION:
+	case CONNMAN_SERVICE_STATE_CONFIGURATION:
+	case CONNMAN_SERVICE_STATE_FAILURE:
+	case CONNMAN_SERVICE_STATE_DISCONNECT:
+		if (!info)
+			return;
+
+		handle_service_state_offline(service, info);
+
+		g_hash_table_remove(service_hash, service);
+
+		return;
+	case CONNMAN_SERVICE_STATE_READY:
+	case CONNMAN_SERVICE_STATE_ONLINE:
+		if (!info) {
+			info = g_new0(struct connman_service_info, 1);
+			g_hash_table_replace(service_hash, service, info);
+		}
+
+		info->service = service;
+		handle_service_state_online(service, state, info);
+	}
 }
 
 static void ipconfig_changed(struct connman_service *service,
@@ -2198,6 +1693,8 @@ static void ipconfig_changed(struct connman_service *service,
 			continue;
 
 		if (session->service && session->service == service) {
+			update_routing_table(session);
+
 			if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
 				ipconfig_ipv4_changed(session);
 			else if (type == CONNMAN_IPCONFIG_TYPE_IPV6)
@@ -2211,16 +1708,6 @@ static struct connman_notifier session_notifier = {
 	.service_state_changed	= service_state_changed,
 	.ipconfig_changed	= ipconfig_changed,
 };
-
-static int session_nfacct_flush_cb(unsigned int error, void *user_data)
-{
-	if (error == 0)
-		return 0;
-
-	connman_error("Could not flush nfacct table: %s", strerror(error));
-
-	return -error;
-}
 
 int __connman_session_init(void)
 {
@@ -2241,11 +1728,12 @@ int __connman_session_init(void)
 	session_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
 						NULL, cleanup_session);
 
+	service_hash = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+						NULL, cleanup_service);
 	if (__connman_firewall_is_up()) {
 		err = init_firewall();
 		if (err < 0)
 			return err;
-		__connman_nfacct_flush(session_nfacct_flush_cb, NULL);
 	}
 
 	return 0;
@@ -2265,6 +1753,8 @@ void __connman_session_cleanup(void)
 	g_hash_table_foreach(session_hash, release_session, NULL);
 	g_hash_table_destroy(session_hash);
 	session_hash = NULL;
+	g_hash_table_destroy(service_hash);
+	service_hash = NULL;
 
 	dbus_connection_unref(connection);
 }

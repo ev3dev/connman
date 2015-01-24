@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -44,8 +44,6 @@ struct connman_ipconfig {
 	int refcount;
 	int index;
 	enum connman_ipconfig_type type;
-
-	struct connman_ipconfig *origin;
 
 	const struct connman_ipconfig_ops *ops;
 	void *ops_data;
@@ -135,6 +133,7 @@ const char *__connman_ipconfig_type2string(enum connman_ipconfig_type type)
 {
 	switch (type) {
 	case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+	case CONNMAN_IPCONFIG_TYPE_ALL:
 		return "unknown";
 	case CONNMAN_IPCONFIG_TYPE_IPV4:
 		return "IPv4";
@@ -477,7 +476,7 @@ void __connman_ipconfig_newlink(int index, unsigned short type,
 						struct rtnl_link_stats *stats)
 {
 	struct connman_ipdevice *ipdevice;
-	GList *list;
+	GList *list, *ipconfig_copy;
 	GString *str;
 	bool up = false, down = false;
 	bool lower_up = false, lower_down = false;
@@ -556,7 +555,9 @@ update:
 
 	g_string_free(str, TRUE);
 
-	for (list = g_list_first(ipconfig_list); list;
+	ipconfig_copy = g_list_copy(ipconfig_list);
+
+	for (list = g_list_first(ipconfig_copy); list;
 						list = g_list_next(list)) {
 		struct connman_ipconfig *ipconfig = list->data;
 
@@ -576,6 +577,8 @@ update:
 		if (down && ipconfig->ops->down)
 			ipconfig->ops->down(ipconfig, ifname);
 	}
+
+	g_list_free(ipconfig_copy);
 
 	if (lower_up)
 		__connman_ipconfig_lower_up(ipdevice);
@@ -694,7 +697,7 @@ void __connman_ipconfig_newaddr(int index, int family, const char *label,
 		goto out;
 
 	if ((ipdevice->flags & (IFF_RUNNING | IFF_LOWER_UP)) != (IFF_RUNNING | IFF_LOWER_UP))
-		return;
+		goto out;
 
 	for (list = g_list_first(ipconfig_list); list;
 						list = g_list_next(list)) {
@@ -1086,8 +1089,6 @@ int __connman_ipconfig_gateway_add(struct connman_ipconfig *ipconfig)
 	if (!service)
 		return -EINVAL;
 
-	__connman_connection_gateway_remove(service, ipconfig->type);
-
 	DBG("type %d gw %s peer %s", ipconfig->type,
 		ipconfig->address->gateway, ipconfig->address->peer);
 
@@ -1251,11 +1252,6 @@ void __connman_ipconfig_unref_debug(struct connman_ipconfig *ipconfig,
 
 	__connman_ipconfig_set_ops(ipconfig, NULL);
 
-	if (ipconfig->origin && ipconfig->origin != ipconfig) {
-		__connman_ipconfig_unref(ipconfig->origin);
-		ipconfig->origin = NULL;
-	}
-
 	connman_ipaddress_free(ipconfig->system);
 	connman_ipaddress_free(ipconfig->address);
 	g_free(ipconfig->last_dhcp_address);
@@ -1299,9 +1295,6 @@ int __connman_ipconfig_get_index(struct connman_ipconfig *ipconfig)
 {
 	if (!ipconfig)
 		return -1;
-
-	if (ipconfig->origin)
-		return ipconfig->origin->index;
 
 	return ipconfig->index;
 }
@@ -1699,10 +1692,6 @@ int __connman_ipconfig_disable(struct connman_ipconfig *ipconfig)
 	if (ipdevice->config_ipv6 == ipconfig) {
 		ipconfig_list = g_list_remove(ipconfig_list, ipconfig);
 
-		if (ipdevice->config_ipv6->method ==
-						CONNMAN_IPCONFIG_METHOD_AUTO)
-			disable_ipv6(ipdevice->config_ipv6);
-
 		connman_ipaddress_clear(ipdevice->config_ipv6->system);
 		__connman_ipconfig_unref(ipdevice->config_ipv6);
 		ipdevice->config_ipv6 = NULL;
@@ -1770,6 +1759,25 @@ static int string2privacy(const char *privacy)
 		return 2;
 	else
 		return 0;
+}
+
+int __connman_ipconfig_ipv6_reset_privacy(struct connman_ipconfig *ipconfig)
+{
+	struct connman_ipdevice *ipdevice;
+	int err;
+
+	if (!ipconfig)
+		return -EINVAL;
+
+	ipdevice = g_hash_table_lookup(ipdevice_hash,
+						GINT_TO_POINTER(ipconfig->index));
+	if (!ipdevice)
+		return -ENODEV;
+
+	err = __connman_ipconfig_ipv6_set_privacy(ipconfig, privacy2string(
+							ipdevice->ipv6_privacy));
+
+	return err;
 }
 
 int __connman_ipconfig_ipv6_set_privacy(struct connman_ipconfig *ipconfig,
@@ -2089,8 +2097,7 @@ int __connman_ipconfig_set_config(struct connman_ipconfig *ipconfig,
 
 	case CONNMAN_IPCONFIG_METHOD_OFF:
 		ipconfig->method = method;
-		if (ipconfig->type == CONNMAN_IPCONFIG_TYPE_IPV6)
-			disable_ipv6(ipconfig);
+
 		break;
 
 	case CONNMAN_IPCONFIG_METHOD_AUTO:
@@ -2100,7 +2107,7 @@ int __connman_ipconfig_set_config(struct connman_ipconfig *ipconfig,
 		ipconfig->method = method;
 		if (privacy_string)
 			ipconfig->ipv6_privacy_config = privacy;
-		enable_ipv6(ipconfig);
+
 		break;
 
 	case CONNMAN_IPCONFIG_METHOD_MANUAL:
@@ -2112,6 +2119,7 @@ int __connman_ipconfig_set_config(struct connman_ipconfig *ipconfig,
 			type = AF_INET6;
 			break;
 		case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+		case CONNMAN_IPCONFIG_TYPE_ALL:
 			type = -1;
 			break;
 		}
@@ -2135,6 +2143,7 @@ int __connman_ipconfig_set_config(struct connman_ipconfig *ipconfig,
 			return connman_ipaddress_set_ipv6(
 					ipconfig->address, address,
 						prefix_length, gateway);
+
 		break;
 
 	case CONNMAN_IPCONFIG_METHOD_DHCP:
@@ -2164,9 +2173,11 @@ void __connman_ipconfig_append_ethernet(struct connman_ipconfig *ipconfig,
 
 	if (ipconfig->index >= 0) {
 		char *ifname = connman_inet_ifname(ipconfig->index);
-		connman_dbus_dict_append_basic(iter, "Interface",
-					DBUS_TYPE_STRING, &ifname);
-		g_free(ifname);
+		if (ifname) {
+			connman_dbus_dict_append_basic(iter, "Interface",
+						DBUS_TYPE_STRING, &ifname);
+			g_free(ifname);
+		}
 	}
 
 	if (ipdevice->address)
@@ -2198,6 +2209,7 @@ int __connman_ipconfig_load(struct connman_ipconfig *ipconfig,
 			ipconfig->method = CONNMAN_IPCONFIG_METHOD_AUTO;
 			break;
 		case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+		case CONNMAN_IPCONFIG_TYPE_ALL:
 			ipconfig->method = CONNMAN_IPCONFIG_METHOD_OFF;
 			break;
 		}

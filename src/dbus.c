@@ -408,6 +408,25 @@ dbus_bool_t __connman_dbus_append_objpath_dict_array(DBusMessage *msg,
 	return TRUE;
 }
 
+dbus_bool_t __connman_dbus_append_objpath_array(DBusMessage *msg,
+			connman_dbus_append_cb_t function, void *user_data)
+{
+	DBusMessageIter iter, array;
+
+	if (!msg || !function)
+		return FALSE;
+
+	dbus_message_iter_init_append(msg, &iter);
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY,
+				DBUS_TYPE_OBJECT_PATH_AS_STRING, &array);
+
+	function(&array, user_data);
+
+	dbus_message_iter_close_container(&iter, &array);
+
+	return TRUE;
+}
+
 struct callback_data {
 	void *cb;
 	void *user_data;
@@ -632,6 +651,38 @@ err:
 	g_free(data);
 
 	return err;
+}
+
+void connman_dbus_reply_pending(DBusMessage *pending,
+					int error, const char *path)
+{
+	if (pending) {
+		if (error > 0) {
+			DBusMessage *reply;
+
+			reply = __connman_error_failed(pending,	error);
+			if (reply)
+				g_dbus_send_message(connection, reply);
+		} else {
+			const char *sender;
+
+			sender = dbus_message_get_interface(pending);
+			if (!path)
+				path = dbus_message_get_path(pending);
+
+			DBG("sender %s path %s", sender, path);
+
+			if (g_strcmp0(sender, CONNMAN_MANAGER_INTERFACE) == 0)
+				g_dbus_send_reply(connection, pending,
+					DBUS_TYPE_OBJECT_PATH, &path,
+							DBUS_TYPE_INVALID);
+			else
+				g_dbus_send_reply(connection, pending,
+							DBUS_TYPE_INVALID);
+		}
+
+		dbus_message_unref(pending);
+	}
 }
 
 DBusConnection *connman_dbus_get_connection(void)

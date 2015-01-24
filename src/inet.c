@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *  Copyright (C) 2003-2005  Go-Core Project
  *  Copyright (C) 2003-2006  Helsinki University of Technology
  *
@@ -240,36 +240,6 @@ char *connman_inet_ifname(int index)
 	return g_strdup(ifr.ifr_name);
 }
 
-short int connman_inet_ifflags(int index)
-{
-	struct ifreq ifr;
-	int sk, err;
-
-	sk = socket(PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-	if (sk < 0)
-		return -errno;
-
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_ifindex = index;
-
-	if (ioctl(sk, SIOCGIFNAME, &ifr) < 0) {
-		err = -errno;
-		goto done;
-	}
-
-	if (ioctl(sk, SIOCGIFFLAGS, &ifr) < 0) {
-		err = -errno;
-		goto done;
-	}
-
-	err = ifr.ifr_flags;
-
-done:
-	close(sk);
-
-	return err;
-}
-
 int connman_inet_ifup(int index)
 {
 	struct ifreq ifr;
@@ -358,36 +328,6 @@ done:
 	close(sk);
 
 	return err;
-}
-
-bool connman_inet_is_cfg80211(int index)
-{
-	bool result = false;
-	char phy80211_path[PATH_MAX];
-	struct stat st;
-	struct ifreq ifr;
-	int sk;
-
-	sk = socket(PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-	if (sk < 0)
-		return false;
-
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_ifindex = index;
-
-	if (ioctl(sk, SIOCGIFNAME, &ifr) < 0)
-		goto done;
-
-	snprintf(phy80211_path, PATH_MAX,
-				"/sys/class/net/%s/phy80211", ifr.ifr_name);
-
-	if (stat(phy80211_path, &st) == 0 && (st.st_mode & S_IFDIR))
-		result = true;
-
-done:
-	close(sk);
-
-	return result;
 }
 
 struct in6_ifreq {
@@ -480,7 +420,8 @@ int connman_inet_clear_address(int index, struct connman_ipaddress *ipaddress)
 	broadcast = ipaddress->broadcast;
 	peer = ipaddress->peer;
 
-	DBG("index %d address %s prefix_len %d", index, address, prefix_len);
+	DBG("index %d address %s prefix_len %d peer %s broadcast %s", index,
+		address, prefix_len, peer, broadcast);
 
 	if (!address)
 		return -EINVAL;
@@ -2385,9 +2326,10 @@ int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
 
 	err = sendto(rtnl->fd, &rtnl->req.n, rtnl->req.n.nlmsg_len, 0,
 		(struct sockaddr *) &nladdr, sizeof(nladdr));
-	DBG("handle %p len %d err %d", rtnl, rtnl->req.n.nlmsg_len, err);
+	DBG("handle %p len %d", rtnl, rtnl->req.n.nlmsg_len);
 	if (err < 0) {
-		connman_error("Can not talk to rtnetlink");
+		connman_error("Can not talk to rtnetlink err %d %s",
+			-errno, strerror(errno));
 		return -errno;
 	}
 

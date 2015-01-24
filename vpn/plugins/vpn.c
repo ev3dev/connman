@@ -2,7 +2,7 @@
  *
  *  ConnMan VPN daemon
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -138,9 +138,9 @@ void vpn_died(struct connman_task *task, int exit_code, void *user_data)
 	vpn_provider_set_data(provider, NULL);
 
 	if (data->watch != 0) {
-		vpn_provider_unref(provider);
 		vpn_rtnl_remove_watch(data->watch);
 		data->watch = 0;
+		vpn_provider_unref(provider);
 	}
 
 vpn_exit:
@@ -160,8 +160,6 @@ vpn_exit:
 			ret = VPN_PROVIDER_ERROR_UNKNOWN;
 
 		vpn_provider_indicate_error(provider, ret);
-
-		vpn_provider_set_state(provider, VPN_PROVIDER_STATE_FAILURE);
 	} else
 		vpn_provider_set_state(provider, VPN_PROVIDER_STATE_IDLE);
 
@@ -245,6 +243,31 @@ static DBusMessage *vpn_notify(struct connman_task *task,
 	switch (state) {
 	case VPN_STATE_CONNECT:
 	case VPN_STATE_READY:
+		if (data->state == VPN_STATE_READY) {
+			/*
+			 * This is the restart case, in which case we must
+			 * just set the IP address.
+			 *
+			 * We need to remove first the old address, just
+			 * replacing the old address will not work as expected
+			 * because the old address will linger in the interface
+			 * and not disapper so the clearing is needed here.
+			 *
+			 * Also the state must change, otherwise the routes
+			 * will not be set properly.
+			 */
+			vpn_provider_set_state(provider,
+						VPN_PROVIDER_STATE_CONNECT);
+
+			vpn_provider_clear_address(provider, AF_INET);
+			vpn_provider_clear_address(provider, AF_INET6);
+
+			vpn_provider_change_address(provider);
+			vpn_provider_set_state(provider,
+						VPN_PROVIDER_STATE_READY);
+			break;
+		}
+
 		index = vpn_provider_get_index(provider);
 		vpn_provider_ref(provider);
 		data->watch = vpn_rtnl_add_newlink_watch(index,

@@ -2,7 +2,7 @@
  *
  *  ConnMan VPN daemon
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -84,6 +84,8 @@ struct vpn_provider {
 	char *config_file;
 	char *config_entry;
 	bool immutable;
+	struct connman_ipaddress *prev_ipv4_addr;
+	struct connman_ipaddress *prev_ipv6_addr;
 };
 
 static void append_properties(DBusMessageIter *iter,
@@ -1000,6 +1002,8 @@ static void provider_destruct(struct vpn_provider *provider)
 	g_strfreev(provider->host_ip);
 	g_free(provider->config_file);
 	g_free(provider->config_entry);
+	connman_ipaddress_free(provider->prev_ipv4_addr);
+	connman_ipaddress_free(provider->prev_ipv6_addr);
 	g_free(provider);
 }
 
@@ -1307,13 +1311,6 @@ static int provider_indicate_state(struct vpn_provider *provider,
 					VPN_CONNECTION_INTERFACE, "State",
 					DBUS_TYPE_STRING, &str);
 
-	/*
-	 * We do not stay in failure state as clients like connmand can
-	 * get confused about our current state.
-	 */
-	if (provider->state == VPN_PROVIDER_STATE_FAILURE)
-		provider->state = VPN_PROVIDER_STATE_IDLE;
-
 	return 0;
 }
 
@@ -1550,15 +1547,16 @@ int vpn_provider_indicate_error(struct vpn_provider *provider,
 	DBG("provider %p id %s error %d", provider, provider->identifier,
 									error);
 
+	vpn_provider_set_state(provider, VPN_PROVIDER_STATE_FAILURE);
+
 	switch (error) {
-	case VPN_PROVIDER_ERROR_LOGIN_FAILED:
-		break;
-	case VPN_PROVIDER_ERROR_AUTH_FAILED:
-		vpn_provider_set_state(provider, VPN_PROVIDER_STATE_FAILURE);
-		break;
+	case VPN_PROVIDER_ERROR_UNKNOWN:
 	case VPN_PROVIDER_ERROR_CONNECT_FAILED:
 		break;
-	default:
+
+        case VPN_PROVIDER_ERROR_LOGIN_FAILED:
+        case VPN_PROVIDER_ERROR_AUTH_FAILED:
+		vpn_provider_set_state(provider, VPN_PROVIDER_STATE_IDLE);
 		break;
 	}
 
@@ -2304,19 +2302,41 @@ int vpn_provider_set_ipaddress(struct vpn_provider *provider,
 		break;
 	}
 
-	DBG("provider %p ipconfig %p family %d", provider, ipconfig,
-							ipaddress->family);
+	DBG("provider %p state %d ipconfig %p family %d", provider,
+		provider->state, ipconfig, ipaddress->family);
 
 	if (!ipconfig)
 		return -EINVAL;
 
 	provider->family = ipaddress->family;
 
-	__vpn_ipconfig_set_local(ipconfig, ipaddress->local);
-	__vpn_ipconfig_set_peer(ipconfig, ipaddress->peer);
-	__vpn_ipconfig_set_broadcast(ipconfig, ipaddress->broadcast);
-	__vpn_ipconfig_set_gateway(ipconfig, ipaddress->gateway);
-	__vpn_ipconfig_set_prefixlen(ipconfig, ipaddress->prefixlen);
+	if (provider->state == VPN_PROVIDER_STATE_CONNECT ||
+			provider->state == VPN_PROVIDER_STATE_READY) {
+		struct connman_ipaddress *addr =
+					__vpn_ipconfig_get_address(ipconfig);
+
+		/*
+		 * Remember the old address so that we can remove it in notify
+		 * function in plugins/vpn.c if we ever restart
+		 */
+		if (ipaddress->family == AF_INET6) {
+			connman_ipaddress_free(provider->prev_ipv6_addr);
+			provider->prev_ipv6_addr =
+						connman_ipaddress_copy(addr);
+		} else {
+			connman_ipaddress_free(provider->prev_ipv4_addr);
+			provider->prev_ipv4_addr =
+						connman_ipaddress_copy(addr);
+		}
+	}
+
+	if (ipaddress->local) {
+		__vpn_ipconfig_set_local(ipconfig, ipaddress->local);
+		__vpn_ipconfig_set_peer(ipconfig, ipaddress->peer);
+		__vpn_ipconfig_set_broadcast(ipconfig, ipaddress->broadcast);
+		__vpn_ipconfig_set_gateway(ipconfig, ipaddress->gateway);
+		__vpn_ipconfig_set_prefixlen(ipconfig, ipaddress->prefixlen);
+	}
 
 	return 0;
 }
@@ -2542,6 +2562,63 @@ const char *vpn_provider_get_host(struct vpn_provider *provider)
 const char *vpn_provider_get_path(struct vpn_provider *provider)
 {
 	return provider->path;
+}
+
+void vpn_provider_change_address(struct vpn_provider *provider)
+{
+	switch (provider->family) {
+	case AF_INET:
+		connman_inet_set_address(provider->index,
+			__vpn_ipconfig_get_address(provider->ipconfig_ipv4));
+		break;
+	case AF_INET6:
+		connman_inet_set_ipv6_address(provider->index,
+			__vpn_ipconfig_get_address(provider->ipconfig_ipv6));
+		break;
+	default:
+		break;
+	}
+}
+
+void vpn_provider_clear_address(struct vpn_provider *provider, int family)
+{
+	const char *address;
+	unsigned char len;
+
+	DBG("provider %p family %d ipv4 %p ipv6 %p", provider, family,
+		provider->prev_ipv4_addr, provider->prev_ipv6_addr);
+
+	switch (family) {
+	case AF_INET:
+		if (provider->prev_ipv4_addr) {
+			connman_ipaddress_get_ip(provider->prev_ipv4_addr,
+						&address, &len);
+
+			DBG("ipv4 %s/%d", address, len);
+
+			connman_inet_clear_address(provider->index,
+					provider->prev_ipv4_addr);
+			connman_ipaddress_free(provider->prev_ipv4_addr);
+			provider->prev_ipv4_addr = NULL;
+		}
+		break;
+	case AF_INET6:
+		if (provider->prev_ipv6_addr) {
+			connman_ipaddress_get_ip(provider->prev_ipv6_addr,
+						&address, &len);
+
+			DBG("ipv6 %s/%d", address, len);
+
+			connman_inet_clear_ipv6_address(provider->index,
+							address, len);
+
+			connman_ipaddress_free(provider->prev_ipv6_addr);
+			provider->prev_ipv6_addr = NULL;
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 static int agent_probe(struct connman_agent *agent)

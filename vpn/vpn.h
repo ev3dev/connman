@@ -2,7 +2,7 @@
  *
  *  ConnMan VPN daemon
  *
- *  Copyright (C) 2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -32,7 +32,7 @@ void __vpn_manager_cleanup(void);
 
 struct vpn_ipconfig;
 
-unsigned char __vpn_ipconfig_netmask_prefix_len(const char *netmask);
+struct connman_ipaddress *__vpn_ipconfig_get_address(struct vpn_ipconfig *ipconfig);
 unsigned short __vpn_ipconfig_get_type_from_index(int index);
 unsigned int __vpn_ipconfig_get_flags_from_index(int index);
 void __vpn_ipconfig_foreach(void (*function) (int index,

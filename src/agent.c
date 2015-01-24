@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -112,6 +112,17 @@ static void agent_request_free(struct connman_agent_request *request)
 	g_free(request);
 }
 
+static void agent_finalize_pending(struct connman_agent *agent,
+				DBusMessage *reply)
+{
+	struct connman_agent_request *pending = agent->pending;
+	if (pending) {
+		agent->pending = NULL;
+		pending->callback(reply, pending->user_data);
+		agent_request_free(pending);
+	}
+}
+
 static void agent_receive_message(DBusPendingCall *call, void *user_data);
 
 static int agent_send_next_request(struct connman_agent *agent)
@@ -146,9 +157,7 @@ static int agent_send_next_request(struct connman_agent *agent)
 	return 0;
 
 fail:
-	agent->pending->callback(NULL, agent->pending->user_data);
-	agent_request_free(agent->pending);
-	agent->pending = NULL;
+	agent_finalize_pending(agent, NULL);
 	return -ESRCH;
 }
 
@@ -191,11 +200,8 @@ static void agent_receive_message(DBusPendingCall *call, void *user_data)
 		send_cancel_request(agent, agent->pending);
 	}
 
-	agent->pending->callback(reply, agent->pending->user_data);
+	agent_finalize_pending(agent, reply);
 	dbus_message_unref(reply);
-
-	agent_request_free(agent->pending);
-	agent->pending = NULL;
 
 	err = agent_send_next_request(agent);
 	if (err < 0 && err != -EBUSY)
@@ -344,6 +350,9 @@ static void report_error_reply(DBusMessage *reply, void *user_data)
 	bool retry = false;
 	const char *dbus_err;
 
+	if (!reply)
+		goto out;
+
 	if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
 		dbus_err = dbus_message_get_error_name(reply);
 		if (dbus_err &&
@@ -354,11 +363,12 @@ static void report_error_reply(DBusMessage *reply, void *user_data)
 
 	report_error->callback(report_error->user_context, retry,
 			report_error->user_data);
+out:
 	g_free(report_error);
 }
 
-int connman_agent_report_error(void *user_context, const char *path,
-				const char *error,
+int connman_agent_report_error_full(void *user_context, const char *path,
+				const char *method, const char *error,
 				report_error_cb_t callback,
 				const char *dbus_sender, void *user_data)
 {
@@ -377,8 +387,7 @@ int connman_agent_report_error(void *user_context, const char *path,
 		return -ESRCH;
 
 	message = dbus_message_new_method_call(agent->owner, agent->path,
-					CONNMAN_AGENT_INTERFACE,
-					"ReportError");
+					CONNMAN_AGENT_INTERFACE, method);
 	if (!message)
 		return -ENOMEM;
 
@@ -413,6 +422,16 @@ int connman_agent_report_error(void *user_context, const char *path,
 	dbus_message_unref(message);
 
 	return -EINPROGRESS;
+}
+
+int connman_agent_report_error(void *user_context, const char *path,
+				const char *error,
+				report_error_cb_t callback,
+				const char *dbus_sender, void *user_data)
+{
+	return connman_agent_report_error_full(user_context, path,
+				"ReportError", error, callback, dbus_sender,
+				user_data);
 }
 
 static gint compare_priority(gconstpointer a, gconstpointer b)
@@ -456,9 +475,7 @@ static void cancel_all_requests(struct connman_agent *agent)
 		if (agent->pending->call)
 			send_cancel_request(agent, agent->pending);
 
-		agent->pending->callback(NULL, agent->pending->user_data);
-		agent_request_free(agent->pending);
-		agent->pending = NULL;
+		agent_finalize_pending(agent, NULL);
 	}
 
 	for (list = agent->queue; list; list = list->next) {
@@ -521,12 +538,7 @@ void connman_agent_cancel(void *user_context)
 			if (agent->pending->call)
 				send_cancel_request(agent, agent->pending);
 
-			agent->pending->callback(NULL,
-						agent->pending->user_data);
-
-			agent_request_free(agent->pending);
-
-			agent->pending = NULL;
+			agent_finalize_pending(agent, NULL);
 
 			err = agent_send_next_request(agent);
 			if (err < 0 && err != -EBUSY)

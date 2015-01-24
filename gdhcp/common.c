@@ -1,7 +1,7 @@
 /*
  *  DHCP library with GLib integration
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -35,6 +35,7 @@
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "gdhcp.h"
 #include "common.h"
@@ -57,6 +58,42 @@ static const DHCPOption client_options[] = {
 	{ OPTION_STRING,		0xfc }, /* UNOFFICIAL proxy-pac */
 	{ OPTION_UNKNOWN,		0x00 },
 };
+
+#define URANDOM "/dev/urandom"
+static int random_fd = -1;
+
+int dhcp_get_random(uint64_t *val)
+{
+	int r;
+
+	if (random_fd < 0) {
+		random_fd = open(URANDOM, O_RDONLY);
+		if (random_fd < 0) {
+			r = -errno;
+			*val = random();
+
+			return r;
+		}
+	}
+
+	if (read(random_fd, val, sizeof(uint64_t)) < 0) {
+		r = -errno;
+		*val = random();
+
+		return r;
+	}
+
+	return 0;
+}
+
+void dhcp_cleanup_random(void)
+{
+	if (random_fd < 0)
+		return;
+
+	close(random_fd);
+	random_fd = -1;
+}
 
 GDHCPOptionType dhcp_get_code_type(uint8_t code)
 {
@@ -356,44 +393,18 @@ void dhcp_init_header(struct dhcp_packet *packet, char type)
 void dhcpv6_init_header(struct dhcpv6_packet *packet, uint8_t type)
 {
 	int id;
+	uint64_t rand;
 
 	memset(packet, 0, sizeof(*packet));
 
 	packet->message = type;
 
-	id = random();
+	dhcp_get_random(&rand);
+	id = rand;
 
 	packet->transaction_id[0] = (id >> 16) & 0xff;
 	packet->transaction_id[1] = (id >> 8) & 0xff;
 	packet->transaction_id[2] = id & 0xff;
-}
-
-static bool check_vendor(uint8_t  *option_vendor, const char *vendor)
-{
-	uint8_t vendor_length = sizeof(vendor) - 1;
-
-	if (option_vendor[OPT_LEN - OPT_DATA] != vendor_length)
-		return false;
-
-	if (memcmp(option_vendor, vendor, vendor_length) != 0)
-		return false;
-
-	return true;
-}
-
-static void check_broken_vendor(struct dhcp_packet *packet)
-{
-	uint8_t *vendor;
-
-	if (packet->op != BOOTREQUEST)
-		return;
-
-	vendor = dhcp_get_option(packet, DHCP_VENDOR);
-	if (!vendor)
-		return;
-
-	if (check_vendor(vendor, "MSFT 98"))
-		packet->flags |= htons(BROADCAST_FLAG);
 }
 
 int dhcp_recv_l3_packet(struct dhcp_packet *packet, int fd)
@@ -408,8 +419,6 @@ int dhcp_recv_l3_packet(struct dhcp_packet *packet, int fd)
 
 	if (packet->cookie != htonl(DHCP_MAGIC))
 		return -EPROTO;
-
-	check_broken_vendor(packet);
 
 	return n;
 }
@@ -541,8 +550,9 @@ int dhcpv6_send_packet(int index, struct dhcpv6_packet *dhcp_pkt, int len)
 }
 
 int dhcp_send_raw_packet(struct dhcp_packet *dhcp_pkt,
-		uint32_t source_ip, int source_port, uint32_t dest_ip,
-			int dest_port, const uint8_t *dest_arp, int ifindex)
+			uint32_t source_ip, int source_port,
+			uint32_t dest_ip, int dest_port,
+			const uint8_t *dest_arp, int ifindex, bool bcast)
 {
 	struct sockaddr_ll dest;
 	struct ip_udp_dhcp_packet packet;
@@ -558,6 +568,9 @@ int dhcp_send_raw_packet(struct dhcp_packet *dhcp_pkt,
 	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_IP));
 	if (fd < 0)
 		return -errno;
+
+	if (bcast)
+		dhcp_pkt->flags |= htons(BROADCAST_FLAG);
 
 	memset(&dest, 0, sizeof(dest));
 	memset(&packet, 0, sizeof(packet));

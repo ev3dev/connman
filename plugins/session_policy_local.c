@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2012  BMW Car IT GbmH. All rights reserved.
+ *  Copyright (C) 2012-2014  BMW Car IT GmbH.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -565,7 +565,9 @@ static void recheck_sessions(void)
 		if (policy->group)
 			continue;
 
-		group = g_hash_table_lookup(selinux_hash, policy->selinux);
+		if (policy->selinux)
+			group = g_hash_table_lookup(selinux_hash,
+							policy->selinux);
 		if (group) {
 			policy->config->id_type = CONNMAN_SESSION_ID_TYPE_LSM;
 			g_free(policy->config->id);

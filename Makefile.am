@@ -11,7 +11,7 @@ include_HEADERS = include/log.h include/plugin.h \
 			include/device.h include/network.h include/inet.h \
 			include/storage.h include/provision.h \
 			include/session.h include/ipaddress.h include/agent.h \
-			include/inotify.h
+			include/inotify.h include/peer.h include/machine.h
 
 nodist_include_HEADERS = include/version.h
 
@@ -43,9 +43,7 @@ gweb_sources += gweb/giognutls.h gweb/gionotls.c
 endif
 
 shared_sources = src/shared/util.h src/shared/util.c \
-		src/shared/netlink.h src/shared/netlink.c \
-		src/shared/nfacct.h src/shared/nfacct.c \
-		src/shared/nfnetlink_acct_copy.h
+		src/shared/netlink.h src/shared/netlink.c
 
 if DATAFILES
 
@@ -107,7 +105,8 @@ src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) \
 			src/session.c src/tethering.c src/wpad.c src/wispr.c \
 			src/stats.c src/iptables.c src/dnsproxy.c src/6to4.c \
 			src/ippool.c src/bridge.c src/nat.c src/ipaddress.c \
-			src/inotify.c src/firewall.c src/nfacct.c src/ipv6pd.c
+			src/inotify.c src/firewall.c src/ipv6pd.c src/peer.c \
+			src/peer_service.c src/machine.c src/util.c
 
 src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 			@GLIB_LIBS@ @DBUS_LIBS@ @XTABLES_LIBS@ @GNUTLS_LIBS@ \
@@ -155,6 +154,7 @@ endif
 CLEANFILES = src/connman.conf $(BUILT_SOURCES)
 
 statedir = $(localstatedir)/run/connman
+vpn_statedir = $(localstatedir)/run/connman-vpn
 
 if VPN
 vpn_plugindir = $(libdir)/connman/plugins-vpn
@@ -187,6 +187,7 @@ AM_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
 				@GNUTLS_CFLAGS@ $(builtin_cflags) \
 				-DCONNMAN_PLUGIN_BUILTIN \
 				-DSTATEDIR=\""$(statedir)"\" \
+				-DVPN_STATEDIR=\""$(vpn_statedir)"\" \
 				-DPLUGINDIR=\""$(build_plugindir)"\" \
 				-DSCRIPTDIR=\""$(build_scriptdir)"\" \
 				-DSTORAGEDIR=\""$(storagedir)\"" \
@@ -217,7 +218,7 @@ if VPN
 vpn_connman_vpnd_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
 				$(builtin_vpn_cflags) \
 				-DCONNMAN_PLUGIN_BUILTIN \
-				-DSTATEDIR=\""$(statedir)"\" \
+				-DVPN_STATEDIR=\""$(vpn_statedir)"\" \
 				-DPLUGINDIR=\""$(build_vpn_plugindir)"\" \
 				-DSCRIPTDIR=\""$(build_scriptdir)"\" \
 				-DSTORAGEDIR=\""$(storagedir)\"" \
@@ -245,6 +246,7 @@ client_connmanctl_SOURCES = client/dbus_helpers.h client/dbus_helpers.c \
 			client/commands.h client/commands.c \
 			client/input.h client/input.c \
 			client/agent.h client/agent.c \
+			client/peers.h client/peers.c \
 			client/vpnconnections.h client/vpnconnections.c \
 			client/main.c
 
@@ -262,7 +264,8 @@ unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
 				src/shared/sha1.h src/shared/sha1.c
 unit_test_prf_sha1_LDADD = @GLIB_LIBS@
 
-unit_test_ippool_SOURCES = src/log.c src/dbus.c src/ippool.c unit/test-ippool.c
+unit_test_ippool_SOURCES = src/log.c src/dbus.c src/error.c \
+					src/ippool.c unit/test-ippool.c
 unit_test_ippool_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
@@ -318,7 +321,7 @@ tools_iptables_test_LDADD = @GLIB_LIBS@ @XTABLES_LIBS@ -ldl
 
 tools_private_network_test_LDADD = @GLIB_LIBS@ @DBUS_LIBS@
 
-tools_session_test_SOURCES = src/log.c src/dbus.c \
+tools_session_test_SOURCES = src/log.c src/dbus.c src/error.c \
 		tools/session-test.c tools/session-utils.c tools/manager-api.c \
 		tools/session-api.c tools/session-test.h
 tools_session_test_LDADD = gdbus/libgdbus-internal.la \
@@ -347,7 +350,7 @@ test_scripts = test/get-state test/list-services \
 		test/test-counter test/set-ipv4-method test/set-ipv6-method \
 		test/get-services test/get-proxy-autoconfig test/set-proxy \
 		test/enable-tethering test/disable-tethering test/backtrace \
-		test/test-session test/test-supplicant \
+		test/test-session test/p2p-on-supplicant \
 		test/test-new-supplicant test/service-move-before \
 		test/set-global-timeservers test/get-global-timeservers \
 		test/set-nameservers test/set-domains test/set-timeservers \
@@ -375,7 +378,8 @@ EXTRA_DIST += doc/overview-api.txt doc/behavior-api.txt \
 				doc/vpn-manager-api.txt doc/vpn-overview.txt \
 				doc/session-policy-format.txt
 
-EXTRA_DIST += src/main.conf
+EXTRA_DIST += src/main.conf \
+		src/eduroam.config
 
 MANUAL_PAGES += doc/connman.8 doc/connman.conf.5
 

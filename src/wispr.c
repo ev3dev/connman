@@ -2,7 +2,7 @@
  *
  *  Connection Manager
  *
- *  Copyright (C) 2007-2012  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2007-2013  Intel Corporation. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -143,6 +143,7 @@ static void free_wispr_routes(struct connman_wispr_portal_context *wp_context)
 					route->address);
 			break;
 		case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+		case CONNMAN_IPCONFIG_TYPE_ALL:
 			break;
 		}
 
@@ -487,6 +488,7 @@ static bool wispr_route_request(const char *address, int ai_family,
 				gateway);
 		break;
 	case CONNMAN_IPCONFIG_TYPE_UNKNOWN:
+	case CONNMAN_IPCONFIG_TYPE_ALL:
 		break;
 	}
 
@@ -646,6 +648,8 @@ static bool wispr_manage_message(GWebResult *result,
 					wispr_portal_request_wispr_login,
 					wp_context) != -EINPROGRESS)
 			wispr_portal_error(wp_context);
+		else
+			return true;
 
 		break;
 	case 120: /* Falling down */
@@ -709,6 +713,11 @@ static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
 	DBG("status: %03u", status);
 
 	switch (status) {
+	case 000:
+		__connman_agent_request_browser(wp_context->service,
+				wispr_portal_browser_reply_cb,
+				wp_context->status_url, wp_context);
+		break;
 	case 200:
 		if (wp_context->wispr_msg.message_type >= 0)
 			break;
@@ -752,6 +761,11 @@ static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
 			return false;
 		}
 
+		break;
+	case 505:
+		__connman_agent_request_browser(wp_context->service,
+				wispr_portal_browser_reply_cb,
+				wp_context->status_url, wp_context);
 		break;
 	default:
 		break;
@@ -828,12 +842,13 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context)
 	case CONNMAN_SERVICE_TYPE_WIFI:
 	case CONNMAN_SERVICE_TYPE_BLUETOOTH:
 	case CONNMAN_SERVICE_TYPE_CELLULAR:
+	case CONNMAN_SERVICE_TYPE_GADGET:
 		break;
 	case CONNMAN_SERVICE_TYPE_UNKNOWN:
 	case CONNMAN_SERVICE_TYPE_SYSTEM:
 	case CONNMAN_SERVICE_TYPE_GPS:
 	case CONNMAN_SERVICE_TYPE_VPN:
-	case CONNMAN_SERVICE_TYPE_GADGET:
+	case CONNMAN_SERVICE_TYPE_P2P:
 		return -EOPNOTSUPP;
 	}
 

@@ -65,6 +65,7 @@ struct _GDHCPServer {
 	GHashTable *nip_lease_hash;
 	GHashTable *option_hash; /* Options send to client */
 	GDHCPSaveLeaseFunc save_lease_func;
+	GDHCPLeaseAddedCb lease_added_cb;
 	GDHCPDebugFunc debug_func;
 	gpointer debug_data;
 };
@@ -212,6 +213,9 @@ static struct dhcp_lease *add_lease(GDHCPServer *dhcp_server, uint32_t expire,
 
 	g_hash_table_insert(dhcp_server->nip_lease_hash,
 				GINT_TO_POINTER((int) lease->lease_nip), lease);
+
+	if (dhcp_server->lease_added_cb)
+		dhcp_server->lease_added_cb(lease->lease_mac, yiaddr);
 
 	return lease;
 }
@@ -529,7 +533,7 @@ static void send_packet_to_client(GDHCPServer *dhcp_server,
 	dhcp_send_raw_packet(dhcp_pkt,
 		dhcp_server->server_nip, SERVER_PORT,
 		ciaddr, CLIENT_PORT, chaddr,
-		dhcp_server->ifindex);
+		dhcp_server->ifindex, false);
 }
 
 static void send_offer(GDHCPServer *dhcp_server,
@@ -626,7 +630,7 @@ static void send_NAK(GDHCPServer *dhcp_server,
 	dhcp_send_raw_packet(&packet,
 			dhcp_server->server_nip, SERVER_PORT,
 			INADDR_BROADCAST, CLIENT_PORT, MAC_BCAST_ADDR,
-			dhcp_server->ifindex);
+			dhcp_server->ifindex, false);
 }
 
 static void send_inform(GDHCPServer *dhcp_server,
@@ -812,6 +816,15 @@ void g_dhcp_server_set_save_lease(GDHCPServer *dhcp_server,
 		return;
 
 	dhcp_server->save_lease_func = func;
+}
+
+void g_dhcp_server_set_lease_added_cb(GDHCPServer *dhcp_server,
+							GDHCPLeaseAddedCb cb)
+{
+	if (!dhcp_server)
+		return;
+
+	dhcp_server->lease_added_cb = cb;
 }
 
 GDHCPServer *g_dhcp_server_ref(GDHCPServer *dhcp_server)
