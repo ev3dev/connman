@@ -1,3 +1,10 @@
+connman (1.28~20150123g04cbd7e-1) UNRELEASED; urgency=medium
+
+  * New upstream release (1.27)
+    - Fixes: #742408
+
+ -- Shawn Landden <shawn@churchofgit.com>  Sat, 24 Jan 2015 10:41:06 -0800
+
 connman (1.21-1) unstable; urgency=low
 
   * New upstream release.
