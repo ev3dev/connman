@@ -1311,7 +1311,7 @@ static gboolean autoscan_timeout(gpointer data)
 	} else
 		interval = autoscan->interval * autoscan->base;
 
-	if (autoscan->interval >= autoscan->limit)
+	if (interval > autoscan->limit)
 		interval = autoscan->limit;
 
 	throw_wifi_scan(wifi->device, scan_callback_hidden);
@@ -1399,22 +1399,8 @@ static void setup_autoscan(struct wifi_data *wifi)
 	start_autoscan(wifi->device);
 }
 
-static void interface_autoscan_callback(int result,
-					GSupplicantInterface *interface,
-							void *user_data)
-{
-	struct wifi_data *wifi = user_data;
-
-	if (result < 0) {
-		DBG("Could not enable Autoscan, falling back...");
-		setup_autoscan(wifi);
-	}
-}
-
 static void finalize_interface_creation(struct wifi_data *wifi)
 {
-	GSupplicantInterface *interface = wifi->interface;
-
 	DBG("interface is ready wifi %p tethering %d", wifi, wifi->tethering);
 
 	if (!wifi->device) {
@@ -1430,12 +1416,7 @@ static void finalize_interface_creation(struct wifi_data *wifi)
 	if (wifi->p2p_device)
 		return;
 
-	/* Setting up automatic scanning */
-	if (g_supplicant_interface_autoscan(interface, AUTOSCAN_DEFAULT,
-				interface_autoscan_callback, wifi) < 0) {
-		DBG("Could not enable Autoscan, falling back...");
-		setup_autoscan(wifi);
-	}
+	setup_autoscan(wifi);
 }
 
 static void interface_create_callback(int result,
@@ -2787,9 +2768,8 @@ static void peer_changed(GSupplicantPeer *peer, GSupplicantPeerState state)
 		p_state = CONNMAN_PEER_STATE_IDLE;
 		break;
 	case G_SUPPLICANT_PEER_GROUP_JOINED:
-		if (!g_supplicant_peer_is_in_a_group(peer))
-			break;
-		p_state = CONNMAN_PEER_STATE_READY;
+		connman_peer_set_iface_address(connman_peer,
+				g_supplicant_peer_get_iface_address(peer));
 		break;
 	case G_SUPPLICANT_PEER_GROUP_DISCONNECTED:
 		p_state = CONNMAN_PEER_STATE_IDLE;

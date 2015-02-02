@@ -225,11 +225,6 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 					GSupplicantInterfaceCallback callback,
 							void *user_data);
 
-int g_supplicant_interface_autoscan(GSupplicantInterface *interface,
-					const char *autoscan_data,
-					GSupplicantInterfaceCallback callback,
-							void *user_data);
-
 int g_supplicant_interface_p2p_find(GSupplicantInterface *interface,
 					GSupplicantInterfaceCallback callback,
 							void *user_data);
@@ -326,6 +321,7 @@ GSupplicantInterface *g_supplicant_peer_get_interface(GSupplicantPeer *peer);
 const char *g_supplicant_peer_get_path(GSupplicantPeer *peer);
 const char *g_supplicant_peer_get_identifier(GSupplicantPeer *peer);
 const void *g_supplicant_peer_get_device_address(GSupplicantPeer *peer);
+const void *g_supplicant_peer_get_iface_address(GSupplicantPeer *peer);
 const char *g_supplicant_peer_get_name(GSupplicantPeer *peer);
 const unsigned char *g_supplicant_peer_get_widi_ies(GSupplicantPeer *peer,
 								int *length);

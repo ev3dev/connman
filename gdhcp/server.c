@@ -56,7 +56,7 @@ struct _GDHCPServer {
 	char *interface;
 	uint32_t start_ip;
 	uint32_t end_ip;
-	uint32_t server_nip;
+	uint32_t server_nip;	/* our address in network byte order */
 	uint32_t lease_seconds;
 	int listener_sockfd;
 	guint listener_watch;
@@ -65,6 +65,7 @@ struct _GDHCPServer {
 	GHashTable *nip_lease_hash;
 	GHashTable *option_hash; /* Options send to client */
 	GDHCPSaveLeaseFunc save_lease_func;
+	GDHCPLeaseAddedCb lease_added_cb;
 	GDHCPDebugFunc debug_func;
 	gpointer debug_data;
 };
@@ -212,6 +213,9 @@ static struct dhcp_lease *add_lease(GDHCPServer *dhcp_server, uint32_t expire,
 
 	g_hash_table_insert(dhcp_server->nip_lease_hash,
 				GINT_TO_POINTER((int) lease->lease_nip), lease);
+
+	if (dhcp_server->lease_added_cb)
+		dhcp_server->lease_added_cb(lease->lease_mac, yiaddr);
 
 	return lease;
 }
@@ -450,7 +454,7 @@ static void init_packet(GDHCPServer *dhcp_server, struct dhcp_packet *packet,
 	packet->gateway_nip = client_packet->gateway_nip;
 	packet->ciaddr = client_packet->ciaddr;
 	dhcp_add_option_uint32(packet, DHCP_SERVER_ID,
-						dhcp_server->server_nip);
+					ntohl(dhcp_server->server_nip));
 }
 
 static void add_option(gpointer key, gpointer value, gpointer user_data)
@@ -664,7 +668,8 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 
 	server_id_option = dhcp_get_option(&packet, DHCP_SERVER_ID);
 	if (server_id_option) {
-		uint32_t server_nid = get_be32(server_id_option);
+		uint32_t server_nid =
+			get_unaligned((const uint32_t *) server_id_option);
 
 		if (server_nid != dhcp_server->server_nip)
 			return TRUE;
@@ -812,6 +817,15 @@ void g_dhcp_server_set_save_lease(GDHCPServer *dhcp_server,
 		return;
 
 	dhcp_server->save_lease_func = func;
+}
+
+void g_dhcp_server_set_lease_added_cb(GDHCPServer *dhcp_server,
+							GDHCPLeaseAddedCb cb)
+{
+	if (!dhcp_server)
+		return;
+
+	dhcp_server->lease_added_cb = cb;
 }
 
 GDHCPServer *g_dhcp_server_ref(GDHCPServer *dhcp_server)

@@ -44,6 +44,8 @@
 #define IEEE80211_CAP_IBSS	0x0002
 #define IEEE80211_CAP_PRIVACY	0x0010
 
+#define BSS_UNKNOWN_STRENGTH    -90
+
 static DBusConnection *connection;
 
 static const GSupplicantCallbacks *callbacks_pointer;
@@ -1079,6 +1081,14 @@ const void *g_supplicant_peer_get_device_address(GSupplicantPeer *peer)
 	return peer->device_address;
 }
 
+const void *g_supplicant_peer_get_iface_address(GSupplicantPeer *peer)
+{
+	if (!peer)
+		return NULL;
+
+	return peer->iface_address;
+}
+
 const char *g_supplicant_peer_get_name(GSupplicantPeer *peer)
 {
 	if (!peer)
@@ -1750,6 +1760,9 @@ static void bss_property(const char *key, DBusMessageIter *iter,
 		dbus_message_iter_get_basic(iter, &signal);
 
 		bss->signal = signal;
+		if (!bss->signal)
+			bss->signal = BSS_UNKNOWN_STRENGTH;
+
 	} else if (g_strcmp0(key, "Level") == 0) {
 		dbus_int32_t level = 0;
 
@@ -1814,6 +1827,7 @@ static struct g_supplicant_bss *interface_bss_added(DBusMessageIter *iter,
 
 	bss->interface = interface;
 	bss->path = g_strdup(path);
+	bss->signal = BSS_UNKNOWN_STRENGTH;
 
 	return bss;
 }
@@ -1900,7 +1914,7 @@ static void interface_bss_removed(DBusMessageIter *iter, void *user_data)
 	bss = g_hash_table_lookup(network->bss_table, path);
 	if (network->best_bss == bss) {
 		network->best_bss = NULL;
-		network->signal = 0;
+		network->signal = BSS_UNKNOWN_STRENGTH;
 	}
 
 	g_hash_table_remove(bss_mapping, path);
@@ -2838,7 +2852,6 @@ static void group_sig_property(const char *key, DBusMessageIter *iter,
 
 		if (len == ETH_ALEN)
 			memcpy(data->iface_address, dev_addr, len);
-
 	} else if (g_strcmp0(key, "role") == 0) {
 		const char *str = NULL;
 
@@ -3079,7 +3092,11 @@ static void signal_group_peer_disconnected(const char *path, DBusMessageIter *it
 	if (!peer_path)
 		return;
 
-	elem = g_slist_find_custom(group->members, peer_path, g_str_equal);
+	for (elem = group->members; elem; elem = elem->next) {
+		if (!g_strcmp0(elem->data, peer_path))
+			break;
+	}
+
 	if (!elem)
 		return;
 
@@ -3429,14 +3446,6 @@ struct interface_scan_data {
 	char *path;
 	GSupplicantInterfaceCallback callback;
 	GSupplicantScanParams *scan_params;
-	void *user_data;
-};
-
-struct interface_autoscan_data {
-	GSupplicantInterface *interface;
-	char *path;
-	GSupplicantInterfaceCallback callback;
-	const char *autoscan_params;
 	void *user_data;
 };
 
@@ -3956,64 +3965,6 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 	return ret;
 }
 
-static void interface_autoscan_result(const char *error,
-				DBusMessageIter *iter, void *user_data)
-{
-	struct interface_autoscan_data *data = user_data;
-	int err = 0;
-
-	if (error) {
-		SUPPLICANT_DBG("error %s", error);
-		err = -EIO;
-	}
-
-	g_free(data->path);
-
-	if (data->callback)
-		data->callback(err, data->interface, data->user_data);
-
-	dbus_free(data);
-}
-
-static void interface_autoscan_params(DBusMessageIter *iter, void *user_data)
-{
-	struct interface_autoscan_data *data = user_data;
-
-	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
-						 &data->autoscan_params);
-}
-
-int g_supplicant_interface_autoscan(GSupplicantInterface *interface,
-					const char *autoscan_data,
-					GSupplicantInterfaceCallback callback,
-							void *user_data)
-{
-	struct interface_autoscan_data *data;
-	int ret;
-
-	data = dbus_malloc0(sizeof(*data));
-	if (!data)
-		return -ENOMEM;
-
-	data->interface = interface;
-	data->path = g_strdup(interface->path);
-	data->callback = callback;
-	data->autoscan_params = autoscan_data;
-	data->user_data = user_data;
-
-	ret = supplicant_dbus_method_call(interface->path,
-			SUPPLICANT_INTERFACE ".Interface", "AutoScan",
-			interface_autoscan_params,
-			interface_autoscan_result, data,
-			interface);
-	if (ret < 0) {
-		g_free(data->path);
-		dbus_free(data);
-	}
-
-	return ret;
-}
-
 static int parse_supplicant_error(DBusMessageIter *iter)
 {
 	int err = -ECANCELED;
@@ -4116,6 +4067,14 @@ error:
 	g_free(data->path);
 	g_free(data->ssid);
 	g_free(data);
+}
+
+static void add_network_security_none(DBusMessageIter *dict)
+{
+	const char *auth_alg = "OPEN";
+
+	supplicant_dbus_dict_append_basic(dict, "auth_alg",
+					DBUS_TYPE_STRING, &auth_alg);
 }
 
 static void add_network_security_wep(DBusMessageIter *dict,
@@ -4463,8 +4422,12 @@ static void add_network_security(DBusMessageIter *dict, GSupplicantSSID *ssid)
 	char *key_mgmt;
 
 	switch (ssid->security) {
-	case G_SUPPLICANT_SECURITY_UNKNOWN:
 	case G_SUPPLICANT_SECURITY_NONE:
+		key_mgmt = "NONE";
+		add_network_security_none(dict);
+		add_network_security_ciphers(dict, ssid);
+		break;
+	case G_SUPPLICANT_SECURITY_UNKNOWN:
 	case G_SUPPLICANT_SECURITY_WEP:
 		key_mgmt = "NONE";
 		add_network_security_wep(dict, ssid);

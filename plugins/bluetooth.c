@@ -899,7 +899,7 @@ static int bluetooth_tech_set_tethering(struct connman_technology *technology,
 	if (i == 0)
 		return -ENODEV;
 
-       return -EINPROGRESS;
+	return 0;
 }
 
 static struct connman_technology_driver tech_driver = {
@@ -975,6 +975,8 @@ static void bluetooth_exit(void)
 	 * so that non-PAN BT connections are not affected.
 	 */
 	device_driver.disable = NULL;
+
+	g_dbus_client_unref(client);
 
 	connman_network_driver_unregister(&network_driver);
 	g_hash_table_destroy(networks);

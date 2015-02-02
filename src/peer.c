@@ -27,6 +27,7 @@
 #include <ctype.h>
 #include <gdbus.h>
 #include <gdhcp/gdhcp.h>
+#include <netinet/if_ether.h>
 
 #include <connman/agent.h>
 
@@ -54,6 +55,7 @@ struct connman_peer {
 	int refcount;
 	struct connman_device *device;
 	struct connman_device *sub_device;
+	unsigned char *iface_address[ETH_ALEN];
 	char *identifier;
 	char *name;
 	char *path;
@@ -64,8 +66,11 @@ struct connman_peer {
 	bool connection_master;
 	struct connman_ippool *ip_pool;
 	GDHCPServer *dhcp_server;
+	uint32_t lease_ip;
 	GSList *services;
 };
+
+static void settings_changed(struct connman_peer *peer);
 
 static void stop_dhcp_server(struct connman_peer *peer)
 {
@@ -79,11 +84,30 @@ static void stop_dhcp_server(struct connman_peer *peer)
 	if (peer->ip_pool)
 		__connman_ippool_unref(peer->ip_pool);
 	peer->ip_pool = NULL;
+	peer->lease_ip = 0;
 }
 
 static void dhcp_server_debug(const char *str, void *data)
 {
 	connman_info("%s: %s\n", (const char *) data, str);
+}
+
+static void lease_added(unsigned char *mac, uint32_t ip)
+{
+	GList *list, *start;
+
+	start = list = g_hash_table_get_values(peers_table);
+	for (; list; list = list->next) {
+		struct connman_peer *temp = list->data;
+
+		if (!memcmp(temp->iface_address, mac, ETH_ALEN)) {
+			temp->lease_ip = ip;
+			settings_changed(temp);
+			break;
+		}
+	}
+
+	g_list_free(start);
 }
 
 static gboolean dhcp_server_started(gpointer data)
@@ -145,6 +169,8 @@ static int start_dhcp_server(struct connman_peer *peer)
 	g_dhcp_server_set_option(peer->dhcp_server, G_DHCP_ROUTER, gateway);
 	g_dhcp_server_set_option(peer->dhcp_server, G_DHCP_DNS_SERVER, NULL);
 	g_dhcp_server_set_ip_range(peer->dhcp_server, start_ip, end_ip);
+
+	g_dhcp_server_set_lease_added_cb(peer->dhcp_server, lease_added);
 
 	err = g_dhcp_server_start(peer->dhcp_server);
 	if (err < 0)
@@ -253,39 +279,43 @@ static bool allow_property_changed(struct connman_peer *peer)
 	return true;
 }
 
-static void append_dhcp_server_ipv4(DBusMessageIter *iter, void *user_data)
-{
-	struct connman_peer *peer = user_data;
-	const char *str = "dhcp";
-	const char *gateway;
-	const char *subnet;
-
-	if (!peer->ip_pool)
-		return;
-
-	gateway = __connman_ippool_get_gateway(peer->ip_pool);
-	subnet = __connman_ippool_get_subnet_mask(peer->ip_pool);
-
-	connman_dbus_dict_append_basic(iter, "Method", DBUS_TYPE_STRING, &str);
-	connman_dbus_dict_append_basic(iter, "Address",
-						DBUS_TYPE_STRING, &gateway);
-	connman_dbus_dict_append_basic(iter, "Netmask",
-						DBUS_TYPE_STRING, &subnet);
-	connman_dbus_dict_append_basic(iter, "Gateway",
-						DBUS_TYPE_STRING, &gateway);
-}
-
 static void append_ipv4(DBusMessageIter *iter, void *user_data)
 {
 	struct connman_peer *peer = user_data;
+	char trans[INET_ADDRSTRLEN+1] = {};
+	const char *local = "";
+	const char *remote = "";
+	char *dhcp = NULL;
 
 	if (!is_connected(peer))
 		return;
 
-	if (peer->connection_master)
-		append_dhcp_server_ipv4(iter, peer);
-	else if (peer->ipconfig)
-		__connman_ipconfig_append_ipv4(peer->ipconfig, iter);
+	if (peer->connection_master) {
+		struct in_addr addr;
+
+		addr.s_addr = peer->lease_ip;
+		inet_ntop(AF_INET, &addr, trans, INET_ADDRSTRLEN);
+
+		local = __connman_ippool_get_gateway(peer->ip_pool);
+		remote = trans;
+	} else if (peer->ipconfig) {
+		local = __connman_ipconfig_get_local(peer->ipconfig);
+
+		remote = __connman_ipconfig_get_gateway(peer->ipconfig);
+		if (!remote) {
+			remote = dhcp = __connman_dhcp_get_server_address(
+							peer->ipconfig);
+			if (!dhcp)
+				remote = "";
+		}
+	}
+
+	connman_dbus_dict_append_basic(iter, "Local",
+						DBUS_TYPE_STRING, &local);
+	connman_dbus_dict_append_basic(iter, "Remote",
+						DBUS_TYPE_STRING, &remote);
+	if (dhcp)
+		g_free(dhcp);
 }
 
 static void append_peer_service(DBusMessageIter *iter,
@@ -725,6 +755,13 @@ void connman_peer_set_name(struct connman_peer *peer, const char *name)
 	peer->name = g_strdup(name);
 }
 
+void connman_peer_set_iface_address(struct connman_peer *peer,
+					const unsigned char *iface_address)
+{
+	memset(peer->iface_address, 0, ETH_ALEN);
+	memcpy(peer->iface_address, iface_address, ETH_ALEN);
+}
+
 void connman_peer_set_device(struct connman_peer *peer,
 				struct connman_device *device)
 {
@@ -885,6 +922,10 @@ int connman_peer_set_state(struct connman_peer *peer,
 	peer->state = new_state;
 	state_changed(peer);
 
+	if (peer->state == CONNMAN_PEER_STATE_READY ||
+				peer->state == CONNMAN_PEER_STATE_DISCONNECT)
+		settings_changed(peer);
+
 	return 0;
 }
 
@@ -976,7 +1017,8 @@ static void peer_ip_bound(struct connman_ipconfig *ipconfig,
 
 	DBG("%s ip bound", ifname);
 
-	settings_changed(peer);
+	if (peer->state == CONNMAN_PEER_STATE_READY)
+		settings_changed(peer);
 	connman_peer_set_state(peer, CONNMAN_PEER_STATE_READY);
 }
 
@@ -987,7 +1029,8 @@ static void peer_ip_release(struct connman_ipconfig *ipconfig,
 
 	DBG("%s ip release", ifname);
 
-	settings_changed(peer);
+	if (peer->state == CONNMAN_PEER_STATE_READY)
+		settings_changed(peer);
 }
 
 static const struct connman_ipconfig_ops peer_ip_ops = {
@@ -1150,6 +1193,10 @@ int __connman_peer_init(void)
 void __connman_peer_cleanup(void)
 {
 	DBG("");
+
+	g_hash_table_destroy(peers_notify->remove);
+	g_hash_table_destroy(peers_notify->add);
+	g_free(peers_notify);
 
 	g_hash_table_destroy(peers_table);
 	peers_table = NULL;

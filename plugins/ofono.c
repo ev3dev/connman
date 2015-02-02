@@ -293,11 +293,10 @@ static void set_connected(struct modem_data *modem)
 	}
 
 	method = modem->context->ipv6_method;
-	if (method == CONNMAN_IPCONFIG_METHOD_FIXED) {
+	if (method == CONNMAN_IPCONFIG_METHOD_AUTO) {
 		connman_service_create_ip6config(service, index);
 		connman_network_set_ipv6_method(modem->network, method);
-		connman_network_set_ipaddress(modem->network,
-						modem->context->ipv6_address);
+
 		setip = true;
 	}
 
@@ -325,10 +324,18 @@ static void set_disconnected(struct modem_data *modem)
 {
 	DBG("%s", modem->path);
 
-	if (!modem->network)
-		return;
+	if (modem->network)
+		connman_network_set_connected(modem->network, false);
 
-	connman_network_set_connected(modem->network, false);
+	if (modem->context) {
+		g_free(modem->context->ipv4_nameservers);
+		modem->context->ipv4_nameservers = NULL;
+		modem->context->ipv4_method = CONNMAN_IPCONFIG_METHOD_UNKNOWN;
+
+		g_free(modem->context->ipv6_nameservers);
+		modem->context->ipv6_nameservers = NULL;
+		modem->context->ipv6_method = CONNMAN_IPCONFIG_METHOD_UNKNOWN;
+	}
 }
 
 typedef void (*set_property_cb)(struct modem_data *data,
@@ -913,7 +920,7 @@ static void extract_ipv6_settings(DBusMessageIter *array,
 	if (index < 0)
 		goto out;
 
-	context->ipv6_method = CONNMAN_IPCONFIG_METHOD_FIXED;
+	context->ipv6_method = CONNMAN_IPCONFIG_METHOD_AUTO;
 
 	context->ipv6_address =
 		connman_ipaddress_alloc(CONNMAN_IPCONFIG_TYPE_IPV6);

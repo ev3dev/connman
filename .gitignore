@@ -23,6 +23,7 @@ ltmain.sh
 missing
 stamp-h1
 autom4te.cache
+test-driver
 
 connman.pc
 include/connman
@@ -31,6 +32,7 @@ src/builtin.h
 src/connmand
 src/connman.conf
 src/connman.service
+src/net.connman.service
 src/*-connman.rules
 plugins/connman.policy
 scripts/connman
@@ -58,8 +60,6 @@ tools/session-test
 tools/netlink-test
 unit/test-ippool
 unit/test-nat
-unit/test-pbkdf2-sha1
-unit/test-prf-sha1
 
 doc/*.bak
 doc/*.stamp
