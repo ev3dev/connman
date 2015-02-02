@@ -1,3 +1,79 @@
+connman (1.28-0ev3dev1) testing; urgency=medium
+
+  [ Patrik Flykt ]
+  * ipconfig: Remove unused ipconfig->origin
+  * connection: Clean up service reference counting
+
+  [ Pasi Sjöholm ]
+  * network: Index needs to be set also for ip6config
+  * ofono: Clean nameservers when disconnecting
+
+  [ Jukka Rissanen ]
+  * dhcpv6: Calculate re-transmission timer correctly
+
+  [ Tomasz Bursztyka ]
+  * doc: Improve Peer's API about local and remote IP address
+  * gdhcp: Call a function to tell about the given IP for a MAC
+  * gsupplicant: Add a getter for the Peer's interface address
+  * peer: Add a holder for peer's distant MAC address
+  * wifi: Set the MAC address of the distant peer
+  * peer: Changed IPv4 property to provide local and remote IP address
+  * gsupplicant: Find the peer properly in the group when disconnected
+  * peer: Refactor when IPv4 settings changed should be notified
+  * peer: Reset the lease when dhcp server is stopped.
+
+  [ David Lechner ]
+  * bluetooth: Fix bluetooth plugin returning error on technology_set
+  * Remove debian patches that are no longer needed
+
+  [ Jason Abele ]
+  * wifi: Fix autoscan interval limit
+
+  [ Hannu Mallat ]
+  * bluetooth: Clean up gdbus client on exit
+  * rfkill: Cleanup IO watch on exit
+  * technology: Clean up technology list on exit
+  * rtnl: Cleanup IO watch on exit
+  * peer: Clean up at exit
+  * dnsproxy: Clean up cache on exit
+  * main: Free wifi option parameter
+
+  [ Pasi Sjöholm ]
+  * ofono: Clean ipv4/6_method when disconnecting
+
+  [ Patrik Flykt ]
+  * ofono: IPv6 contexts use stateless autoconfiguration and/or DHCPv6
+  * service: Remove redundant service save
+  * gsupplicant: Use a reasonable value for zero BSS signal strength
+  * agent-connman: Call callbacks when Agent has exited
+
+  [ Tomasz Bursztyka ]
+  * gdhcp: Add an helper function to get the dhcp server address
+  * dhcp: Add an helper function to get the dhcp server address
+  * peer: Get the appropriate IPv4 remote address
+  * README: Remove bogus advice on wpa_supplicant building setting
+  * wifi: Remove wpa_supplicant autoscan support
+
+  [ Jukka Rissanen ]
+  * gdhcp: Set DHCP server id option in network byte order
+  * gdhcp: Server id must not be converted to host byte order
+
+  [ Pasi Sjöholm ]
+  * counter: Fix possible memory leak
+
+  [ Slava Monich ]
+  * dnsproxy: Don't try to destroy NULL hashtable on exit
+  * gsupplicant: Use OPEN auth_alg for open wifi networks
+
+  [ Marcel Holtmann ]
+  * build: Add src/net.connman.service to .gitignore
+  * build: Clean up the test-driver autotools script
+  * unit: Remove unrelated test cases that are not needed
+  * shared: Remove unneeded SHA-1 helper functions
+  * Release 1.28
+
+ -- David Lechner <david@lechnology.com>  Mon, 02 Feb 2015 12:15:40 -0600
+
 connman (1.27-0ev3dev3) testing; urgency=medium
 
   * Fix error when enabling/disabling bluetooth tethering.
