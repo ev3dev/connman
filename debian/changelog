@@ -3,6 +3,9 @@ connman (1.28-1) unstable; urgency=medium
   * New upstream release (1.28)
     - Fixes: #742408
     - Drop 02-test-pbkdf2-sha1-maximum-salt-len-should-be-32-instead.patch
+  * Conflict with resolvconf (Fixes: #763628)
+  * Conflict with wicd-daemon instead of wicd metapackage (Fixes: #745874)
+  * Enable pptp and l2tp vpn plugins (Fixes: #751234)
 
  -- Shawn Landden <shawn@churchofgit.com>  Fri, 13 Feb 2015 08:00:07 -0800
 

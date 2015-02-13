@@ -14,6 +14,7 @@ Build-Depends: debhelper (>= 9),
                iptables-dev,
                wpasupplicant,
                libbluetooth-dev,
+               ppp-dev,
                dh-systemd,
                dh-autoreconf
 Standards-Version: 3.9.5
@@ -25,7 +26,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, dbus, lsb-base
 Recommends: bluez, wpasupplicant, ofono
 Suggests: indicator-network
-Conflicts: network-manager, wicd
+Conflicts: network-manager, wicd-daemon, resolvconf
 Description: Intel Connection Manager daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
@@ -49,7 +50,8 @@ Description: Intel Connection Manager daemon
 Package: connman-vpn
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: connman (=${source:Version})
+Recommends: connman (=${source:Version}),
+            xl2tpd
 Description: Intel Connection Manager daemon - VPN daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
