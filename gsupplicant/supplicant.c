@@ -3449,14 +3449,6 @@ struct interface_scan_data {
 	void *user_data;
 };
 
-struct interface_autoscan_data {
-	GSupplicantInterface *interface;
-	char *path;
-	GSupplicantInterfaceCallback callback;
-	const char *autoscan_params;
-	void *user_data;
-};
-
 static void interface_create_data_free(struct interface_create_data *data)
 {
 	g_free(data->ifname);
@@ -3973,64 +3965,6 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 	return ret;
 }
 
-static void interface_autoscan_result(const char *error,
-				DBusMessageIter *iter, void *user_data)
-{
-	struct interface_autoscan_data *data = user_data;
-	int err = 0;
-
-	if (error) {
-		SUPPLICANT_DBG("error %s", error);
-		err = -EIO;
-	}
-
-	g_free(data->path);
-
-	if (data->callback)
-		data->callback(err, data->interface, data->user_data);
-
-	dbus_free(data);
-}
-
-static void interface_autoscan_params(DBusMessageIter *iter, void *user_data)
-{
-	struct interface_autoscan_data *data = user_data;
-
-	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
-						 &data->autoscan_params);
-}
-
-int g_supplicant_interface_autoscan(GSupplicantInterface *interface,
-					const char *autoscan_data,
-					GSupplicantInterfaceCallback callback,
-							void *user_data)
-{
-	struct interface_autoscan_data *data;
-	int ret;
-
-	data = dbus_malloc0(sizeof(*data));
-	if (!data)
-		return -ENOMEM;
-
-	data->interface = interface;
-	data->path = g_strdup(interface->path);
-	data->callback = callback;
-	data->autoscan_params = autoscan_data;
-	data->user_data = user_data;
-
-	ret = supplicant_dbus_method_call(interface->path,
-			SUPPLICANT_INTERFACE ".Interface", "AutoScan",
-			interface_autoscan_params,
-			interface_autoscan_result, data,
-			interface);
-	if (ret < 0) {
-		g_free(data->path);
-		dbus_free(data);
-	}
-
-	return ret;
-}
-
 static int parse_supplicant_error(DBusMessageIter *iter)
 {
 	int err = -ECANCELED;
@@ -4133,6 +4067,14 @@ error:
 	g_free(data->path);
 	g_free(data->ssid);
 	g_free(data);
+}
+
+static void add_network_security_none(DBusMessageIter *dict)
+{
+	const char *auth_alg = "OPEN";
+
+	supplicant_dbus_dict_append_basic(dict, "auth_alg",
+					DBUS_TYPE_STRING, &auth_alg);
 }
 
 static void add_network_security_wep(DBusMessageIter *dict,
@@ -4480,8 +4422,12 @@ static void add_network_security(DBusMessageIter *dict, GSupplicantSSID *ssid)
 	char *key_mgmt;
 
 	switch (ssid->security) {
-	case G_SUPPLICANT_SECURITY_UNKNOWN:
 	case G_SUPPLICANT_SECURITY_NONE:
+		key_mgmt = "NONE";
+		add_network_security_none(dict);
+		add_network_security_ciphers(dict, ssid);
+		break;
+	case G_SUPPLICANT_SECURITY_UNKNOWN:
 	case G_SUPPLICANT_SECURITY_WEP:
 		key_mgmt = "NONE";
 		add_network_security_wep(dict, ssid);
