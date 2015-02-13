@@ -17,7 +17,7 @@ Build-Depends: debhelper (>= 9),
                ppp-dev,
                dh-systemd,
                dh-autoreconf
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/connman.git
 Vcs-Git: git://anonscm.debian.org/collab-maint/connman.git
 
