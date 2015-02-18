@@ -1,17 +1,10 @@
-connman (1.28-2) UNRELEASED; urgency=medium
-
-  * Bump Standards Version to 3.9.6 (no changes required)
-
- -- Shawn Landden <shawn@churchofgit.com>  Fri, 13 Feb 2015 09:01:28 -0800
-
 connman (1.28-1) unstable; urgency=medium
 
-  * New upstream release (1.28)
-    - Fixes: #742408
+  * New upstream release (1.28) (Closes: #742408)
     - Drop 02-test-pbkdf2-sha1-maximum-salt-len-should-be-32-instead.patch
-  * Conflict with resolvconf (Fixes: #763628)
-  * Conflict with wicd-daemon instead of wicd metapackage (Fixes: #745874)
-  * Enable pptp and l2tp vpn plugins (Fixes: #751234)
+  * Conflict with resolvconf (Closes: #763628)
+  * Conflict with wicd-daemon instead of wicd metapackage (Closes: #745874)
+  * Enable pptp and l2tp vpn plugins (Closes: #751234)
 
  -- Shawn Landden <shawn@churchofgit.com>  Fri, 13 Feb 2015 08:00:07 -0800
 
