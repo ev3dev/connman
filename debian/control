@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Alexander Sack <asac@debian.org>
 Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawn@churchofgit.com>
-Homepage: https://www.connman.net
+Homepage: https://01.org/connman
 Build-Depends: debhelper (>= 9),
                libudev-dev,
                libglib2.0-dev,
