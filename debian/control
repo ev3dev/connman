@@ -52,6 +52,8 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: connman (=${source:Version}),
             xl2tpd
+Replaces: connman (<< 1.21-1)
+Breaks: connman (<< 1.21-1)
 Description: Intel Connection Manager daemon - VPN daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
