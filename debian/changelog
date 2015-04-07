@@ -5,8 +5,10 @@ connman (1.28-1) unstable; urgency=medium
   * Conflict with resolvconf (Closes: #763628)
   * Conflict with wicd-daemon instead of wicd metapackage (Closes: #745874)
   * Enable pptp and l2tp vpn plugins (Closes: #751234)
+  * debian/copyright: some files have moved, use kernel.org git url for source
+  * debian/control: new upstream url http://01.org/connman
 
- -- Shawn Landden <shawn@churchofgit.com>  Fri, 13 Feb 2015 08:00:07 -0800
+ -- Shawn Landden <shawn@churchofgit.com>  Tue, 07 Apr 2015 12:38:11 -0700
 
 connman (1.21-1) unstable; urgency=low
 
