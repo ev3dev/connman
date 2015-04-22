@@ -1,3 +1,107 @@
+connman (1.29-0ev3dev1) testing; urgency=medium
+
+  [ Chris Hiszpanski ]
+  * Fix struct in6_pktinfo redefinition
+
+  [ Patrik Flykt ]
+  * TODO: Purge old owners and update tasks
+  * AUTHORS: Mention Chris' contributions
+  * ofono: Set ipconfig off if indicated that the protocol is not used
+  * network: Merge identical ipconfig code paths
+  * AUTHORS: Mention Tomáš' contributions
+  * TODO: Add tasks for interface names, gateway selection and ObjectManager
+  * service: Check whether properties can be sent before assigning value
+  * ipconfig: Prevent potential crash
+  * service: Connect ethernet networks when created
+  * AUTHORS: Mention Philip's contributions
+  * AUTHORS: Mention Andreas' contributions
+  * technology: Properly report error if device enable/disable fails
+  * rfkill: Properly report errors when rfkilling
+  * service: Let service error indicate invalid WiFi PSK passphrase
+  * build: Specify generated service files and their sources
+  * AUTHORS: Mention Arman's and Vinicius' contributions
+  * service: Do not clear passphrase or identity on error
+  * AUTHORS: Mention Marcus' contributions
+
+  [ Pasi Sjöholm ]
+  * network: Disable IPv6 completely if method is off
+  * network: Fix eternal associating with IPv6-only
+  * network: Make sure that IPv6 is enabled with autoconfiguration
+  * network: Set network->connecting after ip address is set
+  * ofono: Do not reset method if its off
+  * ipconfig: Use only settings related to configuration method
+  * gdhcp: Use DHCPV6_CLIENT_PORT as source port
+  * ofono: Always set configuration method when connected
+  * gdhcp: Fix rapid commit option length check
+  * dhcpv6: Fail if we have error with rapid commit
+  * dhcpv6: Rate limit requests when no address is received
+  * resolver: Do not reset timers when redoing nameservers
+  * ipconfig: Modify __connman_ipconfig_newaddr() to return success/fail
+  * rtln: Redo nameserver(s) only when ipaddress is previously unknown
+  * service: Set routes only for same address family
+  * network: Do not try to set gateway from DHCPv6
+  * agent: Advance through list without accessing freed memory
+
+  [ Arman Uguray ]
+  * gdbus: Don't refresh objects/props if disconnected
+  * gdbus/client: Don't GetManagedObjects w/o handlers
+  * gdbus/client: Allow specifying ObjectManager path
+
+  [ Justin Maggard ]
+  * rtnl: Ignore temporary cloned routes
+
+  [ Tomáš Čech ]
+  * build: Install binary with manpage when client is enabled
+  * build: Distribute missing documentation in tarball.
+
+  [ Szymon Janc ]
+  * gdbus: Fix not calling disconnect function
+  * gdbus: Use g_dbus_create_error_valist internally
+  * gdbus: Fix crash in g_dbus_create_error_valist
+
+  [ Philip Withnall ]
+  * plugins: Fix polkit policy defaults to use current allow values
+
+  [ Andreas Oberritter ]
+  * connman.service.in: Start before remote fs mounts
+  * connman.service.in: Use @sbindir@ instead of hardcoding @prefix@/sbin
+
+  [ Luiz Augusto von Dentz ]
+  * gdbus: Make GDBusClient work without ObjectManager
+  * gdbus: Close private connection if setup fails
+
+  [ Vinicius Costa Gomes ]
+  * gitignore: Add vpn/connman-vpn-dbus.conf
+  * build: Fix having unexpanded variables in .service files
+  * build: Fix using '@prefix@/sbin' instead of '@sbindir@
+
+  [ Michael Janssen ]
+  * gdbus: Add g_dbus_get_flags function
+
+  [ Slava Monich ]
+  * network: Fix prefix list memory leak in check_dhcpv6()
+  * ipv6pd: Check timer_hash for NULL prior to destroying it
+  * dnsproxy: request_data in request_list need the request data for UDP
+  * agent: Use g_list_delete_link
+
+  [ Jukka Rissanen ]
+  * build: Add option to set path of the l2tp binary
+  * build: Add option to set path of the pptp binary
+  * dnsproxy: Do not check numserv in request timeout
+  * dnsproxy: Refactor the request_timeout() function
+  * wifi: Do not add frequency to hidden AP scan
+
+  [ Marcus Folkesson ]
+  * ethernet: Add support for VLAN
+
+  [ Marcel Holtmann ]
+  * Release 1.29
+
+  [ David Lechner ]
+  * Debian package now installs connmanctl in /usr/bin instead of /usr/sbin
+
+ -- David Lechner <david@lechnology.com>  Tue, 21 Apr 2015 22:33:02 -0500
+
 connman (1.28-0ev3dev1) testing; urgency=medium
 
   [ Patrik Flykt ]
