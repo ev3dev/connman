@@ -1107,7 +1107,7 @@ static void re_cb(enum request_type req_type, GDHCPClient *dhcp_client,
 			if (!option) {
 				switch (req_type) {
 				case REQ_REQUEST:
-					dhcpv6_request(dhcp, true);
+					do_resend_request(dhcp);
 					break;
 				case REQ_REBIND:
 					dhcpv6_rebind(dhcp);
@@ -1682,9 +1682,16 @@ static void solicitation_cb(GDHCPClient *dhcp_client, gpointer user_data)
 
 	clear_timer(dhcp);
 
-	do_dad(dhcp_client, dhcp);
-
 	g_dhcpv6_client_clear_retransmit(dhcp_client);
+
+	if (g_dhcpv6_client_get_status(dhcp_client) != 0) {
+		if (dhcp->callback)
+			dhcp->callback(dhcp->network,
+					CONNMAN_DHCPV6_STATUS_FAIL, NULL);
+		return;
+	}
+
+	do_dad(dhcp_client, dhcp);
 }
 
 static gboolean timeout_solicitation(gpointer user_data)
