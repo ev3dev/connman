@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(connman, 1.28)
+AC_INIT(connman, 1.29)
 
 AM_INIT_AUTOMAKE([foreign subdir-objects color-tests])
 AC_CONFIG_HEADERS([config.h])
@@ -121,6 +121,9 @@ fi
 AM_CONDITIONAL(VPNC, test "${enable_vpnc}" != "no")
 AM_CONDITIONAL(VPNC_BUILTIN, test "${enable_vpnc}" = "builtin")
 
+AC_ARG_WITH(l2tp, AC_HELP_STRING([--with-l2tp=PROGRAM],
+        [specify location of l2tp binary]), [path_l2tp=${withval}])
+
 AC_ARG_ENABLE(l2tp,
 	AC_HELP_STRING([--enable-l2tp], [enable l2tp support]),
 			[enable_l2tp=${enableval}], [enable_l2tp="no"])
@@ -142,6 +145,9 @@ if (test "${enable_l2tp}" != "no"); then
 fi
 AM_CONDITIONAL(L2TP, test "${enable_l2tp}" != "no")
 AM_CONDITIONAL(L2TP_BUILTIN, test "${enable_l2tp}" = "builtin")
+
+AC_ARG_WITH(pptp, AC_HELP_STRING([--with-pptp=PROGRAM],
+        [specify location of pptp binary]), [path_pptp=${withval}])
 
 AC_ARG_ENABLE(pptp,
 	AC_HELP_STRING([--enable-pptp], [enable pptp support]),
@@ -384,6 +390,4 @@ AM_CONDITIONAL(VPN, test "${enable_openconnect}" != "no" -o \
 			"${enable_l2tp}" != "no" -o \
 			"${enable_pptp}" != "no")
 
-AC_OUTPUT(Makefile include/version.h src/connman.service
-		vpn/connman-vpn.service	vpn/net.connman.vpn.service
-		scripts/connman	connman.pc src/net.connman.service)
+AC_OUTPUT(Makefile include/version.h connman.pc)

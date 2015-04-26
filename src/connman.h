@@ -338,7 +338,7 @@ void __connman_ipconfig_newlink(int index, unsigned short type,
 							unsigned short mtu,
 						struct rtnl_link_stats *stats);
 void __connman_ipconfig_dellink(int index, struct rtnl_link_stats *stats);
-void __connman_ipconfig_newaddr(int index, int family, const char *label,
+int __connman_ipconfig_newaddr(int index, int family, const char *label,
 				unsigned char prefixlen, const char *address);
 void __connman_ipconfig_deladdr(int index, int family, const char *label,
 				unsigned char prefixlen, const char *address);
@@ -587,9 +587,8 @@ int __connman_network_connect(struct connman_network *network);
 int __connman_network_disconnect(struct connman_network *network);
 int __connman_network_clear_ipconfig(struct connman_network *network,
 					struct connman_ipconfig *ipconfig);
-int __connman_network_set_ipconfig(struct connman_network *network,
-				struct connman_ipconfig *ipconfig_ipv4,
-				struct connman_ipconfig *ipconfig_ipv6);
+int __connman_network_enable_ipconfig(struct connman_network *network,
+				struct connman_ipconfig *ipconfig);
 
 const char *__connman_network_get_type(struct connman_network *network);
 const char *__connman_network_get_group(struct connman_network *network);

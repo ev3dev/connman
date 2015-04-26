@@ -72,6 +72,13 @@ endif
 endif
 endif
 
+service_files_sources = src/connman.service.in src/net.connman.service.in \
+				vpn/connman-vpn.service.in \
+				vpn/net.connman.vpn.service.in
+service_files = src/connman.service src/net.connman.service \
+				vpn/connman-vpn.service \
+				vpn/net.connman.vpn.service
+
 plugin_LTLIBRARIES =
 
 plugin_objects =
@@ -82,6 +89,7 @@ builtin_libadd =
 builtin_cflags =
 
 noinst_PROGRAMS =
+bin_PROGRAMS =
 
 unit_objects =
 
@@ -145,13 +153,13 @@ vpn_connman_vpnd_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/vpn/vpn.ver
 endif
 
-BUILT_SOURCES = $(local_headers) src/builtin.h
+BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) scripts/connman
 
 if VPN
 BUILT_SOURCES += vpn/builtin.h
 endif
 
-CLEANFILES = src/connman.conf $(BUILT_SOURCES)
+CLEANFILES = src/connman.conf $(BUILT_SOURCES) $(service_files)
 
 statedir = $(localstatedir)/run/connman
 vpn_statedir = $(localstatedir)/run/connman-vpn
@@ -212,7 +220,8 @@ src_connmand_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
 				-I$(builddir)/src
 
 EXTRA_DIST = src/genbuiltin src/connman-dbus.conf src/connman-polkit.conf \
-						plugins/connman-nmcompat.conf
+				plugins/connman-nmcompat.conf \
+				$(service_files_sources) scripts/connman.in
 
 if VPN
 vpn_connman_vpnd_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
@@ -237,9 +246,9 @@ script_LTLIBRARIES =
 include Makefile.plugins
 
 if CLIENT
-noinst_PROGRAMS += client/connmanctl
+bin_PROGRAMS += client/connmanctl
 
-noinst_MANUAL_PAGES = doc/connmanctl.1
+MANUAL_PAGES += doc/connmanctl.1
 
 client_connmanctl_SOURCES = client/dbus_helpers.h client/dbus_helpers.c \
 			client/services.h client/services.c \
@@ -359,6 +368,8 @@ endif
 EXTRA_DIST += $(test_scripts)
 
 EXTRA_DIST += doc/overview-api.txt doc/behavior-api.txt \
+				doc/coding-style.txt doc/wifi-p2p-overview.txt \
+				doc/vpn-agent-api.txt doc/peer-api.txt \
 				doc/ipconfig-api.txt doc/plugin-api.txt \
 				doc/manager-api.txt doc/agent-api.txt \
 				doc/service-api.txt doc/technology-api.txt \
@@ -366,6 +377,7 @@ EXTRA_DIST += doc/overview-api.txt doc/behavior-api.txt \
 				doc/clock-api.txt doc/session-api.txt \
 				doc/session-overview.txt doc/backtrace.txt \
 				doc/advanced-configuration.txt \
+				doc/vpn-config-format.txt \
 				doc/vpn-connection-api.txt \
 				doc/vpn-manager-api.txt doc/vpn-overview.txt \
 				doc/session-policy-format.txt
@@ -430,6 +442,17 @@ connman-task.pp: vpn/connman-task.te
 endif
 
 EXTRA_DIST += vpn/connman-task.te
+
+do_subst = $(AM_V_GEN)$(SED) \
+		-e 's,[@]prefix[@],$(prefix),g' \
+		-e 's,[@]sbindir[@],$(sbindir),g' \
+		-e 's,[@]sysconfdir[@],$(sysconfdir),g'
+
+%.service: %.service.in Makefile
+	$(do_subst) < $< > $@
+
+scripts/connman: scripts/connman.in Makefile
+	$(do_subst) < $< > $@
 
 include/connman/version.h: include/version.h
 	$(AM_V_at)$(MKDIR_P) include/connman
