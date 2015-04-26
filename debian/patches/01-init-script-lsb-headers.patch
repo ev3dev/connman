@@ -3,11 +3,8 @@ Subject: connman: Missing LSB header in init.d script
 Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=543869
 
 ---
- scripts/connman.in |   33 ++++++++++++++++++++++++++++++---
- 1 file changed, 30 insertions(+), 3 deletions(-)
-
-Index: b/scripts/connman.in
-===================================================================
+diff --git a/scripts/connman.in b/scripts/connman.in
+index 1692b95..1b9ca4a 100644
 --- a/scripts/connman.in
 +++ b/scripts/connman.in
 @@ -1,7 +1,17 @@
@@ -22,13 +19,13 @@ Index: b/scripts/connman.in
 +### END INIT INFO
 +
  
- DAEMON=@prefix@/sbin/connmand
+ DAEMON=@sbindir@/connmand
  DESC="Connection Manager"
 +NAME=connmand
  
  . /lib/lsb/init-functions
  
-@@ -9,8 +19,6 @@ if [ -f @sysconfdir@/default/connman ] ;
+@@ -9,8 +19,6 @@ if [ -f @sysconfdir@/default/connman ] ; then
  	. @sysconfdir@/default/connman
  fi
  
@@ -73,3 +70,4 @@ Index: b/scripts/connman.in
  	exit 1
  	;;
  esac
+
