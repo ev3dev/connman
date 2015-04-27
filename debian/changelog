@@ -1,3 +1,9 @@
+connman (1.29-0ev3dev2) stable; urgency=medium
+
+  * Rebuild only, no changes. Had to bump version because jessie became stable.
+
+ -- David Lechner <david@lechnology.com>  Sun, 26 Apr 2015 18:55:38 -0500
+
 connman (1.29-0ev3dev1) testing; urgency=medium
 
   [ Chris Hiszpanski ]
