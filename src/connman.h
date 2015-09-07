@@ -642,7 +642,8 @@ int __connman_provider_indicate_state(struct connman_provider *provider,
 					enum connman_provider_state state);
 int __connman_provider_indicate_error(struct connman_provider *provider,
 					enum connman_provider_error error);
-int __connman_provider_connect(struct connman_provider *provider);
+int __connman_provider_connect(struct connman_provider *provider,
+					const char *dbus_sender);
 int __connman_provider_remove_by_path(const char *path);
 void __connman_provider_cleanup(void);
 int __connman_provider_init(void);
@@ -694,8 +695,6 @@ int __connman_service_set_immutable(struct connman_service *service,
 int __connman_service_set_ignore(struct connman_service *service,
 						bool ignore);
 void __connman_service_set_search_domains(struct connman_service *service,
-					char **domains);
-void __connman_service_update_search_domains(struct connman_service *service,
 					char **domains);
 
 void __connman_service_set_string(struct connman_service *service,
@@ -772,6 +771,8 @@ void __connman_service_set_proxy_autoconfig(struct connman_service *service,
 
 void __connman_service_set_identity(struct connman_service *service,
 					const char *identity);
+void __connman_service_set_anonymous_identity(struct connman_service *service,
+					const char *anonymous_identity);
 void __connman_service_set_agent_identity(struct connman_service *service,
 						const char *agent_identity);
 int __connman_service_set_passphrase(struct connman_service *service,
@@ -929,7 +930,6 @@ int __connman_dnsproxy_add_listener(int index);
 void __connman_dnsproxy_remove_listener(int index);
 int __connman_dnsproxy_append(int index, const char *domain, const char *server);
 int __connman_dnsproxy_remove(int index, const char *domain, const char *server);
-void __connman_dnsproxy_flush(void);
 
 int __connman_6to4_probe(struct connman_service *service);
 void __connman_6to4_remove(struct connman_ipconfig *ipconfig);
@@ -991,6 +991,9 @@ int __connman_firewall_add_rule(struct firewall_context *ctx,
 				const char *table,
 				const char *chain,
 				const char *rule_fmt, ...);
+int __connman_firewall_remove_rule(struct firewall_context *ctx, int id);
+int __connman_firewall_enable_rule(struct firewall_context *ctx, int id);
+int __connman_firewall_disable_rule(struct firewall_context *ctx, int id);
 int __connman_firewall_enable(struct firewall_context *ctx);
 int __connman_firewall_disable(struct firewall_context *ctx);
 bool __connman_firewall_is_up(void);

@@ -333,14 +333,14 @@ static void refresh_dns_entry(struct cache_entry *entry, char *name)
 	}
 
 	if (!entry->ipv4) {
-		DBG("Refresing A record for %s", name);
+		DBG("Refreshing A record for %s", name);
 		g_resolv_lookup_hostname(ipv4_resolve, name,
 					dummy_resolve_func, NULL);
 		age = 4;
 	}
 
 	if (!entry->ipv6) {
-		DBG("Refresing AAAA record for %s", name);
+		DBG("Refreshing AAAA record for %s", name);
 		g_resolv_lookup_hostname(ipv6_resolve, name,
 					dummy_resolve_func, NULL);
 		age = 4;
@@ -2687,6 +2687,34 @@ static void append_domain(int index, const char *domain)
 	}
 }
 
+static void flush_requests(struct server_data *server)
+{
+	GSList *list;
+
+	list = request_list;
+	while (list) {
+		struct request_data *req = list->data;
+
+		list = list->next;
+
+		if (ns_resolv(server, req, req->request, req->name)) {
+			/*
+			 * A cached result was sent,
+			 * so the request can be released
+			 */
+			request_list =
+				g_slist_remove(request_list, req);
+			destroy_request_data(req);
+			continue;
+		}
+
+		if (req->timeout > 0)
+			g_source_remove(req->timeout);
+
+		req->timeout = g_timeout_add_seconds(5, request_timeout, req);
+	}
+}
+
 int __connman_dnsproxy_append(int index, const char *domain,
 							const char *server)
 {
@@ -2718,6 +2746,8 @@ int __connman_dnsproxy_append(int index, const char *domain,
 	data = create_server(index, domain, server, IPPROTO_UDP);
 	if (!data)
 		return -EIO;
+
+	flush_requests(data);
 
 	return 0;
 }
@@ -2752,33 +2782,6 @@ int __connman_dnsproxy_remove(int index, const char *domain,
 	remove_server(index, domain, server, IPPROTO_TCP);
 
 	return 0;
-}
-
-void __connman_dnsproxy_flush(void)
-{
-	GSList *list;
-
-	list = request_list;
-	while (list) {
-		struct request_data *req = list->data;
-
-		list = list->next;
-
-		if (resolv(req, req->request, req->name)) {
-			/*
-			 * A cached result was sent,
-			 * so the request can be released
-			 */
-			request_list =
-				g_slist_remove(request_list, req);
-			destroy_request_data(req);
-			continue;
-		}
-
-		if (req->timeout > 0)
-			g_source_remove(req->timeout);
-		req->timeout = g_timeout_add_seconds(5, request_timeout, req);
-	}
 }
 
 static void dnsproxy_offline_mode(bool enabled)

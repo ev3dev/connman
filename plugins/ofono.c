@@ -401,8 +401,8 @@ static int set_property(struct modem_data *modem,
 
 	if (modem->call_set_property) {
 		DBG("Cancel pending SetProperty");
-
 		dbus_pending_call_cancel(modem->call_set_property);
+		dbus_pending_call_unref(modem->call_set_property);
 		modem->call_set_property = NULL;
 	}
 
@@ -2142,8 +2142,18 @@ static void modem_update_interfaces(struct modem_data *modem,
 	if (api_added(old_ifaces, new_ifaces, OFONO_API_CDMA_NETREG))
 		cdma_netreg_get_properties(modem);
 
-	if (api_removed(old_ifaces, new_ifaces, OFONO_API_CM))
-		remove_cm_context(modem, modem->context->path);
+	if (api_removed(old_ifaces, new_ifaces, OFONO_API_CM)) {
+		if (modem->call_get_contexts) {
+			DBG("cancelling pending GetContexts call");
+			dbus_pending_call_cancel(modem->call_get_contexts);
+			dbus_pending_call_unref(modem->call_get_contexts);
+			modem->call_get_contexts = NULL;
+		}
+		if (modem->context) {
+			DBG("removing context %s", modem->context->path);
+			remove_cm_context(modem, modem->context->path);
+		}
+	}
 
 	if (api_removed(old_ifaces, new_ifaces, OFONO_API_CDMA_CM))
 		remove_cm_context(modem, modem->context->path);
@@ -2340,14 +2350,20 @@ static void remove_modem(gpointer data)
 
 	DBG("%s", modem->path);
 
-	if (modem->call_set_property)
+	if (modem->call_set_property) {
 		dbus_pending_call_cancel(modem->call_set_property);
+		dbus_pending_call_unref(modem->call_set_property);
+	}
 
-	if (modem->call_get_properties)
+	if (modem->call_get_properties) {
 		dbus_pending_call_cancel(modem->call_get_properties);
+		dbus_pending_call_unref(modem->call_get_properties);
+	}
 
-	if (modem->call_get_contexts)
+	if (modem->call_get_contexts) {
 		dbus_pending_call_cancel(modem->call_get_contexts);
+		dbus_pending_call_unref(modem->call_get_contexts);
+	}
 
 	if (modem->device)
 		destroy_device(modem);

@@ -163,6 +163,7 @@ struct _GSupplicantInterface {
 	unsigned int max_scan_ssids;
 	bool p2p_support;
 	bool p2p_finding;
+	bool ap_create_in_progress;
 	dbus_bool_t ready;
 	GSupplicantState state;
 	dbus_bool_t scanning;
@@ -177,7 +178,6 @@ struct _GSupplicantInterface {
 	GHashTable *network_table;
 	GHashTable *peer_table;
 	GHashTable *group_table;
-	GHashTable *net_mapping;
 	GHashTable *bss_mapping;
 	void *data;
 	const char *pending_peer_path;
@@ -254,7 +254,7 @@ static inline void debug(const char *format, ...)
 	char str[256];
 	va_list ap;
 
-	if (!callbacks_pointer->debug)
+	if (!callbacks_pointer || !callbacks_pointer->debug)
 		return;
 
 	va_start(ap, format);
@@ -432,6 +432,17 @@ static void callback_scan_started(GSupplicantInterface *interface)
 	callbacks_pointer->scan_started(interface);
 }
 
+static void callback_ap_create_fail(GSupplicantInterface *interface)
+{
+	if (!callbacks_pointer)
+		return;
+
+	if (!callbacks_pointer->ap_create_fail)
+		return;
+
+	callbacks_pointer->ap_create_fail(interface);
+}
+
 static void callback_scan_finished(GSupplicantInterface *interface)
 {
 	if (!callbacks_pointer)
@@ -540,7 +551,6 @@ static void remove_interface(gpointer data)
 	GSupplicantInterface *interface = data;
 
 	g_hash_table_destroy(interface->bss_mapping);
-	g_hash_table_destroy(interface->net_mapping);
 	g_hash_table_destroy(interface->network_table);
 	g_hash_table_destroy(interface->peer_table);
 	g_hash_table_destroy(interface->group_table);
@@ -790,20 +800,59 @@ static void interface_capability(const char *key, DBusMessageIter *iter,
 				key, dbus_message_iter_get_arg_type(iter));
 }
 
+struct set_apscan_data
+{
+	unsigned int ap_scan;
+	GSupplicantInterface *interface;
+};
+
 static void set_apscan(DBusMessageIter *iter, void *user_data)
 {
-	unsigned int ap_scan = *(unsigned int *)user_data;
+	struct set_apscan_data *data = user_data;
+	unsigned int ap_scan = data->ap_scan;
 
 	dbus_message_iter_append_basic(iter, DBUS_TYPE_UINT32, &ap_scan);
+}
+
+static void set_apscan_complete(const char *error,
+		DBusMessageIter *iter, void *user_data)
+{
+	struct set_apscan_data *data = user_data;
+	GSupplicantInterface *interface = data->interface;
+
+	if (error) {
+		interface->ap_create_in_progress = false;
+		SUPPLICANT_DBG("Set AP scan error %s", error);
+		goto error;
+	}
+
+	interface->ap_create_in_progress = true;
+error:
+	dbus_free(data);
 }
 
 int g_supplicant_interface_set_apscan(GSupplicantInterface *interface,
 							unsigned int ap_scan)
 {
-	return supplicant_dbus_property_set(interface->path,
+	struct set_apscan_data *data;
+	int ret;
+
+	data = dbus_malloc0(sizeof(*data));
+
+	if (!data)
+		return -ENOMEM;
+
+	data->ap_scan = ap_scan;
+	data->interface = interface;
+
+	ret = supplicant_dbus_property_set(interface->path,
 			SUPPLICANT_INTERFACE ".Interface",
-				"ApScan", DBUS_TYPE_UINT32_AS_STRING,
-					set_apscan, NULL, &ap_scan, NULL);
+			"ApScan", DBUS_TYPE_UINT32_AS_STRING,
+			set_apscan, set_apscan_complete, data, NULL);
+	if (ret < 0)
+		dbus_free(data);
+
+	return ret;
 }
 
 void g_supplicant_interface_set_data(GSupplicantInterface *interface,
@@ -1269,10 +1318,6 @@ static void interface_network_added(DBusMessageIter *iter, void *user_data)
 	if (g_strcmp0(path, "/") == 0)
 		return;
 
-	network = g_hash_table_lookup(interface->net_mapping, path);
-	if (network)
-		return;
-
 	network = g_try_new0(GSupplicantNetwork, 1);
 	if (!network)
 		return;
@@ -1298,19 +1343,8 @@ static void interface_network_added(DBusMessageIter *iter, void *user_data)
 
 static void interface_network_removed(DBusMessageIter *iter, void *user_data)
 {
-	GSupplicantInterface *interface = user_data;
-	GSupplicantNetwork *network;
-	const char *path = NULL;
-
-	dbus_message_iter_get_basic(iter, &path);
-	if (!path)
-		return;
-
-	network = g_hash_table_lookup(interface->net_mapping, path);
-	if (!network)
-		return;
-
-	g_hash_table_remove(interface->net_mapping, path);
+	SUPPLICANT_DBG("");
+	return;
 }
 
 static char *create_name(unsigned char *ssid, int ssid_len)
@@ -1381,7 +1415,7 @@ static char *create_group(struct g_supplicant_bss *bss)
 	return g_string_free(str, FALSE);
 }
 
-static void add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
+static int add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 {
 	GSupplicantInterface *interface = bss->interface;
 	GSupplicantNetwork *network;
@@ -1391,7 +1425,7 @@ static void add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 	SUPPLICANT_DBG("New group created: %s", group);
 
 	if (!group)
-		return;
+		return -ENOMEM;
 
 	network = g_hash_table_lookup(interface->network_table, group);
 	if (network) {
@@ -1404,7 +1438,7 @@ static void add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 	network = g_try_new0(GSupplicantNetwork, 1);
 	if (!network) {
 		g_free(group);
-		return;
+		return -ENOMEM;
 	}
 
 	network->interface = interface;
@@ -1450,6 +1484,8 @@ done:
 	g_hash_table_replace(network->bss_table, bss->path, bss);
 
 	g_hash_table_replace(bss_mapping, bss->path, interface);
+
+	return 0;
 }
 
 static void bss_rates(DBusMessageIter *iter, void *user_data)
@@ -1851,7 +1887,8 @@ static void interface_bss_added_with_keys(DBusMessageIter *iter,
 	supplicant_dbus_property_foreach(iter, bss_property, bss);
 
 	bss_compute_security(bss);
-	add_or_replace_bss_to_network(bss);
+	if (add_or_replace_bss_to_network(bss) < 0)
+		SUPPLICANT_DBG("add_or_replace_bss_to_network failed");
 }
 
 static void interface_bss_added_without_keys(DBusMessageIter *iter,
@@ -1870,7 +1907,8 @@ static void interface_bss_added_without_keys(DBusMessageIter *iter,
 					bss_property, bss, NULL);
 
 	bss_compute_security(bss);
-	add_or_replace_bss_to_network(bss);
+	if (add_or_replace_bss_to_network(bss) < 0)
+			SUPPLICANT_DBG("add_or_replace_bss_to_network failed");
 }
 
 static void update_signal(gpointer key, gpointer value,
@@ -1988,6 +2026,14 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 				interface->state = string2state(str);
 				callback_interface_state(interface);
 			}
+
+		if (interface->ap_create_in_progress) {
+			if (interface->state == G_SUPPLICANT_STATE_DISCONNECTED)
+				callback_ap_create_fail(interface);
+
+			interface->ap_create_in_progress = false;
+		}
+
 		if (interface->state == G_SUPPLICANT_STATE_DISABLED)
 			interface->ready = FALSE;
 		else
@@ -2108,8 +2154,6 @@ static GSupplicantInterface *interface_alloc(const char *path)
 					g_str_equal, NULL, remove_peer);
 	interface->group_table = g_hash_table_new_full(g_str_hash,
 					g_str_equal, NULL, remove_group);
-	interface->net_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
-								NULL, NULL);
 	interface->bss_mapping = g_hash_table_new_full(g_str_hash, g_str_equal,
 								NULL, NULL);
 
@@ -2445,7 +2489,14 @@ static void signal_bss_changed(const char *path, DBusMessageIter *iter)
 
 		g_hash_table_remove(interface->network_table, network->group);
 
-		add_or_replace_bss_to_network(new_bss);
+		if (add_or_replace_bss_to_network(new_bss) < 0) {
+			/* Remove entries in hash tables to handle the
+			 * failure in add_or_replace_bss_to_network
+			 */
+			g_hash_table_remove(bss_mapping, path);
+			g_hash_table_remove(interface->bss_mapping, path);
+			g_hash_table_remove(network->bss_table, path);
+		}
 
 		return;
 	}
@@ -2619,7 +2670,7 @@ static void peer_groups_relation(DBusMessageIter *iter, void *user_data)
 	if (!group)
 		return;
 
-	elem = g_slist_find_custom(data->old_groups, str, g_str_equal);
+	elem = g_slist_find_custom(data->old_groups, str, (GCompareFunc)g_strcmp0);
 	if (elem) {
 		data->old_groups = g_slist_remove_link(data->old_groups, elem);
 		peer->groups = g_slist_concat(elem, peer->groups);
@@ -3233,6 +3284,7 @@ int g_supplicant_set_country(const char *alpha2,
 					const void *user_data)
 {
 	struct supplicant_regdom *regdom;
+	int ret;
 
 	SUPPLICANT_DBG("Country setting %s", alpha2);
 
@@ -3247,10 +3299,15 @@ int g_supplicant_set_country(const char *alpha2,
 	regdom->alpha2 = alpha2;
 	regdom->user_data = user_data;
 
-	return supplicant_dbus_property_set(SUPPLICANT_PATH, SUPPLICANT_INTERFACE,
+	ret =  supplicant_dbus_property_set(SUPPLICANT_PATH, SUPPLICANT_INTERFACE,
 					"Country", DBUS_TYPE_STRING_AS_STRING,
 					country_params, country_result,
 					regdom, NULL);
+	if (ret < 0) {
+		dbus_free(regdom);
+		SUPPLICANT_DBG("Unable to set Country configuration");
+	}
+	return ret;
 }
 
 int g_supplicant_interface_set_country(GSupplicantInterface *interface,
@@ -3259,6 +3316,7 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 							void *user_data)
 {
 	struct supplicant_regdom *regdom;
+	int ret;
 
 	regdom = dbus_malloc0(sizeof(*regdom));
 	if (!regdom)
@@ -3268,11 +3326,17 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 	regdom->alpha2 = alpha2;
 	regdom->user_data = user_data;
 
-	return supplicant_dbus_property_set(interface->path,
+	ret =  supplicant_dbus_property_set(interface->path,
 				SUPPLICANT_INTERFACE ".Interface",
 				"Country", DBUS_TYPE_STRING_AS_STRING,
 				country_params, country_result,
 					regdom, NULL);
+	if (ret < 0) {
+		dbus_free(regdom);
+		SUPPLICANT_DBG("Unable to set Country configuration");
+	}
+
+	return ret;
 }
 
 bool g_supplicant_interface_has_p2p(GSupplicantInterface *interface)
@@ -3967,7 +4031,7 @@ int g_supplicant_interface_scan(GSupplicantInterface *interface,
 
 static int parse_supplicant_error(DBusMessageIter *iter)
 {
-	int err = -ECANCELED;
+	int err = -ECONNABORTED;
 	char *key;
 
 	if (!iter)
@@ -4321,6 +4385,10 @@ static void add_network_security_eap(DBusMessageIter *dict,
 	supplicant_dbus_dict_append_basic(dict, "identity",
 						DBUS_TYPE_STRING,
 						&ssid->identity);
+	if(ssid->anonymous_identity)
+		supplicant_dbus_dict_append_basic(dict, "anonymous_identity",
+						     DBUS_TYPE_STRING,
+						     &ssid->anonymous_identity);
 
 	g_free(eap_value);
 }
@@ -4507,10 +4575,18 @@ static void interface_wps_start_result(const char *error,
 				DBusMessageIter *iter, void *user_data)
 {
 	struct interface_connect_data *data = user_data;
+	int err;
 
 	SUPPLICANT_DBG("");
-	if (error)
+
+	err = 0;
+	if (error) {
 		SUPPLICANT_DBG("error: %s", error);
+		err = parse_supplicant_error(iter);
+	}
+
+	if(data->callback)
+		data->callback(err, data->interface, data->user_data);
 
 	g_free(data->path);
 	g_free(data->ssid);

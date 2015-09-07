@@ -45,6 +45,7 @@ struct connman_config_service {
 	unsigned int ssid_len;
 	char *eap;
 	char *identity;
+	char *anonymous_identity;
 	char *ca_cert_file;
 	char *client_cert_file;
 	char *private_key_file;
@@ -98,6 +99,7 @@ static bool cleanup = false;
 #define SERVICE_KEY_PRV_KEY_PASS       "PrivateKeyPassphrase"
 #define SERVICE_KEY_PRV_KEY_PASS_TYPE  "PrivateKeyPassphraseType"
 #define SERVICE_KEY_IDENTITY           "Identity"
+#define SERVICE_KEY_ANONYMOUS_IDENTITY "AnonymousIdentity"
 #define SERVICE_KEY_PHASE2             "Phase2"
 #define SERVICE_KEY_PASSPHRASE         "Passphrase"
 #define SERVICE_KEY_SECURITY           "Security"
@@ -129,6 +131,7 @@ static const char *service_possible_keys[] = {
 	SERVICE_KEY_PRV_KEY_PASS,
 	SERVICE_KEY_PRV_KEY_PASS_TYPE,
 	SERVICE_KEY_IDENTITY,
+	SERVICE_KEY_ANONYMOUS_IDENTITY,
 	SERVICE_KEY_PHASE2,
 	SERVICE_KEY_PASSPHRASE,
 	SERVICE_KEY_SECURITY,
@@ -220,6 +223,7 @@ free_only:
 	g_free(config_service->ssid);
 	g_free(config_service->eap);
 	g_free(config_service->identity);
+	g_free(config_service->anonymous_identity);
 	g_free(config_service->ca_cert_file);
 	g_free(config_service->client_cert_file);
 	g_free(config_service->private_key_file);
@@ -655,6 +659,13 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 		service->identity = str;
 	}
 
+	str = __connman_config_get_string(keyfile, group,
+					SERVICE_KEY_ANONYMOUS_IDENTITY, NULL);
+	if (str) {
+		g_free(service->anonymous_identity);
+		service->anonymous_identity = str;
+	}
+
 	str = __connman_config_get_string(keyfile, group, SERVICE_KEY_PHASE2, NULL);
 	if (str) {
 		g_free(service->phase2);
@@ -698,7 +709,18 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 
 		} else
 			service->security = CONNMAN_SERVICE_SECURITY_PSK;
-	}
+	} else if (str) {
+
+		if (security != CONNMAN_SERVICE_SECURITY_NONE)
+			connman_info("Mismatch no security and "
+					"setting %s = %s",
+					SERVICE_KEY_SECURITY, str);
+
+			service->security = CONNMAN_SERVICE_SECURITY_NONE;
+	} else
+			service->security = CONNMAN_SERVICE_SECURITY_NONE;
+
+	g_free(str);
 
 	service->config_ident = g_strdup(config->ident);
 	service->config_entry = g_strdup_printf("service_%s", service->ident);
@@ -891,10 +913,10 @@ static void config_notify_handler(struct inotify_event *event,
 		return;
 	}
 
-	if (event->mask & IN_CREATE || event->mask & IN_MOVED_TO)
+	if (event->mask & (IN_CREATE | IN_MOVED_TO))
 		create_config(ident);
 
-	if (event->mask & IN_MODIFY) {
+	if (event->mask & (IN_MODIFY | IN_MOVED_TO)) {
 		struct connman_config *config;
 
 		config = g_hash_table_lookup(config_table, ident);
@@ -916,7 +938,7 @@ static void config_notify_handler(struct inotify_event *event,
 		}
 	}
 
-	if (event->mask & IN_DELETE)
+	if (event->mask & (IN_DELETE | IN_MOVED_FROM))
 		g_hash_table_remove(config_table, ident);
 }
 
@@ -1024,6 +1046,10 @@ static void provision_service_wifi(struct connman_config_service *config,
 	if (config->identity)
 		__connman_service_set_string(service, "Identity",
 							config->identity);
+
+	if (config->anonymous_identity)
+		__connman_service_set_string(service, "AnonymousIdentity",
+						config->anonymous_identity);
 
 	if (config->ca_cert_file)
 		__connman_service_set_string(service, "CACertFile",
@@ -1326,22 +1352,35 @@ static int try_provision_service(struct connman_config_service *config,
 	return 0;
 }
 
+static int
+find_and_provision_service_from_config(struct connman_service *service,
+					struct connman_config *config)
+{
+	GHashTableIter iter;
+	gpointer value, key;
+
+	g_hash_table_iter_init(&iter, config->service_table);
+	while (g_hash_table_iter_next(&iter, &key,
+					&value)) {
+		if (!try_provision_service(value, service))
+			return 0;
+	}
+
+	return -ENOENT;
+}
+
 static int find_and_provision_service(struct connman_service *service)
 {
-	GHashTableIter iter, iter_service;
-	gpointer value, key, value_service, key_service;
+	GHashTableIter iter;
+	gpointer value, key;
 
 	g_hash_table_iter_init(&iter, config_table);
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct connman_config *config = value;
 
-		g_hash_table_iter_init(&iter_service, config->service_table);
-		while (g_hash_table_iter_next(&iter_service, &key_service,
-						&value_service)) {
-			if (!try_provision_service(value_service, service))
-				return 0;
-		}
+		if (!find_and_provision_service_from_config(service, config))
+			return 0;
 	}
 
 	return -ENOENT;
@@ -1425,7 +1464,7 @@ int __connman_config_provision_service_ident(struct connman_service *service,
 			}
 		}
 
-		find_and_provision_service(service);
+		find_and_provision_service_from_config(service, config);
 	}
 
 	return ret;
