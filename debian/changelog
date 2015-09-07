@@ -1,3 +1,32 @@
+connman (1.30-0ev3dev1) stable; urgency=medium
+
+  * New Upstream release.
+
+  * WiFi enhancements that track Access Point enabling (Bing Niu) and enabling
+    tethering first for unused WiFi devices (Patrik Flykt)
+  * Fixes for WiFi handling in case of failure with 4-way handshake, state
+    change (Pasi Sjöholm), WPS (Yusuke Nakamura), provisioning (Peter
+    Meerwald), P2P (Michael Olbrich), memory leaks etc. (Maneesh Jain, Harish
+    Jenny K N), in addition to adding support for anonymous identity (Jaakko
+    Hannikainen)
+  * Improve DNS server handling (Jukka Rissanen, Patrik Flykt)
+  * Fix issues with DHCP (Saurav Babu, Peter Meerwald)
+  * Several internal improvements related to IP configuration information
+    handling (Patrik Flykt, Pasi Sjöholm)
+  * Fix building with automake dependency tracking disabled (Ross Burton)
+  * Fix systemd service dependencies (Patrik Flykt)
+  * Internal improvements and fixes for service and provisioning file handling
+    (Patrik Flykt), D-Bus attribute parsing (Jaakko Hannikainen) and Agent API
+    SSID parsing (Adam Moore)
+  * connmanctl command line client now supports all Service API methods (Saurav
+    Babu) with memory leaks being fixed and VPN connections autocompleted
+    (Jaakko Hannikainen)
+  * Several fixes to the VPN daemon (Jukka Rissanen)
+  * Session policy routing now uses SNAT in order to do a proper re-routing
+    decision (Daniel Wagner)
+
+ -- David Lechner <david@lechnology.com>  Sun, 06 Sep 2015 23:36:00 -0500
+
 connman (1.29-0ev3dev2) stable; urgency=medium
 
   * Rebuild only, no changes. Had to bump version because jessie became stable.
