@@ -134,7 +134,6 @@ static struct connman_ipconfig *create_ip4config(struct connman_service *service
 static struct connman_ipconfig *create_ip6config(struct connman_service *service,
 		int index);
 
-
 struct find_data {
 	const char *path;
 	struct connman_service *service;
@@ -474,6 +473,8 @@ static int service_load(struct connman_service *service)
 
 				connman_network_set_blob(service->network,
 					"WiFi.SSID", ssid, hex_ssid_len / 2);
+
+				g_free(ssid);
 			}
 
 			g_free(hex_ssid);
@@ -939,89 +940,6 @@ static bool nameserver_available(struct connman_service *service,
 	return false;
 }
 
-static int nameserver_add(struct connman_service *service,
-			enum connman_ipconfig_type type,
-			const char *nameserver)
-{
-	int index;
-
-	if (!nameserver_available(service, type, nameserver))
-		return 0;
-
-	index = __connman_service_get_index(service);
-	if (index < 0)
-		return -ENXIO;
-
-	return connman_resolver_append(index, NULL, nameserver);
-}
-
-static int nameserver_add_all(struct connman_service *service,
-			enum connman_ipconfig_type type)
-{
-	int i = 0;
-
-	if (service->nameservers_config) {
-		while (service->nameservers_config[i]) {
-			nameserver_add(service, type,
-				service->nameservers_config[i]);
-			i++;
-		}
-
-		return 0;
-	}
-
-	if (service->nameservers) {
-		while (service->nameservers[i]) {
-			nameserver_add(service, type,
-				service->nameservers[i]);
-			i++;
-		}
-	}
-
-	return 0;
-}
-
-static int nameserver_remove(struct connman_service *service,
-			enum connman_ipconfig_type type,
-			const char *nameserver)
-{
-	int index;
-
-	if (!nameserver_available(service, type, nameserver))
-		return 0;
-
-	index = __connman_service_get_index(service);
-	if (index < 0)
-		return -ENXIO;
-
-	return connman_resolver_remove(index, NULL, nameserver);
-}
-
-static int nameserver_remove_all(struct connman_service *service,
-				enum connman_ipconfig_type type)
-{
-	int index, i = 0;
-
-	index = __connman_service_get_index(service);
-	if (index < 0)
-		return -ENXIO;
-
-	while (service->nameservers_config && service->nameservers_config[i]) {
-
-		nameserver_remove(service, type,
-				service->nameservers_config[i]);
-		i++;
-	}
-
-	i = 0;
-	while (service->nameservers && service->nameservers[i]) {
-		nameserver_remove(service, type, service->nameservers[i]);
-		i++;
-	}
-
-	return 0;
-}
-
 static int searchdomain_add_all(struct connman_service *service)
 {
 	int index, i = 0;
@@ -1068,6 +986,89 @@ static int searchdomain_remove_all(struct connman_service *service)
 
 	if (service->domainname)
 		connman_resolver_remove(index, service->domainname, NULL);
+
+	return 0;
+}
+
+static int nameserver_add(struct connman_service *service,
+			enum connman_ipconfig_type type,
+			const char *nameserver)
+{
+	int index;
+
+	if (!nameserver_available(service, type, nameserver))
+		return 0;
+
+	index = __connman_service_get_index(service);
+	if (index < 0)
+		return -ENXIO;
+
+	return connman_resolver_append(index, NULL, nameserver);
+}
+
+static int nameserver_add_all(struct connman_service *service,
+			enum connman_ipconfig_type type)
+{
+	int i = 0;
+
+	if (service->nameservers_config) {
+		while (service->nameservers_config[i]) {
+			nameserver_add(service, type,
+				service->nameservers_config[i]);
+			i++;
+		}
+	} else if (service->nameservers) {
+		while (service->nameservers[i]) {
+			nameserver_add(service, type,
+				service->nameservers[i]);
+			i++;
+		}
+	}
+
+	searchdomain_add_all(service);
+
+	return 0;
+}
+
+static int nameserver_remove(struct connman_service *service,
+			enum connman_ipconfig_type type,
+			const char *nameserver)
+{
+	int index;
+
+	if (!nameserver_available(service, type, nameserver))
+		return 0;
+
+	index = __connman_service_get_index(service);
+	if (index < 0)
+		return -ENXIO;
+
+	return connman_resolver_remove(index, NULL, nameserver);
+}
+
+static int nameserver_remove_all(struct connman_service *service,
+				enum connman_ipconfig_type type)
+{
+	int index, i = 0;
+
+	index = __connman_service_get_index(service);
+	if (index < 0)
+		return -ENXIO;
+
+	while (service->nameservers_config && service->nameservers_config[i]) {
+
+		nameserver_remove(service, type,
+				service->nameservers_config[i]);
+		i++;
+	}
+
+	i = 0;
+	while (service->nameservers && service->nameservers[i]) {
+		nameserver_remove(service, type, service->nameservers[i]);
+		i++;
+	}
+
+	searchdomain_remove_all(service);
 
 	return 0;
 }
@@ -1120,6 +1121,8 @@ int __connman_service_nameserver_append(struct connman_service *service,
 		service->nameservers = nameservers;
 		nameserver_add(service, CONNMAN_IPCONFIG_TYPE_ALL, nameserver);
 	}
+
+	searchdomain_add_all(service);
 
 	return 0;
 }
@@ -3516,6 +3519,41 @@ static void set_error(struct connman_service *service,
 				DBUS_TYPE_STRING, &str);
 }
 
+static void remove_timeout(struct connman_service *service)
+{
+	if (service->timeout > 0) {
+		g_source_remove(service->timeout);
+		service->timeout = 0;
+	}
+}
+
+static void reply_pending(struct connman_service *service, int error)
+{
+	remove_timeout(service);
+
+	if (service->pending) {
+		connman_dbus_reply_pending(service->pending, error, NULL);
+		service->pending = NULL;
+	}
+
+	if (service->provider_pending) {
+		connman_dbus_reply_pending(service->provider_pending,
+				error, service->path);
+		service->provider_pending = NULL;
+	}
+}
+
+static void service_complete(struct connman_service *service)
+{
+	reply_pending(service, EIO);
+
+	if (service->connect_reason != CONNMAN_SERVICE_CONNECT_REASON_USER)
+		__connman_service_auto_connect(service->connect_reason);
+
+	g_get_current_time(&service->modified);
+	service_save(service);
+}
+
 static DBusMessage *clear_property(DBusConnection *conn,
 					DBusMessage *msg, void *user_data)
 {
@@ -3530,8 +3568,8 @@ static DBusMessage *clear_property(DBusConnection *conn,
 	if (g_str_equal(name, "Error")) {
 		set_error(service, CONNMAN_SERVICE_ERROR_UNKNOWN);
 
-		g_get_current_time(&service->modified);
-		service_save(service);
+		__connman_service_clear_error(service);
+		service_complete(service);
 	} else
 		return __connman_error_invalid_property(msg);
 
@@ -3847,30 +3885,6 @@ static void vpn_auto_connect(void)
 
 	vpn_autoconnect_timeout =
 		g_timeout_add_seconds(0, run_vpn_auto_connect, NULL);
-}
-
-static void remove_timeout(struct connman_service *service)
-{
-	if (service->timeout > 0) {
-		g_source_remove(service->timeout);
-		service->timeout = 0;
-	}
-}
-
-static void reply_pending(struct connman_service *service, int error)
-{
-	remove_timeout(service);
-
-	if (service->pending) {
-		connman_dbus_reply_pending(service->pending, error, NULL);
-		service->pending = NULL;
-	}
-
-	if (service->provider_pending) {
-		connman_dbus_reply_pending(service->provider_pending,
-						error, service->path);
-		service->provider_pending = NULL;
-	}
 }
 
 bool
@@ -5032,17 +5046,6 @@ void __connman_service_set_search_domains(struct connman_service *service,
 	searchdomain_add_all(service);
 }
 
-static void service_complete(struct connman_service *service)
-{
-	reply_pending(service, EIO);
-
-	if (service->connect_reason != CONNMAN_SERVICE_CONNECT_REASON_USER)
-		__connman_service_auto_connect(service->connect_reason);
-
-	g_get_current_time(&service->modified);
-	service_save(service);
-}
-
 static void report_error_cb(void *user_context, bool retry,
 							void *user_data)
 {
@@ -5317,6 +5320,10 @@ static int service_indicate_state(struct connman_service *service)
 	service->state = new_state;
 	state_changed(service);
 
+	if (!is_connected_state(service, old_state) &&
+			is_connected_state(service, new_state))
+		searchdomain_add_all(service);
+
 	switch(new_state) {
 	case CONNMAN_SERVICE_STATE_UNKNOWN:
 
@@ -5378,7 +5385,6 @@ static int service_indicate_state(struct connman_service *service)
 		g_get_current_time(&service->modified);
 		service_save(service);
 
-		searchdomain_add_all(service);
 		dns_changed(service);
 		domain_changed(service);
 		proxy_changed(service);
@@ -7118,9 +7124,10 @@ void __connman_service_cleanup(void)
 	if (services_notify->id != 0) {
 		g_source_remove(services_notify->id);
 		service_send_changed(NULL);
-		g_hash_table_destroy(services_notify->remove);
-		g_hash_table_destroy(services_notify->add);
 	}
+
+	g_hash_table_destroy(services_notify->remove);
+	g_hash_table_destroy(services_notify->add);
 	g_free(services_notify);
 
 	dbus_connection_unref(connection);

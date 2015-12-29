@@ -63,8 +63,10 @@ endif
 
 if SYSTEMD
 systemdunitdir = @SYSTEMD_UNITDIR@
+systemdunit_DATA = src/connman.service src/connman-wait-online.service
 
-systemdunit_DATA = src/connman.service
+tmpfilesdir = @SYSTEMD_TMPFILESDIR@
+nodist_tmpfiles_DATA = scripts/connman_resolvconf.conf
 
 if VPN
 systemdunit_DATA += vpn/connman-vpn.service
@@ -74,10 +76,12 @@ endif
 
 service_files_sources = src/connman.service.in src/net.connman.service.in \
 				vpn/connman-vpn.service.in \
-				vpn/net.connman.vpn.service.in
+				vpn/net.connman.vpn.service.in \
+				src/connman-wait-online.service.in
 service_files = src/connman.service src/net.connman.service \
 				vpn/connman-vpn.service \
-				vpn/net.connman.vpn.service
+				vpn/net.connman.vpn.service \
+				src/connman-wait-online.service
 
 plugin_LTLIBRARIES =
 
@@ -95,7 +99,7 @@ unit_objects =
 
 MANUAL_PAGES =
 
-sbin_PROGRAMS = src/connmand
+sbin_PROGRAMS = src/connmand src/connmand-wait-online
 
 src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) \
 			$(builtin_sources) $(shared_sources) src/connman.ver \
@@ -122,6 +126,11 @@ src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 
 src_connmand_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/src/connman.ver
+
+src_connmand_wait_online_SOURCES = src/connmand-wait-online.c
+
+src_connmand_wait_online_LDADD = gdbus/libgdbus-internal.la \
+			@GLIB_LIBS@ @DBUS_LIBS@
 
 if VPN
 vpn_plugin_LTLIBRARIES =
@@ -153,7 +162,8 @@ vpn_connman_vpnd_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/vpn/vpn.ver
 endif
 
-BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) scripts/connman
+BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) \
+	scripts/connman scripts/connman_resolvconf.conf
 
 if VPN
 BUILT_SOURCES += vpn/builtin.h
@@ -161,8 +171,8 @@ endif
 
 CLEANFILES = src/connman.conf $(BUILT_SOURCES) $(service_files)
 
-statedir = $(localstatedir)/run/connman
-vpn_statedir = $(localstatedir)/run/connman-vpn
+statedir = $(runstatedir)/connman
+vpn_statedir = $(runstatedir)/connman-vpn
 
 if VPN
 vpn_plugindir = $(libdir)/connman/plugins-vpn
@@ -247,8 +257,6 @@ include Makefile.plugins
 
 if CLIENT
 bin_PROGRAMS += client/connmanctl
-
-MANUAL_PAGES += doc/connmanctl.1
 
 client_connmanctl_SOURCES = client/dbus_helpers.h client/dbus_helpers.c \
 			client/services.h client/services.c \
@@ -380,14 +388,23 @@ EXTRA_DIST += doc/overview-api.txt doc/behavior-api.txt \
 				doc/vpn-config-format.txt \
 				doc/vpn-connection-api.txt \
 				doc/vpn-manager-api.txt doc/vpn-overview.txt \
-				doc/session-policy-format.txt
+				doc/session-policy-format.txt \
+				doc/connmanctl.1.in doc/connman.conf.5.in \
+				doc/connman-service.config.5.in \
+				doc/connman-vpn.conf.5.in \
+				doc/connman-vpn-provider.config.5.in \
+				doc/connman.8.in doc/connman-vpn.8.in
 
 EXTRA_DIST += src/main.conf \
-		src/eduroam.config
+		src/eduroam.config \
+		scripts/connman_resolvconf.conf.in
 
-MANUAL_PAGES += doc/connman.8 doc/connman.conf.5
+MANUAL_PAGES += doc/connmanctl.1 doc/connman.conf.5 \
+		doc/connman-service.config.5 doc/connman-vpn.conf.5 \
+		doc/connman-vpn-provider.config.5 \
+		doc/connman.8 doc/connman-vpn.8
 
-dist_man_MANS = $(MANUAL_PAGES)
+nodist_man_MANS = $(MANUAL_PAGES)
 
 pkgconfigdir = $(libdir)/pkgconfig
 
@@ -448,13 +465,33 @@ EXTRA_DIST += vpn/connman-task.te
 do_subst = $(AM_V_GEN)$(SED) \
 		-e 's,[@]prefix[@],$(prefix),g' \
 		-e 's,[@]sbindir[@],$(sbindir),g' \
-		-e 's,[@]sysconfdir[@],$(sysconfdir),g'
+		-e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+		-e 's,[@]storagedir[@],$(storagedir),g' \
+		-e 's,[@]vpn_storagedir[@],$(vpn_storagedir),g' \
+		-e 's,[@]localstatedir[@],$(localstatedir),g' \
+		-e 's,[@]runstatedir[@],$(runstatedir),g'
+
+%.1 : %.1.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+%.5 : %.5.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+%.8 : %.8.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
 
 %.service: %.service.in Makefile
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(do_subst) < $< > $@
 
 scripts/connman: scripts/connman.in Makefile
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+scripts/connman_resolvconf.conf: scripts/connman_resolvconf.conf.in
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(do_subst) < $< > $@
 
@@ -467,4 +504,4 @@ include/connman/%.h: $(abs_top_srcdir)/include/%.h
 	$(AM_V_GEN)$(LN_S) $< $@
 
 clean-local:
-	@$(RM) -rf include/connman
+	@$(RM) -rf include/connman $(MANUAL_PAGES)

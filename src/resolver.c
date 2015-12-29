@@ -35,6 +35,9 @@
 
 #include "connman.h"
 
+#define RESOLV_CONF_STATEDIR STATEDIR"/resolv.conf"
+#define RESOLV_CONF_ETC "/etc/resolv.conf"
+
 #define RESOLVER_FLAG_PUBLIC (1 << 0)
 
 /*
@@ -130,11 +133,19 @@ static int resolvfile_export(void)
 
 	old_umask = umask(022);
 
-	fd = open("/etc/resolv.conf", O_RDWR | O_CREAT | O_CLOEXEC,
+	fd = open(RESOLV_CONF_STATEDIR, O_RDWR | O_CREAT | O_CLOEXEC,
 					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	if (fd < 0) {
-		err = -errno;
-		goto done;
+		connman_warn_once("Cannot create "RESOLV_CONF_STATEDIR" "
+			"falling back to "RESOLV_CONF_ETC);
+
+		fd = open(RESOLV_CONF_ETC, O_RDWR | O_CREAT | O_CLOEXEC,
+					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+		if (fd < 0) {
+			err = -errno;
+			goto done;
+		}
 	}
 
 	if (ftruncate(fd, 0) < 0) {
@@ -378,18 +389,6 @@ static int append_resolver(int index, const char *domain,
 
 		entry->timeout = g_timeout_add_seconds(interval,
 				resolver_refresh_cb, entry);
-
-		/*
-		 * We update the service only for those nameservers
-		 * that are automagically added via netlink (lifetime > 0)
-		 */
-		if (server && entry->index >= 0) {
-			struct connman_service *service;
-			service = __connman_service_lookup_from_index(entry->index);
-			if (service)
-				__connman_service_nameserver_append(service,
-								server, true);
-		}
 	}
 
 	if (entry->index >= 0 && entry->server)
@@ -401,6 +400,18 @@ static int append_resolver(int index, const char *domain,
 		__connman_dnsproxy_append(entry->index, domain, server);
 	else
 		__connman_resolvfile_append(entry->index, domain, server);
+
+	/*
+	 * We update the service only for those nameservers
+	 * that are automagically added via netlink (lifetime > 0)
+	 */
+	if (server && entry->index >= 0 && lifetime) {
+		struct connman_service *service;
+		service = __connman_service_lookup_from_index(entry->index);
+		if (service)
+			__connman_service_nameserver_append(service,
+							server, true);
+	}
 
 	return 0;
 }
@@ -598,6 +609,28 @@ int __connman_resolver_redo_servers(int index)
 
 		__connman_dnsproxy_append(entry->index, entry->domain,
 					entry->server);
+	}
+
+	/*
+	 * We want to re-add all search domains back to search
+	 * domain lists as they just got removed for RDNSS IPv6-servers
+	 * (above).
+	 * Removal of search domains is not necessary
+	 * as there can be only one instance of each search domain
+	 * in the each dns-servers search domain list.
+        */
+
+	for (list = entry_list; list; list = list->next) {
+		struct entry_data *entry = list->data;
+
+		if (entry->index != index)
+			continue;
+
+		if (entry->server)
+			continue;
+
+		__connman_dnsproxy_append(entry->index, entry->domain,
+					NULL);
 	}
 
 	return 0;

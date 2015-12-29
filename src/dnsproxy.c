@@ -355,7 +355,7 @@ static int dns_name_length(unsigned char *buf)
 {
 	if ((buf[0] & NS_CMPRSFLGS) == NS_CMPRSFLGS) /* compressed name */
 		return 2;
-	return strlen((char *)buf);
+	return strlen((char *)buf) + 1;
 }
 
 static void update_cached_ttl(unsigned char *buf, int len, int new_ttl)
@@ -1357,7 +1357,7 @@ static int reply_query_type(unsigned char *msg, int len)
 		return 0;
 
 	/* now the query, which is a name and 2 16 bit words */
-	l = dns_name_length(c) + 1;
+	l = dns_name_length(c);
 	c += l;
 	type = c[0] << 8 | c[1];
 
@@ -2649,7 +2649,7 @@ static bool resolv(struct request_data *req,
 	return false;
 }
 
-static void append_domain(int index, const char *domain)
+static void update_domain(int index, const char *domain, bool append)
 {
 	GSList *list;
 
@@ -2680,11 +2680,24 @@ static void append_domain(int index, const char *domain)
 			}
 		}
 
-		if (!dom_found) {
+		if (!dom_found && append) {
 			data->domains =
 				g_list_append(data->domains, g_strdup(domain));
+		} else if (dom_found && !append) {
+			data->domains =
+				g_list_remove(data->domains, dom);
 		}
 	}
+}
+
+static void append_domain(int index, const char *domain)
+{
+	update_domain(index, domain, true);
+}
+
+static void remove_domain(int index, const char *domain)
+{
+	update_domain(index, domain, false);
 }
 
 static void flush_requests(struct server_data *server)
@@ -2769,8 +2782,14 @@ int __connman_dnsproxy_remove(int index, const char *domain,
 {
 	DBG("index %d server %s", index, server);
 
-	if (!server)
+	if (!server && !domain)
 		return -EINVAL;
+
+	if (!server) {
+		remove_domain(index, domain);
+
+		return 0;
+	}
 
 	if (g_str_equal(server, "127.0.0.1"))
 		return -ENODEV;
