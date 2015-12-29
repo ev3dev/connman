@@ -25,8 +25,8 @@ Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=543869
  
  . /lib/lsb/init-functions
  
-@@ -9,8 +18,6 @@
- 	. @sysconfdir@/default/connman
+@@ -14,8 +23,6 @@
+     ln -sf @runstatedir@/connman/resolv.conf /etc/
  fi
  
 -set -e
@@ -34,7 +34,7 @@ Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=543869
  do_start() {
  	start-stop-daemon --start --oknodo --exec $DAEMON -- $DAEMON_OPTS
  }
-@@ -19,6 +26,15 @@
+@@ -24,6 +31,15 @@
  	start-stop-daemon --stop --oknodo --quiet --exec $DAEMON
  }
  
@@ -50,7 +50,7 @@ Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=543869
  case "$1" in
    start)
  	log_daemon_msg "Starting $DESC"
-@@ -37,8 +53,18 @@
+@@ -42,8 +58,18 @@
  	do_start
  	log_end_msg $?
  	;;

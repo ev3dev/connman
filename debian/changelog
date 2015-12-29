@@ -1,3 +1,22 @@
+connman (1.31-0ev3dev1) stable; urgency=medium
+
+  * New upstream release.
+
+  Upstream changelog:
+  * Fix issue with DNS TTL and CLASS field length.
+  * Fix issue with handling of ClearProperty method.
+  * Fix issue with subnet assignment for tethering.
+  * Fix issue with search domain reconfiguration.
+  * Fix issue with Bluetooth adapter handling.
+  * Fix issue with DHCP handling and OFFER stage.
+  * Add support for handling multiple contexts.
+  * Add support for handling IPv6 timeservers.
+  * Add support for handling DSA interfaces.
+  * Add support for symlinking resolv.conf file.
+  * Add support for connman-wait-online service.
+
+ -- David Lechner <david@lechnology.com>  Tue, 29 Dec 2015 13:05:35 -0600
+
 connman (1.30-0ev3dev1) stable; urgency=medium
 
   * New Upstream release.

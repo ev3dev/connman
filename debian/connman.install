@@ -1,9 +1,15 @@
 src/main.conf /etc/connman/
 etc/dbus-1/system.d/connman.conf
 lib/systemd/system/connman.service
-usr/share/man
+lib/systemd/system/connman-wait-online.service
 usr/share/polkit-1/actions/net.connman.policy
 usr/bin/connmanctl
+usr/lib/tmpfiles.d/connman_resolvconf.conf
 usr/sbin/connmand
+usr/sbin/connmand-wait-online
+usr/share/man/man5/connman-service.config.5
+usr/share/man/man8/connman.8
+usr/share/man/man5/connman.conf.5
+usr/share/man/man1/connmanctl.1
 debian/source_connman.py /usr/share/apport/package-hooks/
 debian/connman-crashdb.conf /etc/apport/crashdb.conf.d/
