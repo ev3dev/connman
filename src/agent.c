@@ -165,12 +165,17 @@ static int send_cancel_request(struct connman_agent *agent,
 			struct connman_agent_request *request)
 {
 	DBusMessage *message;
+	const char *interface = NULL;
 
-	DBG("send cancel req to %s %s", agent->owner, agent->path);
+	if (request && request->driver)
+		interface = request->driver->interface;
+
+	DBG("send cancel req to %s %s iface %s", agent->owner, agent->path,
+								interface);
 
 	message = dbus_message_new_method_call(agent->owner,
 					agent->path,
-					request->driver->interface,
+					interface,
 					"Cancel");
 	if (!message) {
 		connman_error("Couldn't allocate D-Bus message");
@@ -519,12 +524,12 @@ void connman_agent_cancel(void *user_context)
 								user_context) {
 				DBG("cancel pending %p", request);
 
+				agent->queue = g_list_delete_link(agent->queue,
+									list);
+
 				request->callback(NULL, request->user_data);
 
 				agent_request_free(request);
-
-				agent->queue = g_list_delete_link(agent->queue,
-									list);
 			}
 
 			list = next;
@@ -581,7 +586,7 @@ static void agent_release(struct connman_agent *agent, const char *interface)
 
 	message = dbus_message_new_method_call(agent->owner, agent->path,
 						interface, "Release");
-	if (message == NULL) {
+	if (!message) {
 		connman_error("Couldn't allocate D-Bus message");
 		return;
 	}

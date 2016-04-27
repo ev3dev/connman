@@ -103,8 +103,9 @@ static void rl_handler(char *input)
 	}
 
 	if (len > 0) {
-
-		add_history(input);
+		HIST_ENTRY *previous = history_get(where_history());
+		if(!previous || strcmp(previous->line, input))
+			add_history(input);
 
 		err = __connmanctl_commands(connection, trim_args, len);
 
@@ -114,6 +115,7 @@ static void rl_handler(char *input)
 
 	g_strfreev(args);
 	g_free(trim_args);
+	free(input);
 }
 
 static gboolean input_handler(GIOChannel *channel, GIOCondition condition,

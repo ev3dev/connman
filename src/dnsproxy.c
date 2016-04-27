@@ -333,14 +333,14 @@ static void refresh_dns_entry(struct cache_entry *entry, char *name)
 	}
 
 	if (!entry->ipv4) {
-		DBG("Refresing A record for %s", name);
+		DBG("Refreshing A record for %s", name);
 		g_resolv_lookup_hostname(ipv4_resolve, name,
 					dummy_resolve_func, NULL);
 		age = 4;
 	}
 
 	if (!entry->ipv6) {
-		DBG("Refresing AAAA record for %s", name);
+		DBG("Refreshing AAAA record for %s", name);
 		g_resolv_lookup_hostname(ipv6_resolve, name,
 					dummy_resolve_func, NULL);
 		age = 4;
@@ -355,7 +355,7 @@ static int dns_name_length(unsigned char *buf)
 {
 	if ((buf[0] & NS_CMPRSFLGS) == NS_CMPRSFLGS) /* compressed name */
 		return 2;
-	return strlen((char *)buf);
+	return strlen((char *)buf) + 1;
 }
 
 static void update_cached_ttl(unsigned char *buf, int len, int new_ttl)
@@ -1357,7 +1357,7 @@ static int reply_query_type(unsigned char *msg, int len)
 		return 0;
 
 	/* now the query, which is a name and 2 16 bit words */
-	l = dns_name_length(c) + 1;
+	l = dns_name_length(c);
 	c += l;
 	type = c[0] << 8 | c[1];
 
@@ -2050,21 +2050,21 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				ptr = uncompress(ntohs(hdr->nscount),
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				ptr = uncompress(ntohs(hdr->arcount),
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				/*
@@ -2259,9 +2259,11 @@ hangup:
 		g_free(server->incoming_reply);
 		server->incoming_reply = NULL;
 
-		for (list = request_list; list; list = list->next) {
+		list = request_list;
+		while (list) {
 			struct request_data *req = list->data;
 			struct domain_hdr *hdr;
+			list = list->next;
 
 			if (req->protocol == IPPROTO_UDP)
 				continue;
@@ -2523,6 +2525,25 @@ static int server_create_socket(struct server_data *data)
 	return 0;
 }
 
+static void enable_fallback(bool enable)
+{
+	GSList *list;
+
+	for (list = server_list; list; list = list->next) {
+		struct server_data *data = list->data;
+
+		if (data->index != -1)
+			continue;
+
+		if (enable)
+			DBG("Enabling fallback DNS server %s", data->server);
+		else
+			DBG("Disabling fallback DNS server %s", data->server);
+
+		data->enabled = enable;
+	}
+}
+
 static struct server_data *create_server(int index,
 					const char *domain, const char *server,
 					int protocol)
@@ -2609,6 +2630,8 @@ static struct server_data *create_server(int index,
 								data->index)) {
 			data->enabled = true;
 			DBG("Adding DNS server %s", data->server);
+
+			enable_fallback(false);
 		}
 
 		server_list = g_slist_append(server_list, data);
@@ -2649,7 +2672,7 @@ static bool resolv(struct request_data *req,
 	return false;
 }
 
-static void append_domain(int index, const char *domain)
+static void update_domain(int index, const char *domain, bool append)
 {
 	GSList *list;
 
@@ -2680,10 +2703,52 @@ static void append_domain(int index, const char *domain)
 			}
 		}
 
-		if (!dom_found) {
+		if (!dom_found && append) {
 			data->domains =
 				g_list_append(data->domains, g_strdup(domain));
+		} else if (dom_found && !append) {
+			data->domains =
+				g_list_remove(data->domains, dom);
+			g_free(dom);
 		}
+	}
+}
+
+static void append_domain(int index, const char *domain)
+{
+	update_domain(index, domain, true);
+}
+
+static void remove_domain(int index, const char *domain)
+{
+	update_domain(index, domain, false);
+}
+
+static void flush_requests(struct server_data *server)
+{
+	GSList *list;
+
+	list = request_list;
+	while (list) {
+		struct request_data *req = list->data;
+
+		list = list->next;
+
+		if (ns_resolv(server, req, req->request, req->name)) {
+			/*
+			 * A cached result was sent,
+			 * so the request can be released
+			 */
+			request_list =
+				g_slist_remove(request_list, req);
+			destroy_request_data(req);
+			continue;
+		}
+
+		if (req->timeout > 0)
+			g_source_remove(req->timeout);
+
+		req->timeout = g_timeout_add_seconds(5, request_timeout, req);
 	}
 }
 
@@ -2719,6 +2784,8 @@ int __connman_dnsproxy_append(int index, const char *domain,
 	if (!data)
 		return -EIO;
 
+	flush_requests(data);
+
 	return 0;
 }
 
@@ -2726,12 +2793,22 @@ static void remove_server(int index, const char *domain,
 			const char *server, int protocol)
 {
 	struct server_data *data;
+	GSList *list;
 
 	data = find_server(index, server, protocol);
 	if (!data)
 		return;
 
 	destroy_server(data);
+
+	for (list = server_list; list; list = list->next) {
+		struct server_data *data = list->data;
+
+		if (data->index != -1 && data->enabled == true)
+			return;
+	}
+
+	enable_fallback(true);
 }
 
 int __connman_dnsproxy_remove(int index, const char *domain,
@@ -2739,8 +2816,14 @@ int __connman_dnsproxy_remove(int index, const char *domain,
 {
 	DBG("index %d server %s", index, server);
 
-	if (!server)
+	if (!server && !domain)
 		return -EINVAL;
+
+	if (!server) {
+		remove_domain(index, domain);
+
+		return 0;
+	}
 
 	if (g_str_equal(server, "127.0.0.1"))
 		return -ENODEV;
@@ -2752,33 +2835,6 @@ int __connman_dnsproxy_remove(int index, const char *domain,
 	remove_server(index, domain, server, IPPROTO_TCP);
 
 	return 0;
-}
-
-void __connman_dnsproxy_flush(void)
-{
-	GSList *list;
-
-	list = request_list;
-	while (list) {
-		struct request_data *req = list->data;
-
-		list = list->next;
-
-		if (resolv(req, req->request, req->name)) {
-			/*
-			 * A cached result was sent,
-			 * so the request can be released
-			 */
-			request_list =
-				g_slist_remove(request_list, req);
-			destroy_request_data(req);
-			continue;
-		}
-
-		if (req->timeout > 0)
-			g_source_remove(req->timeout);
-		req->timeout = g_timeout_add_seconds(5, request_timeout, req);
-	}
 }
 
 static void dnsproxy_offline_mode(bool enabled)
@@ -2805,6 +2861,7 @@ static void dnsproxy_offline_mode(bool enabled)
 
 static void dnsproxy_default_changed(struct connman_service *service)
 {
+	bool server_enabled = false;
 	GSList *list;
 	int index;
 
@@ -2829,11 +2886,15 @@ static void dnsproxy_default_changed(struct connman_service *service)
 		if (data->index == index) {
 			DBG("Enabling DNS server %s", data->server);
 			data->enabled = true;
+			server_enabled = true;
 		} else {
 			DBG("Disabling DNS server %s", data->server);
 			data->enabled = false;
 		}
 	}
+
+	if (!server_enabled)
+		enable_fallback(true);
 
 	cache_refresh();
 }

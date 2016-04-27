@@ -1,14 +1,32 @@
-connman (1.29-1) unstable; urgency=medium
+connman (1.32-0.1) unstable; urgency=medium
 
+  * Non-maintainer upload.
+
+  [ Shawn Landden ]
   * New upstream release (1.29) (Closes: #742408)
     - Drop 02-test-pbkdf2-sha1-maximum-salt-len-should-be-32-instead.patch
   * Conflict with resolvconf (Closes: #763628)
-  * Conflict with wicd-daemon instead of wicd metapackage (Closes: #745874)
+  * Conflict with wicd-daemon instead of wicd metapackage (Closes: #745874, #797638)
   * Enable pptp and l2tp vpn plugins (Closes: #751234)
   * debian/copyright: some files have moved, use kernel.org git url for source
   * debian/control: new upstream url http://01.org/connman
 
- -- Shawn Landden <shawn@churchofgit.com>  Sun, 26 Apr 2015 12:17:27 -0700
+  [ Mateusz Łukasik ]
+  * Take git changes from git to version 1.29 it never was upload to Debian.
+  * New upstream release (1.31) (Closes: #813580, #813647)
+    - cherry-pick the two patches from git
+  * Refresh 01-init-script-lsb-headers.patch.
+  * debian/connman.install: update for new files.
+
+  [ Gianfranco Costamagna ]
+  * New upstream release (1.32)
+  * Fix build failure with recent headers:
+    - d/p/fix-ftbfs-headers.patch (Closes: #822393)
+  * debian/patches/fix-failure-kernel-4.5.patch:
+    - fix build failure with kernel 4.5.1, due to bad kernel commit
+      1ffad83dffd675cd742286ae82dca7d746cb0da8 (cfr: #822393)
+
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Wed, 27 Apr 2016 19:40:29 +0200
 
 connman (1.21-1.2) unstable; urgency=medium
 
@@ -27,13 +45,18 @@ connman (1.21-1.1) unstable; urgency=medium
 
 connman (1.21-1) unstable; urgency=low
 
-  * New upstream release.
-  * Bump Standards Version to 3.9.5 (no changes required)
-  * Build from upstream git
-    - Use dh-autoreconf
-  * Use init-system-helpers/dh-systemd
-  * Split off connman-vpn
-  * Rework descriptions (From Patrik Flykt <patrik.flykt@linux.intel.com>)
+  * New upstream release. (Closes: #688238)
+  * Add myself to the list of uploaders.
+  * Bump Standards Version to 3.9.5 (no changes required).
+  * Build from upstream git:
+    - Use dh-autoreconf.
+  * Use init-system-helpers/dh-systemd.
+  * Split off connman-vpn.
+  * Rework descriptions (From Patrik Flykt <patrik.flykt@linux.intel.com>).
+  * Also install manpage for connmanctl.
+  * Add patch to remove obsolete After=syslog.target
+    from systemd service file:
+    - debian/patches/0001-remove-After-syslog.target-obsolete.patch
 
  -- Shawn Landden <shawn@churchofgit.com>  Mon, 10 Feb 2014 19:40:38 -0800
 

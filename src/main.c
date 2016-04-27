@@ -57,6 +57,8 @@ static char *default_blacklist[] = {
 	"vboxnet",
 	"virbr",
 	"ifb",
+	"ve-",
+	"vb-",
 	NULL
 };
 
@@ -73,6 +75,7 @@ static struct {
 	bool single_tech;
 	char **tethering_technologies;
 	bool persistent_tethering_mode;
+	bool enable_6to4;
 } connman_settings  = {
 	.bg_scan = true,
 	.pref_timeservers = NULL,
@@ -86,6 +89,7 @@ static struct {
 	.single_tech = false,
 	.tethering_technologies = NULL,
 	.persistent_tethering_mode = false,
+	.enable_6to4 = false,
 };
 
 #define CONF_BG_SCAN                    "BackgroundScanning"
@@ -100,6 +104,7 @@ static struct {
 #define CONF_SINGLE_TECH                "SingleConnectedTechnology"
 #define CONF_TETHERING_TECHNOLOGIES      "TetheringTechnologies"
 #define CONF_PERSISTENT_TETHERING_MODE  "PersistentTetheringMode"
+#define CONF_ENABLE_6TO4                "Enable6to4"
 
 static const char *supported_options[] = {
 	CONF_BG_SCAN,
@@ -114,6 +119,7 @@ static const char *supported_options[] = {
 	CONF_SINGLE_TECH,
 	CONF_TETHERING_TECHNOLOGIES,
 	CONF_PERSISTENT_TETHERING_MODE,
+	CONF_ENABLE_6TO4,
 	NULL
 };
 
@@ -354,6 +360,13 @@ static void parse_config(GKeyFile *config)
 		connman_settings.persistent_tethering_mode = boolean;
 
 	g_clear_error(&error);
+
+	boolean = __connman_config_get_bool(config, "General",
+					CONF_ENABLE_6TO4, &error);
+	if (!error)
+		connman_settings.enable_6to4 = boolean;
+
+	g_clear_error(&error);
 }
 
 static int config_init(const char *file)
@@ -528,6 +541,9 @@ bool connman_setting_get_bool(const char *key)
 	if (g_str_equal(key, CONF_PERSISTENT_TETHERING_MODE))
 		return connman_settings.persistent_tethering_mode;
 
+	if (g_str_equal(key, CONF_ENABLE_6TO4))
+		return connman_settings.enable_6to4;
+
 	return false;
 }
 
@@ -662,7 +678,6 @@ int main(int argc, char *argv[])
 	__connman_stats_init();
 	__connman_clock_init();
 
-	__connman_resolver_init(option_dnsproxy);
 	__connman_ipconfig_init();
 	__connman_rtnl_init();
 	__connman_task_init();
@@ -674,6 +689,7 @@ int main(int argc, char *argv[])
 
 	__connman_plugin_init(option_plugin, option_noplugin);
 
+	__connman_resolver_init(option_dnsproxy);
 	__connman_rtnl_start();
 	__connman_dhcp_init();
 	__connman_dhcpv6_init();

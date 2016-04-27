@@ -142,6 +142,7 @@ struct _GSupplicantSSID {
 	const char *eap;
 	const char *passphrase;
 	const char *identity;
+	const char *anonymous_identity;
 	const char *ca_cert_path;
 	const char *client_cert_path;
 	const char *private_key_path;
@@ -341,6 +342,7 @@ struct _GSupplicantCallbacks {
 	void (*p2p_support) (GSupplicantInterface *interface);
 	void (*scan_started) (GSupplicantInterface *interface);
 	void (*scan_finished) (GSupplicantInterface *interface);
+	void (*ap_create_fail) (GSupplicantInterface *interface);
 	void (*network_added) (GSupplicantNetwork *network);
 	void (*network_removed) (GSupplicantNetwork *network);
 	void (*network_changed) (GSupplicantNetwork *network,

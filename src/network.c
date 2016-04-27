@@ -78,6 +78,7 @@ struct connman_network {
 		char *passphrase;
 		char *eap;
 		char *identity;
+		char *anonymous_identity;
 		char *agent_identity;
 		char *ca_cert_path;
 		char *client_cert_path;
@@ -134,8 +135,6 @@ static void set_configuration(struct connman_network *network,
 		return;
 
 	__connman_device_set_network(network->device, network);
-
-	connman_device_set_disconnected(network->device, false);
 
 	service = connman_service_lookup_from_network(network);
 	__connman_service_ipconfig_indicate_state(service,
@@ -218,8 +217,8 @@ static int set_connected_manual(struct connman_network *network)
 	network->connecting = false;
 
 	service = connman_service_lookup_from_network(network);
-
 	ipconfig = __connman_service_get_ip4config(service);
+	__connman_ipconfig_enable(ipconfig);
 
 	if (!__connman_ipconfig_get_local(ipconfig))
 		__connman_service_read_ip4config(service);
@@ -246,6 +245,7 @@ static int set_connected_dhcp(struct connman_network *network)
 
 	service = connman_service_lookup_from_network(network);
 	ipconfig_ipv4 = __connman_service_get_ip4config(service);
+	__connman_ipconfig_enable(ipconfig_ipv4);
 
 	err = __connman_dhcp_start(ipconfig_ipv4, network,
 							dhcp_callback, NULL);
@@ -285,12 +285,7 @@ static int manual_ipv6_set(struct connman_network *network,
 	if (err < 0)
 		return err;
 
-	__connman_connection_gateway_activate(service,
-						CONNMAN_IPCONFIG_TYPE_IPV6);
-
 	__connman_device_set_network(network->device, network);
-
-	connman_device_set_disconnected(network->device, false);
 
 	connman_network_set_associating(network, false);
 
@@ -556,8 +551,6 @@ static void autoconf_ipv6_set(struct connman_network *network)
 
 	__connman_device_set_network(network->device, network);
 
-	connman_device_set_disconnected(network->device, false);
-
 	service = connman_service_lookup_from_network(network);
 	if (!service)
 		return;
@@ -565,6 +558,8 @@ static void autoconf_ipv6_set(struct connman_network *network)
 	ipconfig = __connman_service_get_ip6config(service);
 	if (!ipconfig)
 		return;
+
+	__connman_ipconfig_enable(ipconfig);
 
 	__connman_ipconfig_enable_ipv6(ipconfig);
 
@@ -800,23 +795,6 @@ static void network_remove(struct connman_network *network)
 	network->driver = NULL;
 }
 
-static void network_change(struct connman_network *network)
-{
-	DBG("network %p name %s", network, network->name);
-
-	if (!network->connected)
-		return;
-
-	connman_device_set_disconnected(network->device, true);
-
-	if (network->driver && network->driver->disconnect) {
-		network->driver->disconnect(network);
-		return;
-	}
-
-	network->connected = false;
-}
-
 static void probe_driver(struct connman_network_driver *driver)
 {
 	GSList *list;
@@ -836,20 +814,6 @@ static void probe_driver(struct connman_network_driver *driver)
 			continue;
 
 		network->driver = driver;
-	}
-}
-
-static void remove_driver(struct connman_network_driver *driver)
-{
-	GSList *list;
-
-	DBG("driver %p name %s", driver, driver->name);
-
-	for (list = network_list; list; list = list->next) {
-		struct connman_network *network = list->data;
-
-		if (network->driver == driver)
-			network_remove(network);
 	}
 }
 
@@ -889,11 +853,18 @@ int connman_network_driver_register(struct connman_network_driver *driver)
  */
 void connman_network_driver_unregister(struct connman_network_driver *driver)
 {
+	GSList *list;
+
 	DBG("driver %p name %s", driver, driver->name);
 
 	driver_list = g_slist_remove(driver_list, driver);
 
-	remove_driver(driver);
+	for (list = network_list; list; list = list->next) {
+		struct connman_network *network = list->data;
+
+		if (network->driver == driver)
+			network_remove(network);
+	}
 }
 
 static void network_destruct(struct connman_network *network)
@@ -906,6 +877,7 @@ static void network_destruct(struct connman_network *network)
 	g_free(network->wifi.passphrase);
 	g_free(network->wifi.eap);
 	g_free(network->wifi.identity);
+	g_free(network->wifi.anonymous_identity);
 	g_free(network->wifi.agent_identity);
 	g_free(network->wifi.ca_cert_path);
 	g_free(network->wifi.client_cert_path);
@@ -1304,9 +1276,6 @@ void connman_network_set_error(struct connman_network *network,
 {
 	DBG("network %p error %d", network, error);
 
-	network->connecting = false;
-	network->associating = false;
-
 	switch (error) {
 	case CONNMAN_NETWORK_ERROR_UNKNOWN:
 		return;
@@ -1324,7 +1293,7 @@ void connman_network_set_error(struct connman_network *network,
 		break;
 	}
 
-	network_change(network);
+	__connman_network_disconnect(network);
 }
 
 /**
@@ -1345,8 +1314,7 @@ int connman_network_set_connected(struct connman_network *network,
 							!connected) {
 		connman_network_set_error(network,
 					CONNMAN_NETWORK_ERROR_CONNECT_FAIL);
-		if (__connman_network_disconnect(network) == 0)
-			return 0;
+		return 0;
 	}
 
 	if (network->connected == connected)
@@ -1816,6 +1784,9 @@ int connman_network_set_string(struct connman_network *network,
 	} else if (g_str_equal(key, "WiFi.Identity")) {
 		g_free(network->wifi.identity);
 		network->wifi.identity = g_strdup(value);
+	} else if (g_str_equal(key, "WiFi.AnonymousIdentity")) {
+		g_free(network->wifi.anonymous_identity);
+		network->wifi.anonymous_identity = g_strdup(value);
 	} else if (g_str_equal(key, "WiFi.AgentIdentity")) {
 		g_free(network->wifi.agent_identity);
 		network->wifi.agent_identity = g_strdup(value);
@@ -1872,6 +1843,8 @@ const char *connman_network_get_string(struct connman_network *network,
 		return network->wifi.eap;
 	else if (g_str_equal(key, "WiFi.Identity"))
 		return network->wifi.identity;
+	else if (g_str_equal(key, "WiFi.AnonymousIdentity"))
+		return network->wifi.anonymous_identity;
 	else if (g_str_equal(key, "WiFi.AgentIdentity"))
 		return network->wifi.agent_identity;
 	else if (g_str_equal(key, "WiFi.CACertFile"))

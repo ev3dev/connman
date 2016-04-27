@@ -1625,8 +1625,7 @@ static uint32_t get_lease(struct dhcp_packet *packet)
 		return 3600;
 
 	lease_seconds = get_be32(option);
-	/* paranoia: must not be prone to overflows */
-	lease_seconds &= 0x0fffffff;
+
 	if (lease_seconds < 10)
 		lease_seconds = 10;
 
@@ -1722,6 +1721,8 @@ static gboolean continue_renew (gpointer user_data)
 
 	if (dhcp_client->t1_timeout > 0)
 		g_source_remove(dhcp_client->t1_timeout);
+
+	dhcp_client->t1_timeout = 0;
 
 	dhcp_client->T1 >>= 1;
 
@@ -2680,6 +2681,7 @@ static gboolean ipv4ll_announce_timeout(gpointer dhcp_data)
 		dhcp_client->ipv4ll_available_cb(dhcp_client,
 					dhcp_client->ipv4ll_available_data);
 	dhcp_client->conflicts = 0;
+	dhcp_client->timeout = 0;
 
 	return FALSE;
 }
@@ -2711,6 +2713,8 @@ int g_dhcp_client_start(GDHCPClient *dhcp_client, const char *last_address)
 	int re;
 	uint32_t addr;
 	uint64_t rand;
+
+	remove_timeouts(dhcp_client);
 
 	if (dhcp_client->type == G_DHCP_IPV6) {
 		if (dhcp_client->information_req_cb) {
@@ -2828,9 +2832,10 @@ int g_dhcp_client_start(GDHCPClient *dhcp_client, const char *last_address)
 		addr = 0;
 	} else {
 		addr = ntohl(inet_addr(last_address));
-		if (addr == 0xFFFFFFFF) {
+		if (addr == 0xFFFFFFFF || ((addr & LINKLOCAL_ADDR) ==
+					LINKLOCAL_ADDR)) {
 			addr = 0;
-		} else {
+		} else if (dhcp_client->last_address != last_address) {
 			g_free(dhcp_client->last_address);
 			dhcp_client->last_address = g_strdup(last_address);
 		}

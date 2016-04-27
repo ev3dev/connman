@@ -1,5 +1,7 @@
 AC_PREREQ(2.60)
-AC_INIT(connman, 1.29)
+AC_INIT(connman, 1.32)
+
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects color-tests])
 AC_CONFIG_HEADERS([config.h])
@@ -30,6 +32,8 @@ m4_ifdef([AC_LIBTOOL_TAGS], [AC_LIBTOOL_TAGS([])])
 
 AC_DISABLE_STATIC
 AC_PROG_LIBTOOL
+
+gl_CONFIGMAKE_PREP
 
 AC_ARG_ENABLE(optimization, AC_HELP_STRING([--disable-optimization],
 			[disable code optimization through compiler]), [
@@ -178,6 +182,9 @@ AC_CHECK_LIB(resolv, ns_initparse, dummy=yes, [
 		AC_MSG_ERROR(resolver library support is required))
 ])
 
+AC_CHECK_HEADERS([execinfo.h])
+AM_CONDITIONAL([BACKTRACE], [test "${ac_cv_header_execinfo_h}" = "yes"])
+
 AC_CHECK_FUNC(signalfd, dummy=yes,
 			AC_MSG_ERROR(signalfd support is required))
 
@@ -249,6 +256,14 @@ if (test -n "${path_systemdunit}"); then
 	AC_SUBST(SYSTEMD_UNITDIR)
 fi
 AM_CONDITIONAL(SYSTEMD, test -n "${path_systemdunit}")
+
+AC_ARG_WITH([tmpfilesdir], AC_HELP_STRING([--with-tmpfilesdir=DIR],
+	[path to systemd tmpfiles.d directory]), [path_tmpfiles=${withval}],
+		[path_tmpfiles="`$PKG_CONFIG --variable=tmpfilesdir systemd`"])
+if (test -n "${path_tmpfiles}"); then
+	SYSTEMD_TMPFILESDIR="${path_tmpfiles}"
+	AC_SUBST(SYSTEMD_TMPFILESDIR)
+fi
 
 PKG_CHECK_MODULES(XTABLES, xtables >= 1.4.11, dummy=yes,
 				AC_MSG_ERROR(Xtables library is required))

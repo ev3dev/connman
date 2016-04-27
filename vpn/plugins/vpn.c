@@ -56,6 +56,7 @@ struct vpn_data {
 	unsigned int watch;
 	enum vpn_state state;
 	struct connman_task *task;
+	int tun_flags;
 };
 
 struct vpn_driver_data {
@@ -89,7 +90,7 @@ static int stop_vpn(struct vpn_provider *provider)
 		return 0;
 
 	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+	ifr.ifr_flags = data->tun_flags | IFF_NO_PI;
 	sprintf(ifr.ifr_name, "%s", data->if_name);
 
 	fd = open("/dev/net/tun", O_RDWR | O_CLOEXEC);
@@ -191,6 +192,34 @@ int vpn_set_ifname(struct vpn_provider *provider, const char *ifname)
 
 	data->if_name = (char *)g_strdup(ifname);
 	vpn_provider_set_index(provider, index);
+
+	return 0;
+}
+
+static int vpn_set_state(struct vpn_provider *provider,
+						enum vpn_provider_state state)
+{
+	struct vpn_data *data = vpn_provider_get_data(provider);
+	if (!data)
+		return -EINVAL;
+
+	switch (state) {
+	case VPN_PROVIDER_STATE_UNKNOWN:
+		return -EINVAL;
+	case VPN_PROVIDER_STATE_IDLE:
+		data->state = VPN_STATE_IDLE;
+		break;
+	case VPN_PROVIDER_STATE_CONNECT:
+	case VPN_PROVIDER_STATE_READY:
+		data->state = VPN_STATE_CONNECT;
+		break;
+	case VPN_PROVIDER_STATE_DISCONNECT:
+		data->state = VPN_STATE_DISCONNECT;
+		break;
+	case VPN_PROVIDER_STATE_FAILURE:
+		data->state = VPN_STATE_FAILURE;
+		break;
+	}
 
 	return 0;
 }
@@ -307,7 +336,7 @@ static DBusMessage *vpn_notify(struct connman_task *task,
 	return NULL;
 }
 
-static int vpn_create_tun(struct vpn_provider *provider)
+static int vpn_create_tun(struct vpn_provider *provider, int flags)
 {
 	struct vpn_data *data = vpn_provider_get_data(provider);
 	struct ifreq ifr;
@@ -327,7 +356,7 @@ static int vpn_create_tun(struct vpn_provider *provider)
 	}
 
 	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+	ifr.ifr_flags = flags | IFF_NO_PI;
 
 	for (i = 0; i < 256; i++) {
 		sprintf(ifr.ifr_name, "vpn%d", i);
@@ -343,6 +372,7 @@ static int vpn_create_tun(struct vpn_provider *provider)
 		goto exist_err;
 	}
 
+	data->tun_flags = flags;
 	data->if_name = (char *)g_strdup(ifr.ifr_name);
 	if (!data->if_name) {
 		connman_error("Failed to allocate memory");
@@ -384,7 +414,7 @@ static int vpn_connect(struct vpn_provider *provider,
 	struct vpn_data *data = vpn_provider_get_data(provider);
 	struct vpn_driver_data *vpn_driver_data;
 	const char *name;
-	int ret = 0;
+	int ret = 0, tun_flags = IFF_TUN;
 	enum vpn_state state = VPN_STATE_UNKNOWN;
 
 	if (data)
@@ -432,7 +462,10 @@ static int vpn_connect(struct vpn_provider *provider,
 	}
 
 	if (vpn_driver_data->vpn_driver->flags != VPN_FLAG_NO_TUN) {
-		ret = vpn_create_tun(provider);
+		if (vpn_driver_data->vpn_driver->device_flags) {
+			tun_flags = vpn_driver_data->vpn_driver->device_flags(provider);
+		}
+		ret = vpn_create_tun(provider, tun_flags);
 		if (ret < 0)
 			goto exist_err;
 	}
@@ -572,6 +605,7 @@ int vpn_register(const char *name, struct vpn_driver *vpn_driver,
 	data->provider_driver.probe = vpn_probe;
 	data->provider_driver.remove = vpn_remove;
 	data->provider_driver.save = vpn_save;
+	data->provider_driver.set_state = vpn_set_state;
 
 	if (!driver_hash)
 		driver_hash = g_hash_table_new_full(g_str_hash,

@@ -85,17 +85,6 @@ Core
    utilize the information already provided by netlink in src/device.c.
 
 
-- Simplify gateway selection code
-
-   Priority: Low
-   Complexity: C4
-
-   The service list is always sorted according to preference with the
-   first service always owning the default route. See if update_order and
-   find_default_gateway in src/connection.c can be modified to use the
-   sorted service list instead of walking through the gateway_hash.
-
-
 - Support D-Bus ObjectManager
 
    Priority: Medium
@@ -152,16 +141,10 @@ WiFi
   wifi's technology set_regdom implementation. Removing autoscan fallback.
   (Note: should be done around the end 2012)
 
+
 Bluetooth
 =========
 
-- Remove Bluez 4.x support
-
-  Priority: Low
-  Complexity: C1
-
-  Remove plugins/bluetooth-legacy.c support in about 6 month (July 2013) or
-  when Bluez 4.x usage becomes minimal.
 
 Cellular
 ========
@@ -200,23 +183,9 @@ VPN
 Tools
 =====
 
-- Add Clock API and MoveBefore/MoveAfter support to connmanctl
+- Add Clock API support to connmanctl
 
    Priority: Low
    Complexity: C2
 
-   The connmanctl command line tool should support Clock API and Service API
-   MoveBefore/MoveAfter.
-
-
-User Interface
-==============
-
-- GNOME3 UI
-
-   Priority: Low
-   Complexity: C4
-
-   A GNOME3 shell user interface would make it easier for mainstream distros
-   users to use ConnMan. Continue/restart the work at
-   https://github.com/connectivity/gnome-extension-connman
+   The connmanctl command line tool should support Clock API.
