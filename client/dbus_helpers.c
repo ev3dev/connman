@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <glib.h>
 
 #include "input.h"
@@ -38,6 +39,7 @@ void __connmanctl_dbus_print(DBusMessageIter *iter, const char *pre,
 	dbus_uint16_t u16;
 	dbus_uint32_t u;
 	dbus_int32_t i;
+	dbus_uint64_t u64;
 	double d;
 
 	char *str;
@@ -111,6 +113,11 @@ void __connmanctl_dbus_print(DBusMessageIter *iter, const char *pre,
 		case DBUS_TYPE_INT32:
 			dbus_message_iter_get_basic(iter, &i);
 			fprintf(stdout, "%d", i);
+			break;
+
+		case DBUS_TYPE_UINT64:
+			dbus_message_iter_get_basic(iter, &u64);
+			fprintf(stdout, "%"PRIu64, u64);
 			break;
 
 		case DBUS_TYPE_DOUBLE:

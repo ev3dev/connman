@@ -266,6 +266,33 @@ static int cmd_state(char *args[], int num, struct connman_option *options)
 			state_print, NULL, NULL, NULL);
 }
 
+static int clock_print(DBusMessageIter *iter, const char *error,
+		void *user_data)
+{
+	DBusMessageIter entry;
+
+	if (error) {
+		fprintf(stderr, "Error: %s", error);
+		return 0;
+	}
+
+	dbus_message_iter_recurse(iter, &entry);
+	__connmanctl_dbus_print(&entry, "  ", " = ", "\n");
+	fprintf(stdout, "\n");
+
+	return 0;
+}
+
+static int cmd_clock(char *args[], int num, struct connman_option *options)
+{
+	if (num > 1)
+		return -E2BIG;
+
+	return __connmanctl_dbus_method_call(connection, CONNMAN_SERVICE,
+			CONNMAN_PATH, "net.connman.Clock", "GetProperties",
+			clock_print, NULL, NULL, NULL);
+}
+
 static int services_list(DBusMessageIter *iter, const char *error,
 		void *user_data)
 {
@@ -768,7 +795,7 @@ static int cmd_service_move_before(char *args[], int num,
 		struct connman_option *options)
 {
 	const char *iface = "net.connman.Service";
-	struct move_service *services = g_new(struct move_service, 1);
+	struct move_service *services;
 
 	if (num > 3)
 		return -E2BIG;
@@ -778,6 +805,8 @@ static int cmd_service_move_before(char *args[], int num,
 
 	if (check_dbus_name(args[1]) == false)
 		return -EINVAL;
+
+	services = g_new(struct move_service, 1);
 
 	services->service = g_strdup_printf("/net/connman/service/%s", args[1]);
 	services->target = g_strdup_printf("/net/connman/service/%s", args[2]);
@@ -826,7 +855,7 @@ static int cmd_service_move_after(char *args[], int num,
 		struct connman_option *options)
 {
 	const char *iface = "net.connman.Service";
-	struct move_service *services = g_new(struct move_service, 1);
+	struct move_service *services;
 
 	if (num > 3)
 		return -E2BIG;
@@ -836,6 +865,8 @@ static int cmd_service_move_after(char *args[], int num,
 
 	if (check_dbus_name(args[1]) == false)
 		return -EINVAL;
+
+	services = g_new(struct move_service, 1);
 
 	services->service = g_strdup_printf("/net/connman/service/%s", args[1]);
 	services->target = g_strdup_printf("/net/connman/service/%s", args[2]);
@@ -2507,6 +2538,8 @@ static const struct {
 	  "Shows if the system is online or offline", NULL },
 	{ "technologies", NULL,           NULL,            cmd_technologies,
 	  "Display technologies", NULL },
+	{ "clock",        NULL,           NULL,            cmd_clock,
+	  "Get System Clock Properties", NULL },
 	{ "enable",       "<technology>|offline", NULL,    cmd_enable,
 	  "Enables given technology or offline mode",
 	  lookup_technology_offline },

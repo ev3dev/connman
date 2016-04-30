@@ -1566,6 +1566,9 @@ struct xtables_globals iptables_globals = {
 	.option_offset = 0,
 	.opts = iptables_opts,
 	.orig_opts = iptables_opts,
+#if XTABLES_VERSION_CODE > 10
+	.compat_rev = xtables_compatible_revision,
+#endif
 };
 
 static struct xtables_target *prepare_target(struct connman_iptables *table,
@@ -2423,8 +2426,10 @@ int __connman_iptables_iterate_chains(const char *table_name,
 	struct connman_iptables *table;
 
 	table = get_table(table_name);
-	if (!table)
+	if (!table) {
+		g_free(cbd);
 		return -EINVAL;
+	}
 
 	iterate_entries(table->blob_entries->entrytable,
 			table->info->valid_hooks,

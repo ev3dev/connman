@@ -284,7 +284,7 @@ static void network_context_free(struct network_context *context)
 	connman_ipaddress_free(context->ipv6_address);
 	g_free(context->ipv6_nameservers);
 
-	free(context);
+	g_free(context);
 }
 
 static void set_connected(struct modem_data *modem,
@@ -361,19 +361,17 @@ static void set_disconnected(struct network_context *context)
 	if (context->network)
 		connman_network_set_connected(context->network, false);
 
-	if (context) {
-		g_free(context->ipv4_nameservers);
-		context->ipv4_nameservers = NULL;
-		if (context->ipv4_method != CONNMAN_IPCONFIG_METHOD_OFF)
-			context->ipv4_method =
-					CONNMAN_IPCONFIG_METHOD_UNKNOWN;
+	g_free(context->ipv4_nameservers);
+	context->ipv4_nameservers = NULL;
+	if (context->ipv4_method != CONNMAN_IPCONFIG_METHOD_OFF)
+		context->ipv4_method =
+			CONNMAN_IPCONFIG_METHOD_UNKNOWN;
 
-		g_free(context->ipv6_nameservers);
-		context->ipv6_nameservers = NULL;
-		if (context->ipv6_method != CONNMAN_IPCONFIG_METHOD_OFF)
-			context->ipv6_method =
-					CONNMAN_IPCONFIG_METHOD_UNKNOWN;
-	}
+	g_free(context->ipv6_nameservers);
+	context->ipv6_nameservers = NULL;
+	if (context->ipv6_method != CONNMAN_IPCONFIG_METHOD_OFF)
+		context->ipv6_method =
+			CONNMAN_IPCONFIG_METHOD_UNKNOWN;
 }
 
 typedef void (*set_property_cb)(struct modem_data *data,

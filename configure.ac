@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(connman, 1.31)
+AC_INIT(connman, 1.32)
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -181,6 +181,9 @@ AC_CHECK_LIB(resolv, ns_initparse, dummy=yes, [
 	AC_CHECK_LIB(resolv, __ns_initparse, dummy=yes,
 		AC_MSG_ERROR(resolver library support is required))
 ])
+
+AC_CHECK_HEADERS([execinfo.h])
+AM_CONDITIONAL([BACKTRACE], [test "${ac_cv_header_execinfo_h}" = "yes"])
 
 AC_CHECK_FUNC(signalfd, dummy=yes,
 			AC_MSG_ERROR(signalfd support is required))

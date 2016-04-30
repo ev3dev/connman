@@ -2050,21 +2050,21 @@ static int forward_dns_reply(unsigned char *reply, int reply_len, int protocol,
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				ptr = uncompress(ntohs(hdr->nscount),
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				ptr = uncompress(ntohs(hdr->arcount),
 						(char *)reply + offset, eom,
 						ptr, uncompressed, NS_MAXDNAME,
 						&uptr);
-				if (ptr == NULL)
+				if (!ptr)
 					goto out;
 
 				/*
@@ -2259,9 +2259,11 @@ hangup:
 		g_free(server->incoming_reply);
 		server->incoming_reply = NULL;
 
-		for (list = request_list; list; list = list->next) {
+		list = request_list;
+		while (list) {
 			struct request_data *req = list->data;
 			struct domain_hdr *hdr;
+			list = list->next;
 
 			if (req->protocol == IPPROTO_UDP)
 				continue;
@@ -2523,6 +2525,25 @@ static int server_create_socket(struct server_data *data)
 	return 0;
 }
 
+static void enable_fallback(bool enable)
+{
+	GSList *list;
+
+	for (list = server_list; list; list = list->next) {
+		struct server_data *data = list->data;
+
+		if (data->index != -1)
+			continue;
+
+		if (enable)
+			DBG("Enabling fallback DNS server %s", data->server);
+		else
+			DBG("Disabling fallback DNS server %s", data->server);
+
+		data->enabled = enable;
+	}
+}
+
 static struct server_data *create_server(int index,
 					const char *domain, const char *server,
 					int protocol)
@@ -2609,6 +2630,8 @@ static struct server_data *create_server(int index,
 								data->index)) {
 			data->enabled = true;
 			DBG("Adding DNS server %s", data->server);
+
+			enable_fallback(false);
 		}
 
 		server_list = g_slist_append(server_list, data);
@@ -2686,6 +2709,7 @@ static void update_domain(int index, const char *domain, bool append)
 		} else if (dom_found && !append) {
 			data->domains =
 				g_list_remove(data->domains, dom);
+			g_free(dom);
 		}
 	}
 }
@@ -2769,12 +2793,22 @@ static void remove_server(int index, const char *domain,
 			const char *server, int protocol)
 {
 	struct server_data *data;
+	GSList *list;
 
 	data = find_server(index, server, protocol);
 	if (!data)
 		return;
 
 	destroy_server(data);
+
+	for (list = server_list; list; list = list->next) {
+		struct server_data *data = list->data;
+
+		if (data->index != -1 && data->enabled == true)
+			return;
+	}
+
+	enable_fallback(true);
 }
 
 int __connman_dnsproxy_remove(int index, const char *domain,
@@ -2827,6 +2861,7 @@ static void dnsproxy_offline_mode(bool enabled)
 
 static void dnsproxy_default_changed(struct connman_service *service)
 {
+	bool server_enabled = false;
 	GSList *list;
 	int index;
 
@@ -2851,11 +2886,15 @@ static void dnsproxy_default_changed(struct connman_service *service)
 		if (data->index == index) {
 			DBG("Enabling DNS server %s", data->server);
 			data->enabled = true;
+			server_enabled = true;
 		} else {
 			DBG("Disabling DNS server %s", data->server);
 			data->enabled = false;
 		}
 	}
+
+	if (!server_enabled)
+		enable_fallback(true);
 
 	cache_refresh();
 }
