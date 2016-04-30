@@ -1,3 +1,31 @@
+connman (1.32-0ev3dev1) stable; urgency=medium
+
+  * New upstream release.
+
+  Upstream changelog:
+  * Remove support for Bluez 4 (Patrik Flykt)
+  * Support tun and tap devices for VPNs (Hendrik Donner)
+  * Support for iptables 1.6 (Wu Zheng)
+  * Support for displaying Clock API settings in connmanctl (Saurav Babu)
+  * Interfaces starting with ve- and vb- created by systemd have been added to
+    the default interface blacklist (Krisztian Litkey)
+  * Fix DHCP issues with renewal of nameservers  (Naveen Singh), timeservers,
+    MTU (Patrik Flykt), timer removal and sending Discover after obtaining
+    link-local address (Saurav Babu)
+  * Re-enable fallback nameservers when the service changes to one with no
+    nameservers specified (Patrik Flykt)
+  * Properly remove P2P peers when disabling P2P technology (John Ernberg)
+  * Prevent wpa_supplicant memory leak by calling RemoveNetwork when the WiFi
+    network deauthenticates ConnMan (Naveen Singh)
+  * Restore previous ip_forward value in /proc when tethering is disabled
+    (Patrik Flykt) and allow raw PSK key when tethering via WiFi (Jose
+    Blanquicet)
+  * Build-time detection of execinfo.h needed for optional or no backtrace
+    implementation in uClibc and musl (Yann Morin)
+  * Simplification of gateway selection (Patrik Flykt)
+
+ -- David Lechner <david@lechnology.com>  Fri, 29 Apr 2016 23:10:38 -0500
+
 connman (1.31-0ev3dev1) stable; urgency=medium
 
   * New upstream release.
