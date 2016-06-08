@@ -73,6 +73,7 @@ struct {
 	{ "OpenVPN.RemoteCertTls", "--remote-cert-tls", 1 },
 	{ "OpenVPN.ConfigFile", "--config", 1 },
 	{ "OpenVPN.DeviceType", NULL, 1 },
+	{ "OpenVPN.Verb", "--verb", 1 },
 };
 
 struct nameserver_entry {
