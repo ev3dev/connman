@@ -2320,6 +2320,7 @@ static void interface_added(DBusMessageIter *iter, void *user_data)
 {
 	GSupplicantInterface *interface;
 	const char *path = NULL;
+	bool properties_appended = GPOINTER_TO_UINT(user_data);
 
 	SUPPLICANT_DBG("");
 
@@ -2338,18 +2339,20 @@ static void interface_added(DBusMessageIter *iter, void *user_data)
 	if (!interface)
 		return;
 
+	if (!properties_appended) {
+		supplicant_dbus_property_get_all(path,
+						SUPPLICANT_INTERFACE ".Interface",
+						interface_property, interface,
+						interface);
+		return;
+	}
+
 	dbus_message_iter_next(iter);
 	if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_INVALID) {
 		supplicant_dbus_property_foreach(iter, interface_property,
 								interface);
 		interface_property(NULL, NULL, interface);
-		return;
 	}
-
-	supplicant_dbus_property_get_all(path,
-					SUPPLICANT_INTERFACE ".Interface",
-					interface_property, interface,
-					interface);
 }
 
 static void interface_removed(DBusMessageIter *iter, void *user_data)
@@ -2479,7 +2482,7 @@ static void signal_interface_added(const char *path, DBusMessageIter *iter)
 	SUPPLICANT_DBG("path %s %s", path, SUPPLICANT_PATH);
 
 	if (g_strcmp0(path, SUPPLICANT_PATH) == 0)
-		interface_added(iter, NULL);
+		interface_added(iter, GUINT_TO_POINTER(true));
 }
 
 static void signal_interface_removed(const char *path, DBusMessageIter *iter)
