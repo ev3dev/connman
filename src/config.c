@@ -716,9 +716,9 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 					"setting %s = %s",
 					SERVICE_KEY_SECURITY, str);
 
-			service->security = CONNMAN_SERVICE_SECURITY_NONE;
+		service->security = CONNMAN_SERVICE_SECURITY_NONE;
 	} else
-			service->security = CONNMAN_SERVICE_SECURITY_NONE;
+		service->security = CONNMAN_SERVICE_SECURITY_NONE;
 
 	g_free(str);
 
