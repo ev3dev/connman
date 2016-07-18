@@ -3482,9 +3482,11 @@ static DBusMessage *set_property(DBusConnection *conn,
 		if (err < 0) {
 			if (is_connected_state(service, state) ||
 					is_connecting_state(service, state)) {
-				__connman_network_enable_ipconfig(service->network,
+				if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
+					__connman_network_enable_ipconfig(service->network,
 							service->ipconfig_ipv4);
-				__connman_network_enable_ipconfig(service->network,
+				else
+					__connman_network_enable_ipconfig(service->network,
 							service->ipconfig_ipv6);
 			}
 
@@ -3497,10 +3499,12 @@ static DBusMessage *set_property(DBusConnection *conn,
 			ipv6_configuration_changed(service);
 
 		if (is_connecting(service) || is_connected(service)) {
-			__connman_network_enable_ipconfig(service->network,
-							service->ipconfig_ipv4);
-			__connman_network_enable_ipconfig(service->network,
-							service->ipconfig_ipv6);
+			if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
+				__connman_network_enable_ipconfig(service->network,
+								service->ipconfig_ipv4);
+			else
+				__connman_network_enable_ipconfig(service->network,
+								service->ipconfig_ipv6);
 		}
 
 		service_save(service);
