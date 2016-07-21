@@ -100,9 +100,9 @@ static int resolvfile_export(void)
 	 * MAXDNSRCH/MAXNS entries are used.
 	 */
 
-	for (count = 0, list = g_list_last(resolvfile_list);
+	for (count = 0, list = g_list_first(resolvfile_list);
 						list && (count < MAXDNSRCH);
-						list = g_list_previous(list)) {
+						list = g_list_next(list)) {
 		struct resolvfile_entry *entry = list->data;
 
 		if (!entry->domain)
@@ -118,9 +118,9 @@ static int resolvfile_export(void)
 	if (count)
 		g_string_append_printf(content, "\n");
 
-	for (count = 0, list = g_list_last(resolvfile_list);
+	for (count = 0, list = g_list_first(resolvfile_list);
 						list && (count < MAXNS);
-						list = g_list_previous(list)) {
+						list = g_list_next(list)) {
 		struct resolvfile_entry *entry = list->data;
 
 		if (!entry->server)
