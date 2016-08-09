@@ -1,3 +1,39 @@
+connman (1.33-0ev3dev1) stable; urgency=medium
+
+  [ Feng Wang ]
+  * dhcp: Remove old IP and gateway address
+
+  [ Naveen Singh ]
+  * Fast-reconnect and Band-steering support
+  * network: connectable flag in network structure
+  * plugins/wifi: Marking network's Connectable flag as true.
+  * device: Use network's connectable flag
+
+  [ Jose Blanquicet ]
+  * peer: Update Connected Propererty of P2P Technology
+
+  [ Saurav Babu ]
+  * wifi: No need to allocate and free memory if ifname is NULL
+
+  [ Harish Jenny K N ]
+  * dhcp: Remove the possible remaining dhcp_retry_cb timer
+
+  [ Jose Blanquicet ]
+  * gsupplicant: Avoid skipping wpa_supplicant interfaces
+
+  [ Saurav Babu ]
+  * client: Fix memory leak while enabling tethering
+
+  [ Luiz Augusto von Dentz ]
+  * gdbus/client: Always call ready callback
+  * gdbus/client: Use g_dbus_send_message if callback is not set
+
+  [ Patrik Flykt ]
+  * dhcpv6: Return -EISCONN when the expiry time is inifinite
+  * gdhcp: Set T1 and T2 to infinite if expiry time is infinite
+
+ -- David Lechner <david@lechnology.com>  Tue, 09 Aug 2016 10:32:10 -0500
+
 connman (1.32-0ev3dev1) stable; urgency=medium
 
   * New upstream release.
