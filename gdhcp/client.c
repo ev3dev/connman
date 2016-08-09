@@ -827,16 +827,19 @@ int g_dhcpv6_client_get_timeouts(GDHCPClient *dhcp_client,
 		return -EINVAL;
 
 	if (T1)
-		*T1 = dhcp_client->T1;
+		*T1 = (dhcp_client->expire == 0xffffffff) ? 0xffffffff:
+			dhcp_client->T1;
 
 	if (T2)
-		*T2 = dhcp_client->T2;
+		*T2 = (dhcp_client->expire == 0xffffffff) ? 0xffffffff:
+			dhcp_client->T2;
 
 	if (started)
 		*started = dhcp_client->last_request;
 
 	if (expire)
-		*expire = dhcp_client->last_request + dhcp_client->expire;
+		*expire = (dhcp_client->expire == 0xffffffff) ? 0xffffffff:
+			dhcp_client->last_request + dhcp_client->expire;
 
 	return 0;
 }

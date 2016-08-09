@@ -256,6 +256,9 @@ static void no_lease_cb(GDHCPClient *dhcp_client, gpointer user_data)
 	DBG("No lease available ipv4ll %d client %p", ipv4ll_running,
 		dhcp->ipv4ll_client);
 
+	if (dhcp->timeout > 0)
+		g_source_remove(dhcp->timeout);
+
 	dhcp->timeout = g_timeout_add_seconds(RATE_LIMIT_INTERVAL,
 						dhcp_retry_cb,
 						dhcp);
@@ -435,7 +438,7 @@ static void lease_available_cb(GDHCPClient *dhcp_client, gpointer user_data)
 	char *address, *netmask = NULL, *gateway = NULL;
 	const char *c_address, *c_gateway;
 	unsigned char prefixlen, c_prefixlen;
-	bool ip_change;
+	bool ip_change = false;
 
 	DBG("Lease available");
 
@@ -467,14 +470,21 @@ static void lease_available_cb(GDHCPClient *dhcp_client, gpointer user_data)
 
 	DBG("c_address %s", c_address);
 
-	if (g_strcmp0(address, c_address))
+	if (g_strcmp0(address, c_address)) {
 		ip_change = true;
-	else if (g_strcmp0(gateway, c_gateway))
+		if (c_address) {
+			/* Remove old ip address */
+			__connman_ipconfig_address_remove(dhcp->ipconfig);
+		}
+	}
+	if (g_strcmp0(gateway, c_gateway)) {
 		ip_change = true;
-	else if (prefixlen != c_prefixlen)
+		if (c_gateway) {
+			/* Remove gateway ip address */
+			__connman_ipconfig_gateway_remove(dhcp->ipconfig);
+		}
+	} else if (prefixlen != c_prefixlen)
 		ip_change = true;
-	else
-		ip_change = false;
 
 	__connman_ipconfig_set_method(dhcp->ipconfig,
 						CONNMAN_IPCONFIG_METHOD_DHCP);

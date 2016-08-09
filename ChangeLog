@@ -1,3 +1,11 @@
+ver 1.33:
+	Fix issue with old IP address from DHCP.
+	Fix issue with DHCP lease timer handling.
+	Fix issue with infinite lease and DHCPv6.
+	Fix issue with network connectable handling.
+	Fix issue with handling WiFi interface discovery.
+	Add support for WiFi fast-reconnect and band-steering.
+
 ver 1.32:
 	Fix issue with DNS proxy response handling.
 	Fix issue with nameservers after DHCP renewal.
