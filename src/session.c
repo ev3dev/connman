@@ -69,7 +69,6 @@ struct connman_session {
 
 	enum connman_session_id_type id_type;
 	struct firewall_context *fw;
-	int snat_id;
 	uint32_t mark;
 	int index;
 	char *gateway;
@@ -80,6 +79,15 @@ struct connman_service_info {
 	struct connman_service *service;
 	GSList *sessions;
 };
+
+struct fw_snat {
+	GSList *sessions;
+	int id;
+	int index;
+	struct firewall_context *fw;
+};
+
+GSList *fw_snat_list;
 
 static struct connman_session_policy *policy;
 static void session_activate(struct connman_session *session);
@@ -195,6 +203,87 @@ static char *service2bearer(enum connman_service_type type)
 	}
 
 	return "";
+}
+
+static struct fw_snat *fw_snat_lookup(int index)
+{
+	struct fw_snat *fw_snat;
+	GSList *list;
+
+	for (list = fw_snat_list; list; list = list->next) {
+		fw_snat = list->data;
+
+		if (fw_snat->index == index)
+			return fw_snat;
+	}
+	return NULL;
+}
+
+static int fw_snat_create(struct connman_session *session,
+				int index, const char *ifname, const char *addr)
+{
+	struct fw_snat *fw_snat;
+	int err;
+
+	fw_snat = g_new0(struct fw_snat, 1);
+
+	fw_snat->fw = __connman_firewall_create();
+	fw_snat->index = index;
+
+	fw_snat->id = __connman_firewall_add_rule(fw_snat->fw,
+				"nat", "POSTROUTING",
+				"-o %s -j SNAT --to-source %s",
+				ifname, addr);
+	if (fw_snat->id < 0) {
+		err = fw_snat->id;
+		goto err;
+	}
+
+	err = __connman_firewall_enable_rule(fw_snat->fw, fw_snat->id);
+	if (err < 0) {
+		__connman_firewall_remove_rule(fw_snat->fw, fw_snat->id);
+		goto err;
+	}
+
+	fw_snat_list = g_slist_prepend(fw_snat_list, fw_snat);
+	fw_snat->sessions = g_slist_prepend(fw_snat->sessions, session);
+
+	return 0;
+err:
+	__connman_firewall_destroy(fw_snat->fw);
+	g_free(fw_snat);
+	return err;
+}
+
+static void fw_snat_ref(struct connman_session *session,
+				struct fw_snat *fw_snat)
+{
+	if (g_slist_find(fw_snat->sessions, session))
+		return;
+	fw_snat->sessions = g_slist_prepend(fw_snat->sessions, session);
+}
+
+static void fw_snat_unref(struct connman_session *session,
+				struct fw_snat *fw_snat)
+{
+	int err;
+
+	fw_snat->sessions = g_slist_remove(fw_snat->sessions, session);
+	if (fw_snat->sessions)
+		return;
+
+	fw_snat_list = g_slist_remove(fw_snat_list, fw_snat);
+
+	err = __connman_firewall_disable_rule(fw_snat->fw, fw_snat->id);
+	if (err < 0)
+		DBG("could not disable SNAT rule");
+
+	err = __connman_firewall_remove_rule(fw_snat->fw, fw_snat->id);
+	if (err < 0)
+		DBG("could not remove SNAT rule");
+
+	__connman_firewall_destroy(fw_snat->fw);
+	g_free(fw_snat);
 }
 
 static int init_firewall(void)
@@ -368,59 +457,46 @@ static void add_default_route(struct connman_session *session)
 
 static void del_nat_rules(struct connman_session *session)
 {
-	int err;
+	struct fw_snat *fw_snat;
 
-	if (!session->fw || session->snat_id == 0)
+	fw_snat = fw_snat_lookup(session->index);
+
+	if (!fw_snat)
 		return;
 
-	err = __connman_firewall_disable_rule(session->fw, session->snat_id);
-	if (err < 0) {
-		DBG("could not disable SNAT rule");
-		return;
-	}
-
-	err = __connman_firewall_remove_rule(session->fw, session->snat_id);
-	if (err < 0)
-		DBG("could not remove SNAT rule");
-
-
-	session->snat_id = 0;
+	fw_snat_unref(session, fw_snat);
 }
 
 static void add_nat_rules(struct connman_session *session)
 {
 	struct connman_ipconfig *ipconfig;
+	struct fw_snat *fw_snat;
 	const char *addr;
 	char *ifname;
-	int index, id, err;
-
-	if (!session->fw)
-		return;
+	int index, err;
 
 	DBG("");
 
+	if (!session->service)
+		return;
+
 	ipconfig = __connman_service_get_ip4config(session->service);
 	index = __connman_ipconfig_get_index(ipconfig);
+
+	fw_snat = fw_snat_lookup(index);
+	if (fw_snat) {
+		fw_snat_ref(session, fw_snat);
+		return;
+	}
+
 	ifname = connman_inet_ifname(index);
 	addr = __connman_ipconfig_get_local(ipconfig);
 
-	id = __connman_firewall_add_rule(session->fw, "nat", "POSTROUTING",
-				"-o %s -j SNAT --to-source %s",
-				ifname, addr);
-	g_free(ifname);
-	if (id < 0) {
+	err = fw_snat_create(session, index, ifname, addr);
+	if (err < 0)
 		DBG("failed to add SNAT rule");
-		return;
-	}
 
-	err = __connman_firewall_enable_rule(session->fw, id);
-	if (err < 0) {
-		DBG("could not enable SNAT rule");
-		__connman_firewall_remove_rule(session->fw, id);
-		return;
-	}
-
-	session->snat_id = id;
+	g_free(ifname);
 }
 
 static void cleanup_routing_table(struct connman_session *session)
@@ -443,6 +519,11 @@ static void update_routing_table(struct connman_session *session)
 {
 	del_default_route(session);
 	add_default_route(session);
+}
+
+static void cleanup_nat_rules(struct connman_session *session)
+{
+	del_nat_rules(session);
 }
 
 static void update_nat_rules(struct connman_session *session)
@@ -498,6 +579,7 @@ static void cleanup_session(gpointer user_data)
 
 	DBG("remove %s", session->session_path);
 
+	cleanup_nat_rules(session);
 	cleanup_routing_table(session);
 	cleanup_firewall_session(session);
 
