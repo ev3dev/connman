@@ -37,7 +37,6 @@ static GHashTable *session_hash;
 static GHashTable *service_hash;
 static struct connman_session *ecall_session;
 static uint32_t session_mark = 256;
-static struct firewall_context *global_firewall = NULL;
 
 enum connman_session_state {
 	CONNMAN_SESSION_STATE_DISCONNECTED   = 0,
@@ -230,18 +229,10 @@ static int fw_snat_create(struct connman_session *session,
 	fw_snat->fw = __connman_firewall_create();
 	fw_snat->index = index;
 
-	fw_snat->id = __connman_firewall_add_rule(fw_snat->fw,
-				"nat", "POSTROUTING",
-				"-o %s -j SNAT --to-source %s",
-				ifname, addr);
+	fw_snat->id = __connman_firewall_enable_snat(fw_snat->fw,
+						index, ifname, addr);
 	if (fw_snat->id < 0) {
 		err = fw_snat->id;
-		goto err;
-	}
-
-	err = __connman_firewall_enable_rule(fw_snat->fw, fw_snat->id);
-	if (err < 0) {
-		__connman_firewall_remove_rule(fw_snat->fw, fw_snat->id);
 		goto err;
 	}
 
@@ -266,67 +257,15 @@ static void fw_snat_ref(struct connman_session *session,
 static void fw_snat_unref(struct connman_session *session,
 				struct fw_snat *fw_snat)
 {
-	int err;
-
 	fw_snat->sessions = g_slist_remove(fw_snat->sessions, session);
 	if (fw_snat->sessions)
 		return;
 
 	fw_snat_list = g_slist_remove(fw_snat_list, fw_snat);
 
-	err = __connman_firewall_disable_rule(fw_snat->fw, fw_snat->id);
-	if (err < 0)
-		DBG("could not disable SNAT rule");
-
-	err = __connman_firewall_remove_rule(fw_snat->fw, fw_snat->id);
-	if (err < 0)
-		DBG("could not remove SNAT rule");
-
+	__connman_firewall_disable_snat(fw_snat->fw);
 	__connman_firewall_destroy(fw_snat->fw);
 	g_free(fw_snat);
-}
-
-static int init_firewall(void)
-{
-	struct firewall_context *fw;
-	int err;
-
-	if (global_firewall)
-		return 0;
-
-	fw = __connman_firewall_create();
-
-	err = __connman_firewall_add_rule(fw, "mangle", "INPUT",
-					"-j CONNMARK --restore-mark");
-	if (err < 0)
-		goto err;
-
-	err = __connman_firewall_add_rule(fw, "mangle", "POSTROUTING",
-					"-j CONNMARK --save-mark");
-	if (err < 0)
-		goto err;
-
-	err = __connman_firewall_enable(fw);
-	if (err < 0)
-		goto err;
-
-	global_firewall = fw;
-
-	return 0;
-
-err:
-	__connman_firewall_destroy(fw);
-
-	return err;
-}
-
-static void cleanup_firewall(void)
-{
-	if (!global_firewall)
-		return;
-
-	__connman_firewall_disable(global_firewall);
-	__connman_firewall_destroy(global_firewall);
 }
 
 static int init_firewall_session(struct connman_session *session)
@@ -339,49 +278,22 @@ static int init_firewall_session(struct connman_session *session)
 
 	DBG("");
 
-	err = init_firewall();
-	if (err < 0)
-		return err;
-
 	fw = __connman_firewall_create();
 	if (!fw)
 		return -ENOMEM;
 
-	switch (session->policy_config->id_type) {
-	case CONNMAN_SESSION_ID_TYPE_UID:
-		err = __connman_firewall_add_rule(fw, "mangle", "OUTPUT",
-				"-m owner --uid-owner %s -j MARK --set-mark %d",
-						session->policy_config->id,
-						session->mark);
-		break;
-	case CONNMAN_SESSION_ID_TYPE_GID:
-		err = __connman_firewall_add_rule(fw, "mangle", "OUTPUT",
-				"-m owner --gid-owner %s -j MARK --set-mark %d",
-						session->policy_config->id,
-						session->mark);
-		break;
-	case CONNMAN_SESSION_ID_TYPE_LSM:
-	default:
-		err = -EINVAL;
+	err =__connman_firewall_enable_marking(fw,
+					session->policy_config->id_type,
+					session->policy_config->id,
+					session->mark);
+	if (err < 0) {
+		__connman_firewall_destroy(fw);
+		return err;
 	}
-
-	if (err < 0)
-		goto err;
-
 	session->id_type = session->policy_config->id_type;
-
-	err = __connman_firewall_enable(fw);
-	if (err)
-		goto err;
-
 	session->fw = fw;
 
 	return 0;
-
-err:
-	__connman_firewall_destroy(fw);
-
-	return err;
 }
 
 static void cleanup_firewall_session(struct connman_session *session)
@@ -389,7 +301,8 @@ static void cleanup_firewall_session(struct connman_session *session)
 	if (!session->fw)
 		return;
 
-	__connman_firewall_disable(session->fw);
+	__connman_firewall_disable_marking(session->fw);
+	__connman_firewall_disable_snat(session->fw);
 	__connman_firewall_destroy(session->fw);
 
 	session->fw = NULL;
@@ -472,10 +385,8 @@ static void add_nat_rules(struct connman_session *session)
 	struct connman_ipconfig *ipconfig;
 	struct fw_snat *fw_snat;
 	const char *addr;
-	char *ifname;
 	int index, err;
-
-	DBG("");
+	char *ifname;
 
 	if (!session->service)
 		return;
@@ -1877,12 +1788,6 @@ int __connman_session_init(void)
 
 	service_hash = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 						NULL, cleanup_service);
-	if (__connman_firewall_is_up()) {
-		err = init_firewall();
-		if (err < 0)
-			return err;
-	}
-
 	return 0;
 }
 
@@ -1892,8 +1797,6 @@ void __connman_session_cleanup(void)
 
 	if (!connection)
 		return;
-
-	cleanup_firewall();
 
 	connman_notifier_unregister(&session_notifier);
 

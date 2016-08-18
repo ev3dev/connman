@@ -31,7 +31,6 @@
 #include "connman.h"
 
 #define CHAIN_PREFIX "connman-"
-#define FW_ALL_RULES -1
 
 static const char *builtin_chains[] = {
 	[NF_IP_PRE_ROUTING]	= "PREROUTING",
@@ -47,7 +46,6 @@ struct connman_managed_table {
 };
 
 struct fw_rule {
-	int id;
 	bool enabled;
 	char *table;
 	char *chain;
@@ -59,9 +57,8 @@ struct firewall_context {
 };
 
 static GSList *managed_tables;
-
-static bool firewall_is_up;
-static unsigned int firewall_rule_id;
+static struct firewall_context *connmark_ctx;
+static unsigned int connmark_ref;
 
 static int chain_to_index(const char *chain_name)
 {
@@ -271,7 +268,7 @@ void __connman_firewall_destroy(struct firewall_context *ctx)
 	g_free(ctx);
 }
 
-static int firewall_enable_rule(struct fw_rule *rule)
+static int enable_rule(struct fw_rule *rule)
 {
 	int err;
 
@@ -293,7 +290,7 @@ static int firewall_enable_rule(struct fw_rule *rule)
 	return 0;
 }
 
-static int firewall_disable_rule(struct fw_rule *rule)
+static int disable_rule(struct fw_rule *rule)
 {
 	int err;
 
@@ -319,7 +316,7 @@ static int firewall_disable_rule(struct fw_rule *rule)
 	return 0;
 }
 
-int __connman_firewall_add_rule(struct firewall_context *ctx,
+static void firewall_add_rule(struct firewall_context *ctx,
 				const char *table,
 				const char *chain,
 				const char *rule_fmt, ...)
@@ -336,40 +333,29 @@ int __connman_firewall_add_rule(struct firewall_context *ctx,
 
 	rule = g_new0(struct fw_rule, 1);
 
-	rule->id = firewall_rule_id++;
 	rule->enabled = false;
 	rule->table = g_strdup(table);
 	rule->chain = g_strdup(chain);
 	rule->rule_spec = rule_spec;
 
 	ctx->rules = g_list_append(ctx->rules, rule);
-	return rule->id;
 }
 
-int __connman_firewall_remove_rule(struct firewall_context *ctx, int id)
+static void firewall_remove_rules(struct firewall_context *ctx)
 {
 	struct fw_rule *rule;
 	GList *list;
-	int err = -ENOENT;
 
 	for (list = g_list_last(ctx->rules); list;
 			list = g_list_previous(list)) {
 		rule = list->data;
 
-		if (rule->id == id || id == FW_ALL_RULES) {
-			ctx->rules = g_list_remove(ctx->rules, rule);
-			cleanup_fw_rule(rule);
-			err = 0;
-
-			if (id != FW_ALL_RULES)
-				break;
-		}
+		ctx->rules = g_list_remove(ctx->rules, rule);
+		cleanup_fw_rule(rule);
 	}
-
-	return err;
 }
 
-int __connman_firewall_enable_rule(struct firewall_context *ctx, int id)
+static int firewall_enable_rules(struct firewall_context *ctx)
 {
 	struct fw_rule *rule;
 	GList *list;
@@ -378,20 +364,15 @@ int __connman_firewall_enable_rule(struct firewall_context *ctx, int id)
 	for (list = g_list_first(ctx->rules); list; list = g_list_next(list)) {
 		rule = list->data;
 
-		if (rule->id == id || id == FW_ALL_RULES) {
-			err = firewall_enable_rule(rule);
-			if (err < 0)
-				break;
-
-			if (id != FW_ALL_RULES)
-				break;
-		}
+		err = enable_rule(rule);
+		if (err < 0)
+			break;
 	}
 
 	return err;
 }
 
-int __connman_firewall_disable_rule(struct firewall_context *ctx, int id)
+static int firewall_disable_rules(struct firewall_context *ctx)
 {
 	struct fw_rule *rule;
 	GList *list;
@@ -402,49 +383,149 @@ int __connman_firewall_disable_rule(struct firewall_context *ctx, int id)
 			list = g_list_previous(list)) {
 		rule = list->data;
 
-		if (rule->id == id || id == FW_ALL_RULES) {
-			e = firewall_disable_rule(rule);
+		e = disable_rule(rule);
 
-			/* Report last error back */
-			if (e == 0 && err == -ENOENT)
-				err = 0;
-			else if (e < 0)
-				err = e;
-
-			if (id != FW_ALL_RULES)
-				break;
-		}
+		/* Report last error back */
+		if (e == 0 && err == -ENOENT)
+			err = 0;
+		else if (e < 0)
+			err = e;
 	}
 
 	return err;
 }
 
-int __connman_firewall_enable(struct firewall_context *ctx)
+int __connman_firewall_enable_nat(struct firewall_context *ctx,
+				char *address, unsigned char prefixlen,
+				char *interface)
+{
+	char *cmd;
+	int err;
+
+	cmd = g_strdup_printf("-s %s/%d -o %s -j MASQUERADE",
+					address, prefixlen, interface);
+
+	firewall_add_rule(ctx, "nat", "POSTROUTING", cmd);
+	g_free(cmd);
+	err = firewall_enable_rules(ctx);
+	if (err)
+		firewall_remove_rules(ctx);
+	return err;
+}
+
+int __connman_firewall_disable_nat(struct firewall_context *ctx)
 {
 	int err;
 
-	err = __connman_firewall_enable_rule(ctx, FW_ALL_RULES);
+	err = firewall_disable_rules(ctx);
 	if (err < 0) {
-		connman_warn("Failed to install iptables rules: %s",
-				strerror(-err));
-		__connman_firewall_disable_rule(ctx, FW_ALL_RULES);
+		DBG("could not disable NAT rule");
 		return err;
 	}
 
-	firewall_is_up = true;
-
+	firewall_remove_rules(ctx);
 	return 0;
 }
 
-int __connman_firewall_disable(struct firewall_context *ctx)
+int __connman_firewall_enable_snat(struct firewall_context *ctx,
+				int index, const char *ifname,
+				const char *addr)
 {
-	__connman_firewall_disable_rule(ctx, FW_ALL_RULES);
-	return __connman_firewall_remove_rule(ctx, FW_ALL_RULES);
+	int err;
+
+	firewall_add_rule(ctx, "nat", "POSTROUTING",
+				"-o %s -j SNAT --to-source %s",
+				ifname, addr);
+
+	err = firewall_enable_rules(ctx);
+	if (err)
+		firewall_remove_rules(ctx);
+	return err;
 }
 
-bool __connman_firewall_is_up(void)
+int __connman_firewall_disable_snat(struct firewall_context *ctx)
 {
-	return firewall_is_up;
+	int err;
+
+	err = firewall_disable_rules(ctx);
+	if (err < 0) {
+		DBG("could not disable SNAT rule");
+		return err;
+	}
+
+	firewall_remove_rules(ctx);
+	return 0;
+}
+
+static int firewall_enable_connmark(void)
+{
+	int err;
+
+	if (connmark_ref > 0) {
+		connmark_ref++;
+		return 0;
+	}
+
+	connmark_ctx = __connman_firewall_create();
+
+	firewall_add_rule(connmark_ctx, "mangle", "INPUT",
+					"-j CONNMARK --restore-mark");
+	firewall_add_rule(connmark_ctx, "mangle", "POSTROUTING",
+					"-j CONNMARK --save-mark");
+	err = firewall_enable_rules(connmark_ctx);
+	if (err) {
+		__connman_firewall_destroy(connmark_ctx);
+		connmark_ctx = NULL;
+		return err;
+	}
+	connmark_ref++;
+	return 0;
+}
+
+static void firewall_disable_connmark(void)
+{
+	connmark_ref--;
+	if (connmark_ref > 0)
+		return;
+
+	firewall_disable_rules(connmark_ctx);
+	__connman_firewall_destroy(connmark_ctx);
+	connmark_ctx = NULL;
+}
+
+int __connman_firewall_enable_marking(struct firewall_context *ctx,
+					enum connman_session_id_type id_type,
+					char *id, uint32_t mark)
+{
+	int err;
+
+	err = firewall_enable_connmark();
+	if (err)
+		return err;
+
+	switch (id_type) {
+	case CONNMAN_SESSION_ID_TYPE_UID:
+		firewall_add_rule(ctx, "mangle", "OUTPUT",
+				"-m owner --uid-owner %s -j MARK --set-mark %d",
+					id, mark);
+		break;
+	case CONNMAN_SESSION_ID_TYPE_GID:
+		firewall_add_rule(ctx, "mangle", "OUTPUT",
+				"-m owner --gid-owner %s -j MARK --set-mark %d",
+					id, mark);
+		break;
+	case CONNMAN_SESSION_ID_TYPE_LSM:
+	default:
+		return -EINVAL;
+	}
+
+	return firewall_enable_rules(ctx);
+}
+
+int __connman_firewall_disable_marking(struct firewall_context *ctx)
+{
+	firewall_disable_connmark();
+	return firewall_disable_rules(ctx);
 }
 
 static void iterate_chains_cb(const char *chain_name, void *user_data)
@@ -514,11 +595,8 @@ static void flush_all_tables(void)
 
 	if (!g_file_test("/proc/net/ip_tables_names",
 			G_FILE_TEST_EXISTS | G_FILE_TEST_IS_REGULAR)) {
-		firewall_is_up = false;
 		return;
 	}
-
-	firewall_is_up = true;
 
 	flush_table("filter");
 	flush_table("mangle");

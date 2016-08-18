@@ -992,16 +992,18 @@ struct firewall_context;
 
 struct firewall_context *__connman_firewall_create(void);
 void __connman_firewall_destroy(struct firewall_context *ctx);
-int __connman_firewall_add_rule(struct firewall_context *ctx,
-				const char *table,
-				const char *chain,
-				const char *rule_fmt, ...);
-int __connman_firewall_remove_rule(struct firewall_context *ctx, int id);
-int __connman_firewall_enable_rule(struct firewall_context *ctx, int id);
-int __connman_firewall_disable_rule(struct firewall_context *ctx, int id);
-int __connman_firewall_enable(struct firewall_context *ctx);
-int __connman_firewall_disable(struct firewall_context *ctx);
-bool __connman_firewall_is_up(void);
+int __connman_firewall_enable_nat(struct firewall_context *ctx,
+					char *address, unsigned char prefixlen,
+					char *interface);
+int __connman_firewall_disable_nat(struct firewall_context *ctx);
+int __connman_firewall_enable_snat(struct firewall_context *ctx,
+				int index, const char *ifname,
+				const char *addr);
+int __connman_firewall_disable_snat(struct firewall_context *ctx);
+int __connman_firewall_enable_marking(struct firewall_context *ctx,
+					enum connman_session_id_type id_type,
+					char *id, uint32_t mark);
+int __connman_firewall_disable_marking(struct firewall_context *ctx);
 
 int __connman_firewall_init(void);
 void __connman_firewall_cleanup(void);

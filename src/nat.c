@@ -80,28 +80,14 @@ static int enable_ip_forward(bool enable)
 
 static int enable_nat(struct connman_nat *nat)
 {
-	char *cmd;
-	int err;
-
 	g_free(nat->interface);
 	nat->interface = g_strdup(default_interface);
 
 	if (!nat->interface)
 		return 0;
 
-	/* Enable masquerading */
-	cmd = g_strdup_printf("-s %s/%d -o %s -j MASQUERADE",
-					nat->address,
-					nat->prefixlen,
-					nat->interface);
-
-	err = __connman_firewall_add_rule(nat->fw, "nat",
-				"POSTROUTING", cmd);
-	g_free(cmd);
-	if (err < 0)
-		return err;
-
-	return __connman_firewall_enable(nat->fw);
+	return __connman_firewall_enable_nat(nat->fw, nat->address,
+					nat->prefixlen,	nat->interface);
 }
 
 static void disable_nat(struct connman_nat *nat)
@@ -109,8 +95,7 @@ static void disable_nat(struct connman_nat *nat)
 	if (!nat->interface)
 		return;
 
-	/* Disable masquerading */
-	__connman_firewall_disable(nat->fw);
+	__connman_firewall_disable_nat(nat->fw);
 }
 
 int __connman_nat_enable(const char *name, const char *address,
