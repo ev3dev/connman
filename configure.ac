@@ -269,6 +269,7 @@ PKG_CHECK_MODULES(XTABLES, xtables >= 1.4.11, dummy=yes,
 				AC_MSG_ERROR(Xtables library is required))
 AC_SUBST(XTABLES_CFLAGS)
 AC_SUBST(XTABLES_LIBS)
+AM_CONDITIONAL(XTABLES, test "${XTABLES}" != "no")
 
 AC_ARG_ENABLE(test, AC_HELP_STRING([--enable-test],
 		[enable test/example scripts]), [enable_test=${enableval}])

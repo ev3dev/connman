@@ -120,13 +120,13 @@ src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) $(backtrace_sources) \
 			src/storage.c src/dbus.c src/config.c \
 			src/technology.c src/counter.c src/ntp.c \
 			src/session.c src/tethering.c src/wpad.c src/wispr.c \
-			src/stats.c src/iptables.c src/dnsproxy.c src/6to4.c \
+			src/stats.c src/dnsproxy.c src/6to4.c \
 			src/ippool.c src/bridge.c src/nat.c src/ipaddress.c \
-			src/inotify.c src/firewall.c src/ipv6pd.c src/peer.c \
+			src/inotify.c src/ipv6pd.c src/peer.c \
 			src/peer_service.c src/machine.c src/util.c
 
 src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-			@GLIB_LIBS@ @DBUS_LIBS@ @XTABLES_LIBS@ @GNUTLS_LIBS@ \
+			@GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ \
 			-lresolv -ldl -lrt
 
 src_connmand_LDFLAGS = -Wl,--export-dynamic \
@@ -136,6 +136,11 @@ src_connmand_wait_online_SOURCES = src/connmand-wait-online.c
 
 src_connmand_wait_online_LDADD = gdbus/libgdbus-internal.la \
 			@GLIB_LIBS@ @DBUS_LIBS@
+
+if XTABLES
+src_connmand_SOURCES += src/iptables.c src/firewall-iptables.c
+src_connmand_LDADD += @XTABLES_LIBS@
+endif
 
 if VPN
 vpn_plugin_LTLIBRARIES =
@@ -206,7 +211,7 @@ build_vpn_plugindir = $(vpn_plugindir)
 endif
 endif
 
-AM_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
+AM_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
 				@GNUTLS_CFLAGS@ $(builtin_cflags) \
 				-DCONNMAN_PLUGIN_BUILTIN \
 				-DSTATEDIR=\""$(statedir)"\" \
@@ -223,7 +228,7 @@ else
 AM_CPPFLAGS = -I$(builddir)/include -I$(builddir)/src -I$(srcdir)/gdbus
 endif
 
-src_connmand_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
+src_connmand_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
 				@GNUTLS_CFLAGS@ $(builtin_cflags) \
 				-DCONNMAN_PLUGIN_BUILTIN \
 				-DSTATEDIR=\""$(statedir)"\" \
@@ -250,6 +255,11 @@ vpn_connman_vpnd_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
 				-DCONFIGDIR=\""$(configdir)\"" \
 				-I$(builddir)/vpn
 
+endif
+
+if XTABLES
+AM_CFLAGS += @XTABLES_CFLAGS@
+src_connmand_CFLAGS += @XTABLES_CFLAGS@
 endif
 
 EXTRA_DIST += vpn/vpn-dbus.conf vpn/vpn-polkit.conf
@@ -297,9 +307,9 @@ noinst_PROGRAMS += tools/supplicant-test \
 			tools/dhcp-test tools/dhcp-server-test \
 			tools/addr-test tools/web-test tools/resolv-test \
 			tools/dbus-test tools/polkit-test \
-			tools/iptables-test tools/tap-test tools/wpad-test \
+			tools/tap-test tools/wpad-test \
 			tools/stats-tool tools/private-network-test \
-			tools/session-test tools/iptables-unit \
+			tools/session-test \
 			tools/dnsproxy-test tools/netlink-test
 
 tools_supplicant_test_SOURCES = tools/supplicant-test.c \
@@ -330,9 +340,6 @@ tools_dbus_test_LDADD = gdbus/libgdbus-internal.la @GLIB_LIBS@ @DBUS_LIBS@
 
 tools_polkit_test_LDADD = @DBUS_LIBS@
 
-tools_iptables_test_SOURCES = $(backtrace_sources) src/log.c src/iptables.c tools/iptables-test.c
-tools_iptables_test_LDADD = @GLIB_LIBS@ @XTABLES_LIBS@ -ldl
-
 tools_private_network_test_LDADD = @GLIB_LIBS@ @DBUS_LIBS@
 
 tools_session_test_SOURCES = $(backtrace_sources) src/log.c src/dbus.c src/error.c \
@@ -341,12 +348,21 @@ tools_session_test_SOURCES = $(backtrace_sources) src/log.c src/dbus.c src/error
 tools_session_test_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
+if XTABLES
+noinst_PROGRAMS += tools/iptables-test tools/iptables-unit
+
+tools_iptables_test_SOURCES = $(backtrace_sources) src/log.c src/iptables.c \
+				tools/iptables-test.c
+tools_iptables_test_LDADD = @GLIB_LIBS@ @XTABLES_LIBS@ -ldl
+
 tools_iptables_unit_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
 		-DIPTABLES_SAVE=\""${IPTABLES_SAVE}"\"
 tools_iptables_unit_SOURCES = $(backtrace_sources) src/log.c \
-		 src/iptables.c src/firewall.c src/nat.c tools/iptables-unit.c
+		src/iptables.c src/firewall-iptables.c src/nat.c \
+		tools/iptables-unit.c
 tools_iptables_unit_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ @XTABLES_LIBS@ -ldl
+endif
 
 tools_dnsproxy_test_SOURCES = tools/dnsproxy-test.c
 tools_dnsproxy_test_LDADD = @GLIB_LIBS@
