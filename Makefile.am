@@ -142,6 +142,11 @@ src_connmand_SOURCES += src/iptables.c src/firewall-iptables.c
 src_connmand_LDADD += @XTABLES_LIBS@
 endif
 
+if NFTABLES
+src_connmand_SOURCES += src/firewall-nftables.c
+src_connmand_LDADD +=  @NFTABLES_LIBS@
+endif
+
 if VPN
 vpn_plugin_LTLIBRARIES =
 
@@ -260,6 +265,11 @@ endif
 if XTABLES
 AM_CFLAGS += @XTABLES_CFLAGS@
 src_connmand_CFLAGS += @XTABLES_CFLAGS@
+endif
+
+if NFTABLES
+AM_CFLAGS += @NFTABLES_CFLAGS@
+src_connmand_CFLAGS += @NFTABLES_CFLAGS@
 endif
 
 EXTRA_DIST += vpn/vpn-dbus.conf vpn/vpn-polkit.conf

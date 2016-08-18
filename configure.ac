@@ -265,11 +265,33 @@ if (test -n "${path_tmpfiles}"); then
 	AC_SUBST(SYSTEMD_TMPFILESDIR)
 fi
 
-PKG_CHECK_MODULES(XTABLES, xtables >= 1.4.11, dummy=yes,
-				AC_MSG_ERROR(Xtables library is required))
-AC_SUBST(XTABLES_CFLAGS)
-AC_SUBST(XTABLES_LIBS)
-AM_CONDITIONAL(XTABLES, test "${XTABLES}" != "no")
+AC_ARG_WITH(firewall, AC_HELP_STRING([--with-firewall=TYPE],
+			[specify which firewall type is used iptables or nftables [default=iptables]]),
+		[firewall_type=${withval}],
+		[firewall_type="iptables"])
+
+if (test "${firewall_type}" != "iptables" -a \
+		"${firewall_type}" != "nftables"); then
+	AC_MSG_ERROR(neither nftables nor iptables support enabled)
+fi
+
+found_iptables="no"
+if (test "${firewall_type}" = "iptables"); then
+	PKG_CHECK_MODULES(XTABLES, xtables >= 1.4.11, [found_iptables="yes"],
+			AC_MSG_ERROR(Xtables library is required))
+	AC_SUBST(XTABLES_CFLAGS)
+	AC_SUBST(XTABLES_LIBS)
+fi
+AM_CONDITIONAL(XTABLES, test "${found_iptables}" != "no")
+
+found_nftables="no"
+if (test "${firewall_type}" = "nftables"); then
+	PKG_CHECK_MODULES(NFTABLES, [libnftnl >= 1.0.4 libmnl >= 1.0.0], [found_nftables="yes"],
+		AC_MSG_ERROR([libnftnl >= 1.0.4 or libmnl >= 1.0.0 not found]))
+	AC_SUBST(NFTABLES_CFLAGS)
+	AC_SUBST(NFTABLES_LIBS)
+fi
+AM_CONDITIONAL(NFTABLES, test "${found_nftables}" != "no")
 
 AC_ARG_ENABLE(test, AC_HELP_STRING([--enable-test],
 		[enable test/example scripts]), [enable_test=${enableval}])
