@@ -529,6 +529,7 @@ int __connman_firewall_init(void)
 {
 	DBG("");
 
+	__connman_iptables_init();
 	flush_all_tables();
 
 	return 0;
@@ -539,4 +540,5 @@ void __connman_firewall_cleanup(void)
 	DBG("");
 
 	g_slist_free_full(managed_tables, cleanup_managed_table);
+	__connman_iptables_cleanup();
 }
