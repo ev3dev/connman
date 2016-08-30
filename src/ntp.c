@@ -486,6 +486,7 @@ static void start_ntp(char *server)
 	family = info->ai_family;
 
 	memcpy(&timeserver_addr, info->ai_addr, info->ai_addrlen);
+	freeaddrinfo(info);
 	memset(&in6addr, 0, sizeof(in6addr));
 
 	if (family == AF_INET) {
@@ -503,7 +504,6 @@ static void start_ntp(char *server)
 		connman_error("Family is neither ipv4 nor ipv6");
 		return;
 	}
-	freeaddrinfo(info);
 
 	DBG("server %s family %d", server, family);
 
