@@ -2351,10 +2351,6 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 			return TRUE;
 	}
 
-	if (!message_type && !client_id)
-		/* No message type / client id option, ignore package */
-		return TRUE;
-
 	debug(dhcp_client, "received DHCP packet xid 0x%04x "
 		"(current state %d)", ntohl(xid), dhcp_client->state);
 
