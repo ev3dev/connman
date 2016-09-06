@@ -46,7 +46,6 @@ struct gateway_config {
 struct gateway_data {
 	int index;
 	struct connman_service *service;
-	unsigned int order;
 	struct gateway_config *ipv4_gateway;
 	struct gateway_config *ipv6_gateway;
 	bool default_checked;
@@ -381,8 +380,6 @@ static struct gateway_data *add_gateway(struct connman_service *service,
 
 	data->service = service;
 
-	data->order = __connman_service_get_order(service);
-
 	/*
 	 * If the service is already in the hash, then we
 	 * must not replace it blindly but disable the gateway
@@ -558,25 +555,13 @@ static void unset_default_gateway(struct gateway_data *data,
 
 static struct gateway_data *find_default_gateway(void)
 {
-	struct gateway_data *found = NULL;
-	unsigned int order = 0;
-	GHashTableIter iter;
-	gpointer value, key;
+	struct connman_service *service;
 
-	g_hash_table_iter_init(&iter, gateway_hash);
+	service = __connman_service_get_default();
+	if (!service)
+		return NULL;
 
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		struct gateway_data *data = value;
-
-		if (!found || data->order > order) {
-			found = data;
-			order = data->order;
-
-			DBG("default %p order %d", found, order);
-		}
-	}
-
-	return found;
+	return g_hash_table_lookup(gateway_hash, service);
 }
 
 static bool choose_default_gateway(struct gateway_data *data,
@@ -589,37 +574,35 @@ static bool choose_default_gateway(struct gateway_data *data,
 	 * this one as default. If the other one is already active
 	 * we mark this one as non default.
 	 */
-	if (data->ipv4_gateway) {
-		if (candidate->ipv4_gateway &&
-				!candidate->ipv4_gateway->active) {
+	if (data->ipv4_gateway && candidate->ipv4_gateway) {
+
+		if (!candidate->ipv4_gateway->active) {
 			DBG("ipv4 downgrading %p", candidate);
 			unset_default_gateway(candidate,
 						CONNMAN_IPCONFIG_TYPE_IPV4);
 		}
-		if (candidate->ipv4_gateway &&
-				candidate->ipv4_gateway->active &&
-				candidate->order > data->order) {
+
+		if (candidate->ipv4_gateway->active &&
+				__connman_service_compare(candidate->service,
+							data->service) < 0) {
 			DBG("ipv4 downgrading this %p", data);
-			unset_default_gateway(data,
-						CONNMAN_IPCONFIG_TYPE_IPV4);
+			unset_default_gateway(data, CONNMAN_IPCONFIG_TYPE_IPV4);
 			downgraded = true;
 		}
 	}
 
-	if (data->ipv6_gateway) {
-		if (candidate->ipv6_gateway &&
-				!candidate->ipv6_gateway->active) {
+	if (data->ipv6_gateway && candidate->ipv6_gateway) {
+		if (!candidate->ipv6_gateway->active) {
 			DBG("ipv6 downgrading %p", candidate);
 			unset_default_gateway(candidate,
 						CONNMAN_IPCONFIG_TYPE_IPV6);
 		}
 
-		if (candidate->ipv6_gateway &&
-				candidate->ipv6_gateway->active &&
-				candidate->order > data->order) {
+		if (candidate->ipv6_gateway->active &&
+			__connman_service_compare(candidate->service,
+						data->service) < 0) {
 			DBG("ipv6 downgrading this %p", data);
-			unset_default_gateway(data,
-						CONNMAN_IPCONFIG_TYPE_IPV6);
+			unset_default_gateway(data, CONNMAN_IPCONFIG_TYPE_IPV6);
 			downgraded = true;
 		}
 	}
@@ -753,40 +736,6 @@ static struct gateway_data *find_active_gateway(void)
 	}
 
 	return NULL;
-}
-
-static void update_order(void)
-{
-	GHashTableIter iter;
-	gpointer value, key;
-
-	DBG("");
-
-	g_hash_table_iter_init(&iter, gateway_hash);
-
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		struct gateway_data *data = value;
-
-		data->order = __connman_service_get_order(data->service);
-	}
-}
-
-void __connman_connection_gateway_activate(struct connman_service *service,
-					enum connman_ipconfig_type type)
-{
-	struct gateway_data *data = NULL;
-
-	data = g_hash_table_lookup(gateway_hash, service);
-	if (!data)
-		return;
-
-	DBG("gateway %p/%p type %d", data->ipv4_gateway,
-					data->ipv6_gateway, type);
-
-	if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
-		data->ipv4_gateway->active = true;
-	else if (type == CONNMAN_IPCONFIG_TYPE_IPV6)
-		data->ipv6_gateway->active = true;
 }
 
 static void add_host_route(int family, int index, const char *gateway,
@@ -1026,11 +975,7 @@ bool __connman_connection_update_gateway(void)
 	if (!gateway_hash)
 		return updated;
 
-	update_order();
-
 	default_gateway = find_default_gateway();
-
-	__connman_service_update_ordering();
 
 	DBG("default %p", default_gateway);
 

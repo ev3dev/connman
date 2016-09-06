@@ -501,6 +501,12 @@ static DBusMessage *do_connect(DBusConnection *conn, DBusMessage *msg,
 	return NULL;
 }
 
+static DBusMessage *do_connect2(DBusConnection *conn, DBusMessage *msg,
+								void *data)
+{
+	return do_connect(conn, msg, data);
+}
+
 static DBusMessage *do_disconnect(DBusConnection *conn, DBusMessage *msg,
 								void *data)
 {
@@ -527,6 +533,9 @@ static const GDBusMethodTable connection_methods[] = {
 			GDBUS_ARGS({ "name", "s" }), NULL,
 			clear_property) },
 	{ GDBUS_ASYNC_METHOD("Connect", NULL, NULL, do_connect) },
+	{ GDBUS_ASYNC_METHOD("Connect2",
+			GDBUS_ARGS({ "dbus_sender", "s" }),
+			NULL, do_connect2) },
 	{ GDBUS_METHOD("Disconnect", NULL, NULL, do_disconnect) },
 	{ },
 };
@@ -549,6 +558,12 @@ static void resolv_result(GResolvResultStatus status,
 		provider->host_ip = g_strdupv(results);
 
 	vpn_provider_unref(provider);
+
+	/* Remove the resolver here so that it will not be left
+	 * hanging around and cause double free in unregister_provider()
+	 */
+	g_resolv_unref(provider->resolv);
+	provider->resolv = NULL;
 }
 
 static void provider_resolv_host_addr(struct vpn_provider *provider)
@@ -796,16 +811,20 @@ static gchar **create_network_list(GSList *networks, gsize *count)
 {
 	GSList *list;
 	gchar **result = NULL;
+	gchar **prev_result;
 	unsigned int num_elems = 0;
 
 	for (list = networks; list; list = g_slist_next(list)) {
 		struct vpn_route *route = list->data;
 		int family;
 
+		prev_result = result;
 		result = g_try_realloc(result,
 				(num_elems + 1) * sizeof(gchar *));
-		if (!result)
+		if (!result) {
+			g_free(prev_result);
 			return NULL;
+		}
 
 		switch (route->family) {
 		case AF_INET:
@@ -826,9 +845,12 @@ static gchar **create_network_list(GSList *networks, gsize *count)
 		num_elems++;
 	}
 
+	prev_result = result;
 	result = g_try_realloc(result, (num_elems + 1) * sizeof(gchar *));
-	if (!result)
+	if (!result) {
+		g_free(prev_result);
 		return NULL;
+	}
 
 	result[num_elems] = NULL;
 	*count = num_elems;
@@ -1081,10 +1103,22 @@ int __vpn_provider_connect(struct vpn_provider *provider, DBusMessage *msg)
 	DBG("provider %p", provider);
 
 	if (provider->driver && provider->driver->connect) {
+		const char *dbus_sender = dbus_message_get_sender(msg);
+
 		dbus_message_ref(msg);
+
+		if (dbus_message_has_signature(msg,
+						DBUS_TYPE_STRING_AS_STRING)) {
+			const char *sender = NULL;
+
+			dbus_message_get_args(msg, NULL, DBUS_TYPE_STRING,
+					&sender, DBUS_TYPE_INVALID);
+			if (sender && sender[0])
+				dbus_sender = sender;
+		}
+
 		err = provider->driver->connect(provider, connect_cb,
-						dbus_message_get_sender(msg),
-						msg);
+						dbus_sender, msg);
 	} else
 		return -EOPNOTSUPP;
 
@@ -1560,6 +1594,9 @@ int vpn_provider_indicate_error(struct vpn_provider *provider,
 		break;
 	}
 
+	if (provider->driver && provider->driver->set_state)
+		provider->driver->set_state(provider, provider->state);
+
 	return 0;
 }
 
@@ -1604,6 +1641,18 @@ static void unregister_provider(gpointer data)
 	configuration_count_del();
 
 	connection_unregister(provider);
+
+	/* If the provider has any DNS resolver queries pending,
+	 * they need to be cleared here because the unref will not
+	 * be able to do that (because the provider_resolv_host_addr()
+	 * has increased the ref count by 1). This is quite rare as
+	 * normally the resolving either returns a value or has a
+	 * timeout which clears the memory. Typically resolv_result() will
+	 * unref the provider but in this case that call has not yet
+	 * happened.
+	 */
+	if (provider->resolv)
+		vpn_provider_unref(provider);
 
 	vpn_provider_unref(provider);
 }

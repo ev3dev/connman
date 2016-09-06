@@ -2229,10 +2229,8 @@ static int inet_rtnl_recv(GIOChannel *chan, gpointer user_data)
 
 		h = ptr;
 
-		if (!NLMSG_OK(h, len)) {
+		if (!NLMSG_OK(h, len))
 			return -1;
-			break;
-		}
 
 		if (h->nlmsg_seq != rth->seq) {
 			/* Skip this msg */
@@ -2293,13 +2291,12 @@ int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
 {
 	struct sockaddr_nl nladdr;
 	struct inet_rtnl_cb_data *data;
-	unsigned seq;
 	int err;
 
 	memset(&nladdr, 0, sizeof(nladdr));
 	nladdr.nl_family = AF_NETLINK;
 
-	n->nlmsg_seq = seq = ++rtnl->seq;
+	n->nlmsg_seq = ++rtnl->seq;
 
 	if (callback) {
 		data = g_try_malloc0(sizeof(struct inet_rtnl_cb_data));
@@ -2651,8 +2648,14 @@ char **__connman_inet_get_running_interfaces(void)
 
 	g_free(ifr);
 
-	if (count < numif)
+	if (count < numif) {
+		char **prev_result = result;
 		result = g_try_realloc(result, (count + 1) * sizeof(char *));
+		if (!result) {
+			g_free(prev_result);
+			goto error;
+		}
+	}
 
 	return result;
 

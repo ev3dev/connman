@@ -31,6 +31,7 @@
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <xtables.h>
+#include <inttypes.h>
 
 #include <linux/netfilter_ipv4/ip_tables.h>
 
@@ -154,6 +155,7 @@ struct error_target {
 struct connman_iptables_entry {
 	int offset;
 	int builtin;
+	int counter_idx;
 
 	struct ipt_entry *entry;
 };
@@ -251,8 +253,9 @@ static int print_entry(struct ipt_entry *entry, int builtin, unsigned int hook,
 {
 	iterate_entries_cb_t cb = user_data;
 
-	DBG("entry %p  hook %d  offset %d  size %d", entry, hook,
-			offset, entry->next_offset);
+	DBG("entry %p  hook %u  offset %u  size %u  packets %"PRIu64"  bytes %"PRIu64,
+			entry, hook, offset, (unsigned int) entry->next_offset,
+			(uint64_t) entry->counters.pcnt, (uint64_t) entry->counters.bcnt);
 
 	return cb(entry, builtin, hook, size, offset, NULL);
 }
@@ -460,7 +463,7 @@ static void update_targets_reference(struct connman_iptables *table,
 
 static int iptables_add_entry(struct connman_iptables *table,
 				struct ipt_entry *entry, GList *before,
-					int builtin)
+					int builtin, int counter_idx)
 {
 	struct connman_iptables_entry *e, *entry_before;
 
@@ -473,6 +476,7 @@ static int iptables_add_entry(struct connman_iptables *table,
 
 	e->entry = entry;
 	e->builtin = builtin;
+	e->counter_idx = counter_idx;
 
 	table->entries = g_list_insert_before(table->entries, before, e);
 	table->num_entries++;
@@ -620,7 +624,7 @@ static int iptables_add_chain(struct connman_iptables *table,
 	error->t.u.user.target_size = ALIGN(sizeof(struct error_target));
 	g_stpcpy(error->error, name);
 
-	if (iptables_add_entry(table, entry_head, last, -1) < 0)
+	if (iptables_add_entry(table, entry_head, last, -1, -1) < 0)
 		goto err_head;
 
 	/* tail entry */
@@ -638,7 +642,7 @@ static int iptables_add_chain(struct connman_iptables *table,
 				ALIGN(sizeof(struct ipt_standard_target));
 	standard->verdict = XT_RETURN;
 
-	if (iptables_add_entry(table, entry_return, last, -1) < 0)
+	if (iptables_add_entry(table, entry_return, last, -1, -1) < 0)
 		goto err;
 
 	return 0;
@@ -826,7 +830,7 @@ static int iptables_append_rule(struct connman_iptables *table,
 	if (!new_entry)
 		return -EINVAL;
 
-	ret = iptables_add_entry(table, new_entry, chain_tail->prev, builtin);
+	ret = iptables_add_entry(table, new_entry, chain_tail->prev, builtin, -1);
 	if (ret < 0)
 		g_free(new_entry);
 
@@ -857,7 +861,7 @@ static int iptables_insert_rule(struct connman_iptables *table,
 	if (builtin == -1)
 		chain_head = chain_head->next;
 
-	ret = iptables_add_entry(table, new_entry, chain_head, builtin);
+	ret = iptables_add_entry(table, new_entry, chain_head, builtin, -1);
 	if (ret < 0)
 		g_free(new_entry);
 
@@ -1128,6 +1132,8 @@ static int iptables_change_policy(struct connman_iptables *table,
 	target = ipt_get_target(entry->entry);
 
 	t = (struct xt_standard_target *)target;
+	if (t->verdict != verdict)
+		entry->counter_idx = -1;
 	t->verdict = verdict;
 
 	return 0;
@@ -1405,6 +1411,19 @@ static int iptables_replace(struct connman_iptables *table,
 	return 0;
 }
 
+static int iptables_add_counters(struct connman_iptables *table,
+		struct xt_counters_info *c)
+{
+	int err;
+
+	err = setsockopt(table->ipt_sock, IPPROTO_IP, IPT_SO_SET_ADD_COUNTERS, c,
+			sizeof(*c) + sizeof(struct xt_counters) * c->num_counters);
+	if (err < 0)
+		return -errno;
+
+	return 0;
+}
+
 static int add_entry(struct ipt_entry *entry, int builtin, unsigned int hook,
 			size_t size, unsigned offset, void *user_data)
 {
@@ -1417,7 +1436,8 @@ static int add_entry(struct ipt_entry *entry, int builtin, unsigned int hook,
 
 	memcpy(new_entry, entry, entry->next_offset);
 
-	return iptables_add_entry(table, new_entry, NULL, builtin);
+	return iptables_add_entry(table, new_entry, NULL, builtin,
+			table->num_entries);
 }
 
 static void table_cleanup(struct connman_iptables *table)
@@ -1546,6 +1566,9 @@ struct xtables_globals iptables_globals = {
 	.option_offset = 0,
 	.opts = iptables_opts,
 	.orig_opts = iptables_opts,
+#if XTABLES_VERSION_CODE > 10
+	.compat_rev = xtables_compatible_revision,
+#endif
 };
 
 static struct xtables_target *prepare_target(struct connman_iptables *table,
@@ -1745,6 +1768,7 @@ struct parse_context {
 	struct xtables_target *xt_t;
 	GList *xt_m;
 	struct xtables_rule_match *xt_rm;
+	int proto;
 };
 
 static int prepare_getopt_args(const char *str, struct parse_context *ctx)
@@ -1784,6 +1808,14 @@ static int parse_xt_modules(int c, bool invert,
 {
 	struct xtables_match *m;
 	struct xtables_rule_match *rm;
+	struct ipt_entry fw;
+
+	memset(&fw, 0, sizeof(fw));
+
+	/* The SNAT parser wants to know the protocol. */
+	if (ctx->proto == 0)
+		ctx->proto = IPPROTO_IP;
+	fw.ip.proto = ctx->proto;
 
 	for (rm = ctx->xt_rm; rm; rm = rm->next) {
 		if (rm->completed != 0)
@@ -1799,7 +1831,7 @@ static int parse_xt_modules(int c, bool invert,
 					+ XT_OPTION_OFFSET_SCALE)
 			continue;
 
-		xtables_option_mpcall(c, ctx->argv, invert, m, NULL);
+		xtables_option_mpcall(c, ctx->argv, invert, m, &fw);
 	}
 
 	if (!ctx->xt_t)
@@ -1813,7 +1845,7 @@ static int parse_xt_modules(int c, bool invert,
 					+ XT_OPTION_OFFSET_SCALE)
 		return 0;
 
-	xtables_option_tpcall(c, ctx->argv, invert, ctx->xt_t, NULL);
+	xtables_option_tpcall(c, ctx->argv, invert, ctx->xt_t, &fw);
 
 	return 0;
 }
@@ -1987,6 +2019,9 @@ static int parse_rule_spec(struct connman_iptables *table,
 			}
 			ctx->xt_m = g_list_append(ctx->xt_m, xt_m);
 
+			break;
+		case 'p':
+			ctx->proto = xtables_parse_protocol(optarg);
 			break;
 		case 'j':
 			/* Target */
@@ -2303,6 +2338,10 @@ int __connman_iptables_commit(const char *table_name)
 	struct connman_iptables *table;
 	struct ipt_replace *repl;
 	int err;
+	struct xt_counters_info *counters;
+	struct connman_iptables_entry *e;
+	GList *list;
+	unsigned int cnt;
 
 	DBG("%s", table_name);
 
@@ -2311,21 +2350,44 @@ int __connman_iptables_commit(const char *table_name)
 		return -EINVAL;
 
 	repl = iptables_blob(table);
+	if (!repl)
+		return -ENOMEM;
 
 	if (debug_enabled)
 		dump_ipt_replace(repl);
 
 	err = iptables_replace(table, repl);
 
-	g_free(repl->counters);
-	g_free(repl);
+	if (err < 0)
+		goto out_free;
+
+	counters = g_try_malloc0(sizeof(*counters) +
+			sizeof(struct xt_counters) * table->num_entries);
+	if (!counters) {
+		err = -ENOMEM;
+		goto out_hash_remove;
+	}
+	g_stpcpy(counters->name, table->info->name);
+	counters->num_counters = table->num_entries;
+	for (list = table->entries, cnt = 0; list; list = list->next, cnt++) {
+		e = list->data;
+		if (e->counter_idx >= 0)
+			counters->counters[cnt] = repl->counters[e->counter_idx];
+	}
+	err = iptables_add_counters(table, counters);
+	g_free(counters);
 
 	if (err < 0)
-		return err;
+		goto out_hash_remove;
 
+	err = 0;
+
+out_hash_remove:
 	g_hash_table_remove(table_hash, table_name);
-
-	return 0;
+out_free:
+	g_free(repl->counters);
+	g_free(repl);
+	return err;
 }
 
 static void remove_table(gpointer user_data)
@@ -2364,8 +2426,10 @@ int __connman_iptables_iterate_chains(const char *table_name,
 	struct connman_iptables *table;
 
 	table = get_table(table_name);
-	if (!table)
+	if (!table) {
+		g_free(cbd);
 		return -EINVAL;
+	}
 
 	iterate_entries(table->blob_entries->entrytable,
 			table->info->valid_hooks,

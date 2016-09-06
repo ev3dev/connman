@@ -19,7 +19,8 @@ noinst_HEADERS = include/rtnl.h include/task.h \
 			include/dbus.h include/option.h \
 			include/provider.h include/vpn-dbus.h \
 			include/utsname.h include/timeserver.h include/proxy.h \
-			include/technology.h include/setting.h
+			include/technology.h include/setting.h \
+			include/backtrace.h
 
 local_headers = $(foreach file,$(include_HEADERS) $(nodist_include_HEADERS) \
 			$(noinst_HEADERS), include/connman/$(notdir $(file)))
@@ -40,6 +41,10 @@ if WISPR
 gweb_sources += gweb/giognutls.h gweb/giognutls.c
 else
 gweb_sources += gweb/giognutls.h gweb/gionotls.c
+endif
+
+if BACKTRACE
+backtrace_sources = src/backtrace.c
 endif
 
 shared_sources = src/shared/util.h src/shared/util.c \
@@ -63,8 +68,10 @@ endif
 
 if SYSTEMD
 systemdunitdir = @SYSTEMD_UNITDIR@
+systemdunit_DATA = src/connman.service src/connman-wait-online.service
 
-systemdunit_DATA = src/connman.service
+tmpfilesdir = @SYSTEMD_TMPFILESDIR@
+nodist_tmpfiles_DATA = scripts/connman_resolvconf.conf
 
 if VPN
 systemdunit_DATA += vpn/connman-vpn.service
@@ -74,10 +81,12 @@ endif
 
 service_files_sources = src/connman.service.in src/net.connman.service.in \
 				vpn/connman-vpn.service.in \
-				vpn/net.connman.vpn.service.in
+				vpn/net.connman.vpn.service.in \
+				src/connman-wait-online.service.in
 service_files = src/connman.service src/net.connman.service \
 				vpn/connman-vpn.service \
-				vpn/net.connman.vpn.service
+				vpn/net.connman.vpn.service \
+				src/connman-wait-online.service
 
 plugin_LTLIBRARIES =
 
@@ -95,9 +104,9 @@ unit_objects =
 
 MANUAL_PAGES =
 
-sbin_PROGRAMS = src/connmand
+sbin_PROGRAMS = src/connmand src/connmand-wait-online
 
-src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) \
+src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) $(backtrace_sources) \
 			$(builtin_sources) $(shared_sources) src/connman.ver \
 			src/main.c src/connman.h src/log.c \
 			src/error.c src/plugin.c src/task.c \
@@ -123,6 +132,11 @@ src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 src_connmand_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/src/connman.ver
 
+src_connmand_wait_online_SOURCES = src/connmand-wait-online.c
+
+src_connmand_wait_online_LDADD = gdbus/libgdbus-internal.la \
+			@GLIB_LIBS@ @DBUS_LIBS@
+
 if VPN
 vpn_plugin_LTLIBRARIES =
 
@@ -135,7 +149,7 @@ builtin_vpn_cflags =
 
 sbin_PROGRAMS += vpn/connman-vpnd
 
-vpn_connman_vpnd_SOURCES = $(builtin_vpn_sources) \
+vpn_connman_vpnd_SOURCES = $(builtin_vpn_sources) $(backtrace_sources) \
 			$(gweb_sources) vpn/vpn.ver vpn/main.c vpn/vpn.h \
 			src/log.c src/error.c src/plugin.c src/task.c \
 			vpn/vpn-manager.c vpn/vpn-provider.c \
@@ -153,7 +167,8 @@ vpn_connman_vpnd_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/vpn/vpn.ver
 endif
 
-BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) scripts/connman
+BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) \
+	scripts/connman scripts/connman_resolvconf.conf
 
 if VPN
 BUILT_SOURCES += vpn/builtin.h
@@ -161,8 +176,8 @@ endif
 
 CLEANFILES = src/connman.conf $(BUILT_SOURCES) $(service_files)
 
-statedir = $(localstatedir)/run/connman
-vpn_statedir = $(localstatedir)/run/connman-vpn
+statedir = $(runstatedir)/connman
+vpn_statedir = $(runstatedir)/connman-vpn
 
 if VPN
 vpn_plugindir = $(libdir)/connman/plugins-vpn
@@ -248,8 +263,6 @@ include Makefile.plugins
 if CLIENT
 bin_PROGRAMS += client/connmanctl
 
-MANUAL_PAGES += doc/connmanctl.1
-
 client_connmanctl_SOURCES = client/dbus_helpers.h client/dbus_helpers.c \
 			client/services.h client/services.c \
 			client/commands.h client/commands.c \
@@ -265,8 +278,8 @@ endif
 
 noinst_PROGRAMS += unit/test-ippool
 
-unit_test_ippool_SOURCES = src/log.c src/dbus.c src/error.c \
-					src/ippool.c unit/test-ippool.c
+unit_test_ippool_SOURCES = $(backtrace_sources) src/log.c src/dbus.c \
+					src/error.c src/ippool.c unit/test-ippool.c
 unit_test_ippool_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
@@ -317,12 +330,12 @@ tools_dbus_test_LDADD = gdbus/libgdbus-internal.la @GLIB_LIBS@ @DBUS_LIBS@
 
 tools_polkit_test_LDADD = @DBUS_LIBS@
 
-tools_iptables_test_SOURCES = src/log.c src/iptables.c tools/iptables-test.c
+tools_iptables_test_SOURCES = $(backtrace_sources) src/log.c src/iptables.c tools/iptables-test.c
 tools_iptables_test_LDADD = @GLIB_LIBS@ @XTABLES_LIBS@ -ldl
 
 tools_private_network_test_LDADD = @GLIB_LIBS@ @DBUS_LIBS@
 
-tools_session_test_SOURCES = src/log.c src/dbus.c src/error.c \
+tools_session_test_SOURCES = $(backtrace_sources) src/log.c src/dbus.c src/error.c \
 		tools/session-test.c tools/session-utils.c tools/manager-api.c \
 		tools/session-api.c tools/session-test.h
 tools_session_test_LDADD = gdbus/libgdbus-internal.la \
@@ -330,7 +343,7 @@ tools_session_test_LDADD = gdbus/libgdbus-internal.la \
 
 tools_iptables_unit_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @XTABLES_CFLAGS@ \
 		-DIPTABLES_SAVE=\""${IPTABLES_SAVE}"\"
-tools_iptables_unit_SOURCES = src/log.c \
+tools_iptables_unit_SOURCES = $(backtrace_sources) src/log.c \
 		 src/iptables.c src/firewall.c src/nat.c tools/iptables-unit.c
 tools_iptables_unit_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ @XTABLES_LIBS@ -ldl
@@ -380,14 +393,23 @@ EXTRA_DIST += doc/overview-api.txt doc/behavior-api.txt \
 				doc/vpn-config-format.txt \
 				doc/vpn-connection-api.txt \
 				doc/vpn-manager-api.txt doc/vpn-overview.txt \
-				doc/session-policy-format.txt
+				doc/session-policy-format.txt \
+				doc/connmanctl.1.in doc/connman.conf.5.in \
+				doc/connman-service.config.5.in \
+				doc/connman-vpn.conf.5.in \
+				doc/connman-vpn-provider.config.5.in \
+				doc/connman.8.in doc/connman-vpn.8.in
 
 EXTRA_DIST += src/main.conf \
-		src/eduroam.config
+		src/eduroam.config \
+		scripts/connman_resolvconf.conf.in
 
-MANUAL_PAGES += doc/connman.8 doc/connman.conf.5
+MANUAL_PAGES += doc/connmanctl.1 doc/connman.conf.5 \
+		doc/connman-service.config.5 doc/connman-vpn.conf.5 \
+		doc/connman-vpn-provider.config.5 \
+		doc/connman.8 doc/connman-vpn.8
 
-dist_man_MANS = $(MANUAL_PAGES)
+nodist_man_MANS = $(MANUAL_PAGES)
 
 pkgconfigdir = $(libdir)/pkgconfig
 
@@ -410,9 +432,11 @@ MAINTAINERCLEANFILES = Makefile.in \
 
 
 src/builtin.h: src/genbuiltin $(builtin_sources)
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(AM_V_GEN)$(srcdir)/src/genbuiltin $(builtin_modules) > $@
 
 vpn/builtin.h: src/genbuiltin $(builtin_vpn_sources)
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(AM_V_GEN)$(srcdir)/src/genbuiltin $(builtin_vpn_modules) > $@
 
 src/connman.conf: src/connman-dbus.conf src/connman-polkit.conf
@@ -446,12 +470,34 @@ EXTRA_DIST += vpn/connman-task.te
 do_subst = $(AM_V_GEN)$(SED) \
 		-e 's,[@]prefix[@],$(prefix),g' \
 		-e 's,[@]sbindir[@],$(sbindir),g' \
-		-e 's,[@]sysconfdir[@],$(sysconfdir),g'
+		-e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+		-e 's,[@]storagedir[@],$(storagedir),g' \
+		-e 's,[@]vpn_storagedir[@],$(vpn_storagedir),g' \
+		-e 's,[@]localstatedir[@],$(localstatedir),g' \
+		-e 's,[@]runstatedir[@],$(runstatedir),g'
+
+%.1 : %.1.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+%.5 : %.5.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+%.8 : %.8.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
 
 %.service: %.service.in Makefile
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(do_subst) < $< > $@
 
 scripts/connman: scripts/connman.in Makefile
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(do_subst) < $< > $@
+
+scripts/connman_resolvconf.conf: scripts/connman_resolvconf.conf.in
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(do_subst) < $< > $@
 
 include/connman/version.h: include/version.h
@@ -463,4 +509,4 @@ include/connman/%.h: $(abs_top_srcdir)/include/%.h
 	$(AM_V_GEN)$(LN_S) $< $@
 
 clean-local:
-	@$(RM) -rf include/connman
+	@$(RM) -rf include/connman $(MANUAL_PAGES)

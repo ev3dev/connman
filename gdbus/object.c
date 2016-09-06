@@ -258,7 +258,8 @@ static DBusHandlerResult process_message(DBusConnection *connection,
 
 	reply = method->function(connection, message, iface_user_data);
 
-	if (method->flags & G_DBUS_METHOD_FLAG_NOREPLY) {
+	if (method->flags & G_DBUS_METHOD_FLAG_NOREPLY ||
+					dbus_message_get_no_reply(message)) {
 		if (reply != NULL)
 			dbus_message_unref(reply);
 		return DBUS_HANDLER_RESULT_HANDLED;
@@ -1720,9 +1721,10 @@ static void process_property_changes(struct generic_data *data)
 	}
 }
 
-void g_dbus_emit_property_changed(DBusConnection *connection,
+void g_dbus_emit_property_changed_full(DBusConnection *connection,
 				const char *path, const char *interface,
-				const char *name)
+				const char *name,
+				GDbusPropertyChangedFlags flags)
 {
 	const GDBusPropertyTable *property;
 	struct generic_data *data;
@@ -1760,7 +1762,16 @@ void g_dbus_emit_property_changed(DBusConnection *connection,
 	iface->pending_prop = g_slist_prepend(iface->pending_prop,
 						(void *) property);
 
-	add_pending(data);
+	if (flags & G_DBUS_PROPERTY_CHANGED_FLAG_FLUSH)
+		process_property_changes(data);
+	else
+		add_pending(data);
+}
+
+void g_dbus_emit_property_changed(DBusConnection *connection, const char *path,
+				const char *interface, const char *name)
+{
+	g_dbus_emit_property_changed_full(connection, path, interface, name, 0);
 }
 
 gboolean g_dbus_get_properties(DBusConnection *connection, const char *path,

@@ -337,6 +337,7 @@ static void pan_create_nap(struct bluetooth_pan *pan)
 {
 	struct connman_device *device;
 	const char* role;
+	const char *adapter;
 
 	role = proxy_get_role(pan->btdevice_proxy);
 	if (!role) {
@@ -344,8 +345,12 @@ static void pan_create_nap(struct bluetooth_pan *pan)
 		return;
 	}
 
-	device = g_hash_table_lookup(devices,
-			proxy_get_string(pan->btdevice_proxy, "Adapter"));
+	adapter = proxy_get_string(pan->btdevice_proxy, "Adapter");
+
+	if (!adapter)
+		return;
+
+	device = g_hash_table_lookup(devices, adapter);
 
 	if (!device || !connman_device_get_powered(device))
 		return;
@@ -713,12 +718,16 @@ static bool tethering_create(const char *path,
 
 	DBG("path %s bridge %s", path, bridge);
 
-	if (!bridge)
-		return -EINVAL;
+	if (!bridge) {
+		g_free(tethering);
+		return false;
+	}
 
 	proxy = g_dbus_proxy_new(client, path, "org.bluez.NetworkServer1");
-	if (!proxy)
+	if (!proxy) {
+		g_free(tethering);
 		return false;
+	}
 
 	tethering->technology = technology;
 	tethering->bridge = g_strdup(bridge);

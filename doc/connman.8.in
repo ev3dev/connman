@@ -1,0 +1,97 @@
+.\" connman(8) manual page
+.\"
+.\" Copyright (C) 2012,2015 Intel Corporation
+.\"
+.TH CONNMAN "8" "2015-10-15"
+.SH NAME
+ConnMan \- network management daemon
+.SH SYNOPSIS
+.B connmand
+.RB [\| \-\-version \||\| \-\-help \|]
+.PP
+.B connmand
+.RB [\| \-c
+.IR file \|]
+.RB [\| \-d\  [\c
+.IR file [,...]\|]\|]
+.RB [\| \-i
+.IR interface [,...]\|]
+.RB [\| \-I
+.IR interface [,...]\|]
+.RB [\| \-W
+.IR driver [,...]\|]
+.RB [\| \-p
+.IR plugin [,...]\|]
+.RB [\| \-P
+.IR plugin [,...]\|]
+.RB [\| \-n \|]
+.RB [\| \-r \|]
+.SH DESCRIPTION
+The \fIConnMan\fP provides a daemon for managing internet connections
+within devices running the Linux operating system. The Connection Manager is
+designed to be slim and to use as few resources as possible.
+It is a fully modular system that can be extended, through plug-ins,
+to support all kinds of wired or wireless technologies.
+Also, configuration methods, like DHCP and domain name resolving,
+are implemented using plug-ins.
+The plug-in approach allows for easy adaption and modification for various
+use cases.
+.P
+.SH OPTIONS
+The following options are supported:
+.TP
+.BR \-v ", " \-\-version
+Print the ConnMan software version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print ConnMan's available options and exit.
+.TP
+.BI \-c\  file\fR,\ \fB\-\-config= \fIfile
+Specify configuration file to set up various settings for ConnMan.  If not
+specified, the default value of \fI@sysconfdir@/connman/main.conf\fP
+is used.  See \fBconnman.conf\fP(5) for more information on
+configuration file. The use of config file is optional and sane default values
+are used if config file is missing.
+.TP
+.BR \-d\  [ \fIfile [,...]],\  \-\-debug [= \fIfile [,...]]
+Sets how much information ConnMan sends to the log destination (usually
+syslog's "daemon" facility).  If the file options are omitted, then debugging
+information from all the source files are printed. If file options are
+present, then only debug prints from that source file are printed. Example:
+.PP
+           connmand --debug=src/service.c,plugins/wifi.c
+.TP
+.BR \-i\ \fIinterface \fR[,...],\  \-\-device= \fIinterface \fR[,...]
+Only manage these network interfaces. By default all network interfaces
+are managed.
+.TP
+.BR \-I\ \fIinterface \fR[,...],\  \-\-nodevice= \fIinterface \fR[,...]
+Never manage these network interfaces.
+.TP
+.BI \-p\  plugin \fR[,...],\ \fB\-\-plugin= plugin \fR[,...]
+Load these plugins only. The option can be a pattern containing
+"*" and "?" characters.
+.TP
+.BI \-P\  plugin \fR[,...],\ \fB\-\-noplugin= plugin \fR[,...]
+Never load these plugins. The option can be a pattern containing
+"*" and "?" characters.
+.TP
+.BI \-W\  driver \fR[,...],\ \fB\-\-wifi= driver \fR[,...]
+Wifi driver that WiFi/Supplicant should use. If this flag is omitted,
+then the value "nl80211,wext" is used by default.
+.TP
+.BR \-n ", " \-\-nodaemon
+Do not daemonize. This is useful for debugging, and directs log output to
+the controlling terminal in addition to syslog.
+.TP
+.BR \-r ", " \-\-nodnsproxy
+Do not act as a DNS proxy. By default ConnMan will direct all DNS traffic
+to itself by setting nameserver to 127.0.0.1 in \fBresolv.conf\fP(5) file.
+If this is not desired and you want that all programs call directly some
+DNS server, then you can use the \fB--nodnsproxy\fP option.
+If this option is used, then ConnMan is not able to cache the DNS queries
+because the DNS traffic is not going through ConnMan and that can cause
+some extra network traffic.
+.SH SEE ALSO
+.BR connmanctl (1), \ connman.conf (5), \ connman-service.config (5), \c
+.BR \ connman-vpn (8)
