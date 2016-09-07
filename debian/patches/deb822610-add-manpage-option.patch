@@ -1,6 +1,7 @@
 From: Alexander Sack <asac@debian.org>
 Subject: add missing --nobacktrace option to manpage
 Bug-Debian: http://bugs.debian.org/822610
+Forwarded: https://lists.01.org/pipermail/connman/2016-September/020878.html
 Last-Updated: 2016-09-06
 ---
 diff --git a/doc/connman.8.in b/doc/connman.8.in
