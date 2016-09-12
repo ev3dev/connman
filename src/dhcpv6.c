@@ -1193,6 +1193,11 @@ static int check_restart(struct connman_dhcpv6 *dhcp)
 
 	g_dhcpv6_client_get_timeouts(dhcp->dhcp_client, NULL, NULL,
 				NULL, &expired);
+
+	/* infinite lifetime for an DHCPv6 address */
+	if (expired == 0xffffffff)
+		return -EISCONN;
+
 	current = time(NULL);
 
 	if (current >= expired) {

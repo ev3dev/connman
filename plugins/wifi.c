@@ -71,6 +71,9 @@
 #define P2P_LISTEN_PERIOD 500
 #define P2P_LISTEN_INTERVAL 2000
 
+#define ASSOC_STATUS_NO_CLIENT 17
+#define LOAD_SHAPING_MAX_RETRIES 3
+
 static struct connman_technology *wifi_technology = NULL;
 static struct connman_technology *p2p_technology = NULL;
 
@@ -128,6 +131,7 @@ struct wifi_data {
 	unsigned flags;
 	unsigned int watch;
 	int retries;
+	int load_shaping_retries;
 	struct hidden_params *hidden;
 	bool postpone_hidden;
 	struct wifi_tethering_info *tethering_param;
@@ -144,6 +148,8 @@ struct wifi_data {
 	bool p2p_connecting;
 	bool p2p_device;
 	int servicing;
+	int disconnect_code;
+	int assoc_code;
 };
 
 static GList *iface_list = NULL;
@@ -2095,7 +2101,21 @@ static int network_connect(struct connman_network *network)
 		wifi->pending_network = network;
 		g_free(ssid);
 	} else {
+
+		/*
+		 * This is the network that is going to get plumbed into wpa_s
+		 * Mark the previous network that is plumbed in wpa_s as not
+		 * connectable and then the current one as connectable.
+		 * This flag will be used to ensure that the network that is
+		 * sitting in wpa_s never gets marked unavailable even though
+		 * the scan did not find this network.
+		 */
+		if (wifi->network) {
+			connman_network_set_connectable(wifi->network, false);
+		}
+
 		wifi->network = connman_network_ref(network);
+		connman_network_set_connectable(wifi->network, true);
 		wifi->retries = 0;
 
 		return g_supplicant_interface_connect(interface, ssid,
@@ -2119,6 +2139,7 @@ static void disconnect_callback(int result, GSupplicantInterface *interface,
 	}
 
 	if (wifi->network) {
+		connman_network_set_connectable(wifi->network, false);
 		connman_network_set_connected(wifi->network, false);
 		wifi->network = NULL;
 	}
@@ -2291,6 +2312,19 @@ static bool handle_wps_completion(GSupplicantInterface *interface,
 	return true;
 }
 
+static bool handle_assoc_status_code(GSupplicantInterface *interface,
+                                     struct wifi_data *wifi)
+{
+	if (wifi->state == G_SUPPLICANT_STATE_ASSOCIATING &&
+			wifi->assoc_code == ASSOC_STATUS_NO_CLIENT &&
+			wifi->load_shaping_retries < LOAD_SHAPING_MAX_RETRIES) {
+		wifi->load_shaping_retries ++;
+		return TRUE;
+	}
+	wifi->load_shaping_retries = 0;
+	return FALSE;
+}
+
 static bool handle_4way_handshake_failure(GSupplicantInterface *interface,
 					struct connman_network *network,
 					struct wifi_data *wifi)
@@ -2382,6 +2416,10 @@ static void interface_state(GSupplicantInterface *interface)
 			break;
 
 		connman_network_set_connected(network, true);
+
+		wifi->disconnect_code = 0;
+		wifi->assoc_code = 0;
+		wifi->load_shaping_retries = 0;
 		break;
 
 	case G_SUPPLICANT_STATE_DISCONNECTED:
@@ -2399,6 +2437,9 @@ static void interface_state(GSupplicantInterface *interface)
 		if (is_idle(wifi))
 			break;
 
+		if (handle_assoc_status_code(interface, wifi))
+			break;
+
 		/* If previous state was 4way-handshake, then
 		 * it's either: psk was incorrect and thus we retry
 		 * or if we reach the maximum retries we declare the
@@ -2406,12 +2447,6 @@ static void interface_state(GSupplicantInterface *interface)
 		if (handle_4way_handshake_failure(interface,
 						network, wifi))
 			break;
-
-		/* We disable the selected network, if not then
-		 * wpa_supplicant will loop retrying */
-		if (g_supplicant_interface_enable_selected_network(interface,
-						FALSE) != 0)
-			DBG("Could not disable selected network");
 
 		connman_network_set_connected(network, false);
 		connman_network_set_associating(network, false);
@@ -2722,6 +2757,22 @@ static void network_removed(GSupplicantNetwork *network)
 	if (!connman_network)
 		return;
 
+	/*
+	 * wpa_s did not find this network in last scan and hence it generated
+	 * this callback. In case if this is the network with which device
+	 * was connected to, even though network_removed was called, wpa_s
+	 * will keep trying to connect to the same network and once the
+	 * network is back, it will proceed with the connection. Now if
+	 * connman would have removed this network from network hash table,
+	 * on a successful connection complete indication service state
+	 * machine will not move. End result would be only a L2 level
+	 * connection and no IP address. This check ensures that even if the
+	 * network_removed gets called for the previously connected network
+	 * do not remove it from network hash table.
+	 */
+	if (wifi->network == connman_network)
+		return;
+
 	wifi->networks = g_slist_remove(wifi->networks, connman_network);
 
 	connman_device_remove_network(wifi->device, connman_network);
@@ -2935,6 +2986,25 @@ static void debug(const char *str)
 		connman_debug("%s", str);
 }
 
+static void disconnect_reasoncode(GSupplicantInterface *interface,
+				int reasoncode)
+{
+	struct wifi_data *wifi = g_supplicant_interface_get_data(interface);
+
+	if (wifi != NULL) {
+		wifi->disconnect_code = reasoncode;
+	}
+}
+
+static void assoc_status_code(GSupplicantInterface *interface, int status_code)
+{
+	struct wifi_data *wifi = g_supplicant_interface_get_data(interface);
+
+	if (wifi != NULL) {
+		wifi->assoc_code = status_code;
+	}
+}
+
 static const GSupplicantCallbacks callbacks = {
 	.system_ready		= system_ready,
 	.system_killed		= system_killed,
@@ -2953,6 +3023,8 @@ static const GSupplicantCallbacks callbacks = {
 	.peer_changed		= peer_changed,
 	.peer_request		= peer_request,
 	.debug			= debug,
+	.disconnect_reasoncode  = disconnect_reasoncode,
+	.assoc_status_code      = assoc_status_code,
 };
 
 
@@ -3114,6 +3186,8 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 			continue;
 
 		ifname = g_supplicant_interface_get_ifname(wifi->interface);
+		if (!ifname)
+			continue;
 
 		if (wifi->ap_supported == WIFI_AP_NOT_SUPPORTED) {
 			DBG("%s does not support AP mode (detected)", ifname);
@@ -3148,8 +3222,6 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 			goto failed;
 
 		info->ifname = g_strdup(ifname);
-		if (!info->ifname)
-			goto failed;
 
 		wifi->tethering_param->technology = technology;
 		wifi->tethering_param->ssid = ssid_ap_init(identifier, passphrase);

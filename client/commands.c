@@ -523,8 +523,13 @@ struct tether_properties {
 
 static int tether_update(struct tether_properties *tether)
 {
-	if (tether->ssid_result == 0 && tether->passphrase_result == 0)
-		return tether_set("wifi", tether->set_tethering);
+	int ret;
+
+	if (tether->ssid_result == 0 && tether->passphrase_result == 0) {
+		ret = tether_set("wifi", tether->set_tethering);
+		g_free(tether);
+		return ret;
+	}
 
 	if (tether->ssid_result != -EINPROGRESS &&
 			tether->passphrase_result != -EINPROGRESS) {
