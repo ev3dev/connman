@@ -1,10 +1,12 @@
 Source: connman
+Maintainer: Alexander Sack <asac@debian.org>
+Uploaders: Alexander Sack <asac@ubuntu.com>,
+           Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>,
+           Shawn Landden <shawn@churchofgit.com>,
+           Alf Gaida <agaida@siduction.org>
 Section: net
 Priority: optional
-Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Alexander Sack <asac@ubuntu.com>, Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>, Shawn Landden <shawn@churchofgit.com>
-Homepage: https://01.org/connman
-Build-Depends: debhelper (>= 9),
+Build-Depends: debhelper (>= 10),
                libudev-dev,
                libglib2.0-dev,
                libdbus-1-dev,
@@ -20,13 +22,21 @@ Build-Depends: debhelper (>= 9),
 Standards-Version: 3.9.8
 Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/connman.git
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/connman.git
+Homepage: https://01.org/connman
 
 Package: connman
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, dbus, lsb-base
-Recommends: bluez, wpasupplicant, ofono
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         dbus,
+         lsb-base
+Recommends: bluez,
+            wpasupplicant,
+            ofono
 Suggests: indicator-network
-Conflicts: network-manager, wicd-daemon, resolvconf
+Conflicts: network-manager,
+           wicd-daemon,
+           resolvconf
 Description: Intel Connection Manager daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
@@ -49,11 +59,12 @@ Description: Intel Connection Manager daemon
 
 Package: connman-vpn
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: connman (=${source:Version}),
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: connman (= ${source:Version}),
             xl2tpd
-Replaces: connman (<< 1.21-1)
 Breaks: connman (<< 1.21-1)
+Replaces: connman (<< 1.21-1)
 Description: Intel Connection Manager daemon - VPN daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
@@ -77,9 +88,11 @@ Description: Intel Connection Manager daemon - VPN daemon
  applications. The VPN daemon can also be run standalone without connmand.
 
 Package: connman-dev
-Section: devel
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libglib2.0-dev, libdbus-1-dev
+Section: devel
+Depends: ${misc:Depends},
+         libglib2.0-dev,
+         libdbus-1-dev
 Description: Development files for connman
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
@@ -102,8 +115,8 @@ Description: Development files for connman
  developing connman plugins.
 
 Package: connman-doc
-Section: doc
 Architecture: all
+Section: doc
 Depends: ${misc:Depends}
 Suggests: connman-dev
 Description: ConnMan documentation

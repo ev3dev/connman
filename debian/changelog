@@ -1,6 +1,26 @@
-connman (1.32-2) UNRELEASED; urgency=medium
+connman (1.33-1) UNRELEASED; urgency=medium
 
+  [ Alexander Sack ]
   * document forwarding-info for deb822610-add-manpage-option.patch
+
+  [ Alf Gaida ]
+  * Cherry-picked upstream-version 1.33
+  * Format control with cme
+  * Use version 4 in watch file
+  * Bump compat to 10, build depend on debhelpers (>=10)
+  * Build out of the tree (--builddir build)
+  * Removed outdated debian/manpages
+  * Install project manpages
+  * Added hardening flags
+  * Reduce dependencies
+  * Deleted obsolete README.debian - connman conflicts with  n-m, wicd
+    and resolvconf
+  * Removed second --enable-l2tp from config
+  * Added --enable-threads and --enable-pie
+  * Removed dependency shlibs from connman-dev
+  * Some copyright fixes
+  * Added connman.lintian-overrides
+  * Added connman-vpn.overrides
 
  -- Alexander Sack <asac@debian.org>  Wed, 07 Sep 2016 23:21:48 +0200
 
