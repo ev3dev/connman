@@ -2491,8 +2491,6 @@ static void interface_state(GSupplicantInterface *interface)
 		if (wifi->connected)
 			connman_warn("Probably roaming right now!"
 						" Staying connected...");
-		else
-			wifi->connected = false;
 		break;
 	case G_SUPPLICANT_STATE_SCANNING:
 		wifi->connected = false;
