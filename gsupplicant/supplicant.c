@@ -764,6 +764,7 @@ static void remove_peer(gpointer data)
 	g_free(peer->path);
 	g_free(peer->name);
 	g_free(peer->identifier);
+	g_free(peer->widi_ies);
 
 	g_free(peer);
 }
