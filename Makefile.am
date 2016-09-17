@@ -377,7 +377,7 @@ endif
 tools_dnsproxy_test_SOURCES = tools/dnsproxy-test.c
 tools_dnsproxy_test_LDADD = @GLIB_LIBS@
 
-tools_netlink_test_SOURCES =$(shared_sources) tools/netlink-test.c
+tools_netlink_test_SOURCES = $(shared_sources) tools/netlink-test.c
 tools_netlink_test_LDADD = @GLIB_LIBS@
 
 endif
