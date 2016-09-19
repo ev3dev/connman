@@ -444,15 +444,31 @@ bool __connman_technology_get_offlinemode(void)
 static void connman_technology_save_offlinemode(void)
 {
 	GKeyFile *keyfile;
+	GError *error = NULL;
+	bool offlinemode;
 
 	keyfile = __connman_storage_load_global();
-	if (!keyfile)
-		keyfile = g_key_file_new();
 
-	g_key_file_set_boolean(keyfile, "global",
+	if (!keyfile) {
+		keyfile = g_key_file_new();
+		g_key_file_set_boolean(keyfile, "global",
 					"OfflineMode", global_offlinemode);
 
-	__connman_storage_save_global(keyfile);
+		__connman_storage_save_global(keyfile);
+	}
+	else {
+		offlinemode = g_key_file_get_boolean(keyfile, "global",
+						"OfflineMode", &error);
+
+		if (error || offlinemode != global_offlinemode) {
+			g_key_file_set_boolean(keyfile, "global",
+					"OfflineMode", global_offlinemode);
+			if (error)
+				g_clear_error(&error);
+
+			__connman_storage_save_global(keyfile);
+		}
+	}
 
 	g_key_file_free(keyfile);
 
