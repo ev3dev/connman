@@ -4759,6 +4759,20 @@ static gint service_compare(gconstpointer a, gconstpointer b)
 		return 1;
 
 	if (service_a->type != service_b->type) {
+		unsigned int *tech_array;
+		int i;
+
+		tech_array = connman_setting_get_uint_list(
+						"PreferredTechnologies");
+		if (tech_array) {
+			for (i = 0; tech_array[i]; i++) {
+				if (tech_array[i] == service_a->type)
+					return -1;
+
+				if (tech_array[i] == service_b->type)
+					return 1;
+			}
+		}
 
 		if (service_a->type == CONNMAN_SERVICE_TYPE_ETHERNET)
 			return -1;
