@@ -7,7 +7,7 @@ connman (1.33-1) UNRELEASED; urgency=medium
   * Cherry-picked upstream-version 1.33
   * Format control with cme
   * Use version 4 in watch file
-  * Bump compat to 10, build depend on debhelpers (>=10)
+  * Bump compat to 10, build depend on debhelper (>=10)
   * Build out of the tree (--builddir build)
   * Removed outdated debian/manpages
   * Install project manpages
@@ -21,6 +21,7 @@ connman (1.33-1) UNRELEASED; urgency=medium
   * Some copyright fixes
   * Added connman.lintian-overrides
   * Added connman-vpn.overrides
+  * Removed --parallel from rules, standard compat 10
 
  -- Alexander Sack <asac@debian.org>  Wed, 07 Sep 2016 23:21:48 +0200
 

@@ -7,7 +7,8 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 %:
 	dh $@ --with=systemd,autoreconf \
-	      --builddir build
+	      --builddir build \
+	      --as-needed
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
@@ -33,10 +34,8 @@ override_dh_installinit:
 	dh_installinit --restart-after-upgrade
 
 override_dh_auto_clean:
-	rm -f vpn/connman-vpn-dbus.conf
-	rm -f vpn/net.connman.vpn.policy
-	rm -f debian/connman.init
-	rm -f plugins/net.connman.policy
+	$(RM) debian/connman.init
+	$(RM) -r build
 	dh_auto_clean
 
 override_dh_clean:

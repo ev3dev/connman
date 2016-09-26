@@ -1,4 +1,4 @@
-Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: ConnMan
 Upstream-Contact: Marcel Holtmann <marcel@holtmann.org>
 Source: https://git.kernel.org/cgit/network/connman/connman.git
@@ -9,7 +9,7 @@ License: GPL-2
 
 Files: debian/*
 Copyright: 2009-2016 Alexander Sack <asac@debian.org>
-           2016      Alf Gaid <agaida@siduction.org>
+           2016      Alf Gaida <agaida@siduction.org>
            2016      Mateusz Łukasik <mati75@linuxmint.pl>
            2010-2013 Mathieu Trudel <mathieu-tl@ubuntu.com>                
 License: GPL-2+
