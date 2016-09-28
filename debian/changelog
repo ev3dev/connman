@@ -22,6 +22,8 @@ connman (1.33-1) UNRELEASED; urgency=medium
   * Added connman.lintian-overrides
   * Added connman-vpn.overrides
   * Removed --parallel from rules, standard compat 10
+  * added dhcp-follow-rfc.patch (Closes: #0815xxxx)
+    thanks Kristian Klausen <klausenbusk@hotmail.com>
 
  -- Alexander Sack <asac@debian.org>  Wed, 07 Sep 2016 23:21:48 +0200
 
