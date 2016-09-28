@@ -89,6 +89,7 @@ Description: Intel Connection Manager daemon - VPN daemon
 
 Package: connman-dev
 Architecture: any
+Multi-Arch: same
 Section: devel
 Depends: ${misc:Depends},
          libglib2.0-dev,
@@ -116,6 +117,7 @@ Description: Development files for connman
 
 Package: connman-doc
 Architecture: all
+Multi-Arch: foreign
 Section: doc
 Depends: ${misc:Depends}
 Suggests: connman-dev

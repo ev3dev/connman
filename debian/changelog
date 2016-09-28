@@ -24,6 +24,9 @@ connman (1.33-1) UNRELEASED; urgency=medium
   * Removed --parallel from rules, standard compat 10
   * added dhcp-follow-rfc.patch (Closes: #0815xxxx)
     thanks Kristian Klausen <klausenbusk@hotmail.com>
+  * Follow the Multiarch hinter:
+    - Marked connman-doc Multi-Arch: foreign
+    - Marked connman-dev Multi-Arch: same
 
  -- Alexander Sack <asac@debian.org>  Wed, 07 Sep 2016 23:21:48 +0200
 
