@@ -576,8 +576,8 @@ static int dhcp_initialize(struct connman_dhcp *dhcp)
 		g_dhcp_client_set_request(dhcp_client, G_DHCP_MTU);
 	}
 
-	g_dhcp_client_set_request(dhcp_client, G_DHCP_SUBNET);
 	g_dhcp_client_set_request(dhcp_client, G_DHCP_ROUTER);
+	g_dhcp_client_set_request(dhcp_client, G_DHCP_SUBNET);
 
 	g_dhcp_client_register_event(dhcp_client,
 			G_DHCP_CLIENT_EVENT_LEASE_AVAILABLE,
