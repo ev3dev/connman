@@ -1030,8 +1030,11 @@ int __connman_firewall_init(void)
 	 * loaded yet. ENOENT is return in case the table is missing.
 	 */
 	err = cleanup_table_and_chains();
-	if (err < 0 && (err != EAFNOSUPPORT && err != -ENOENT))
+	if (err < 0 && (err != EAFNOSUPPORT && err != -ENOENT)) {
+		connman_warn("initializing nftable failed with '%s' %d. Check if kernel module nf_tables_ipv4 is missing\n",
+			strerror(-err), err);
 		return err;
+	}
 
 	nft_info = g_new0(struct nftables_info, 1);
 	err = create_table_and_chains(nft_info);
@@ -1051,7 +1054,7 @@ void __connman_firewall_cleanup(void)
 
 	err = cleanup_table_and_chains();
 	if (err < 0)
-		printf("cleanup table and chains failed with '%s' %d\n",
+		connman_warn("cleanup table and chains failed with '%s' %d\n",
 			strerror(-err), err);
 
 	g_free(nft_info);
