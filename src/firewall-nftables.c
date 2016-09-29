@@ -65,7 +65,7 @@
 #define CONNMAN_TABLE "connman"
 #define CONNMAN_CHAIN_NAT_PRE "nat-prerouting"
 #define CONNMAN_CHAIN_NAT_POST "nat-postrouting"
-#define CONNMAN_CHAIN_FILTER_OUTPUT "filter-output"
+#define CONNMAN_CHAIN_ROUTE_OUTPUT "route-output"
 
 static bool debug_enabled = true;
 
@@ -755,10 +755,10 @@ static int build_rule_marking(uid_t uid, uint32_t mark, struct nftnl_rule **res)
 	 * http://wiki.nftables.org/wiki-nftables/index.php/Setting_packet_metainformation
 	 * http://wiki.nftables.org/wiki-nftables/index.php/Matching_packet_metainformation
 	 *
-	 * # nft --debug netlink add rule connman filter-output	\
+	 * # nft --debug netlink add rule connman route-output	\
 	 *	meta skuid wagi mark set 1234
 	 *
-	 *	ip connman filter-output
+	 *	ip connman route-output
 	 *	  [ meta load skuid => reg 1 ]
 	 *	  [ cmp eq reg 1 0x000003e8 ]
 	 *	  [ immediate reg 1 0x000004d2 ]
@@ -770,7 +770,7 @@ static int build_rule_marking(uid_t uid, uint32_t mark, struct nftnl_rule **res)
 		return -ENOMEM;
 
 	nftnl_rule_set(rule, NFTNL_RULE_TABLE, CONNMAN_TABLE);
-	nftnl_rule_set(rule, NFTNL_RULE_CHAIN, CONNMAN_CHAIN_FILTER_OUTPUT);
+	nftnl_rule_set(rule, NFTNL_RULE_CHAIN, CONNMAN_CHAIN_ROUTE_OUTPUT);
 
 	expr = nftnl_expr_alloc("meta");
 	if (!expr)
@@ -832,7 +832,7 @@ int __connman_firewall_enable_marking(struct firewall_context *ctx,
 	if (err < 0)
 		goto out;
 
-	ctx->rule.chain = CONNMAN_CHAIN_FILTER_OUTPUT;
+	ctx->rule.chain = CONNMAN_CHAIN_ROUTE_OUTPUT;
 	err = rule_cmd(nl, rule, NFT_MSG_NEWRULE, NFPROTO_IPV4,
 			NLM_F_APPEND|NLM_F_CREATE|NLM_F_ACK,
 			CALLBACK_RETURN_HANDLE, &ctx->rule.handle);
@@ -965,11 +965,11 @@ static int create_table_and_chains(struct nftables_info *nft_info)
 		goto out;
 
 	/*
-	 * # nft add chain connman filter-output		\
-	 *	{ type filter hook output priority 0 ; }
+	 * # nft add chain connman route-output		\
+	 *	{ type route hook output priority 0 ; }
 	 */
-	chain = build_chain(CONNMAN_CHAIN_FILTER_OUTPUT, CONNMAN_TABLE,
-				"filter", NF_INET_LOCAL_OUT, 0);
+	chain = build_chain(CONNMAN_CHAIN_ROUTE_OUTPUT, CONNMAN_TABLE,
+				"route", NF_INET_LOCAL_OUT, 0);
 	if (!chain) {
 		err = -ENOMEM;
 		goto out;
