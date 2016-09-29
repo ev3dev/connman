@@ -80,8 +80,8 @@ struct firewall_context {
 
 struct nftables_info {
 	struct firewall_handle ct;
-	unsigned int mark_ref;
 };
+
 static struct nftables_info *nft_info;
 
 enum callback_return_type {
@@ -745,93 +745,6 @@ int __connman_firewall_disable_snat(struct firewall_context *ctx)
 	return rule_delete(&ctx->rule);
 }
 
-static int build_rule_ct(struct nftnl_rule **res)
-{
-	struct nftnl_rule *rule;
-	struct nftnl_expr *expr;
-
-	/*
-	 * http://wiki.nftables.org/wiki-nftables/index.php/Setting_packet_metainformation
-	 * http://wiki.nftables.org/wiki-nftables/index.php/Matching_packet_metainformation
-	 *
-	 * # nft --debug netlink add rule connman filter-output	\
-	 *	ct mark set mark
-	 *
-	 *	ip connman filter-output
-	 *	  [ meta load mark => reg 1 ]
-	 *	  [ ct set mark with reg 1 ]
-	 */
-
-	rule = nftnl_rule_alloc();
-	if (!rule)
-		return -ENOMEM;
-
-	nftnl_rule_set(rule, NFTNL_RULE_TABLE, CONNMAN_TABLE);
-	nftnl_rule_set(rule, NFTNL_RULE_CHAIN, CONNMAN_CHAIN_FILTER_OUTPUT);
-
-	expr = nftnl_expr_alloc("meta");
-	if (!expr)
-		goto err;
-	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_KEY, NFT_META_MARK);
-	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_DREG, NFT_REG_1);
-	nftnl_rule_add_expr(rule, expr);
-
-	expr = nftnl_expr_alloc("ct");
-	if (!expr)
-		goto err;
-	nftnl_expr_set_u32(expr, NFTNL_EXPR_CT_KEY, NFT_CT_MARK);
-	nftnl_expr_set_u32(expr, NFTNL_EXPR_CT_SREG, NFT_REG_1);
-	nftnl_rule_add_expr(rule, expr);
-
-	*res = rule;
-	return 0;
-
-err:
-	nftnl_rule_free(rule);
-	return -ENOMEM;
-}
-
-static int ct_enable(void)
-{
-	struct nftnl_rule *rule;
-	struct mnl_socket *nl;
-	int err;
-
-	DBG("");
-
-	if (nft_info->mark_ref > 0)
-		return 0;
-
-        err = socket_open_and_bind(&nl);
-        if (err < 0)
-		return err;
-
-	err = build_rule_ct(&rule);
-	if (err < 0)
-		goto out;
-
-	nft_info->ct.chain = CONNMAN_CHAIN_FILTER_OUTPUT;
-	err = rule_cmd(nl, rule, NFT_MSG_NEWRULE, NFPROTO_IPV4,
-			NLM_F_APPEND|NLM_F_CREATE|NLM_F_ACK,
-			CALLBACK_RETURN_HANDLE, &nft_info->ct.handle);
-	nftnl_rule_free(rule);
-
-	if (!err)
-		nft_info->mark_ref++;
-out:
-	mnl_socket_close(nl);
-	return err;
-}
-
-static int ct_disable(void)
-{
-	nft_info->mark_ref--;
-	if (nft_info->mark_ref > 0)
-		return 0;
-
-	return rule_delete(&nft_info->ct);
-}
-
 static int build_rule_marking(uid_t uid, uint32_t mark, struct nftnl_rule **res)
 {
 	struct nftnl_rule *rule;
@@ -911,10 +824,6 @@ int __connman_firewall_enable_marking(struct firewall_context *ctx,
 		return -EINVAL;
 	uid = pw->pw_uid;
 
-	err = ct_enable();
-	if (err)
-		return err;
-
         err = socket_open_and_bind(&nl);
         if (err < 0)
 		return err;
@@ -930,8 +839,6 @@ int __connman_firewall_enable_marking(struct firewall_context *ctx,
 
 	nftnl_rule_free(rule);
 out:
-	if (err)
-		ct_disable();
 	mnl_socket_close(nl);
 	return err;
 }
@@ -943,7 +850,6 @@ int __connman_firewall_disable_marking(struct firewall_context *ctx)
 	DBG("");
 
 	err = rule_delete(&ctx->rule);
-	ct_disable();
 	return err;
 }
 
