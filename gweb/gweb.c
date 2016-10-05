@@ -792,6 +792,9 @@ static void handle_multi_line(struct web_session *session)
 	char *str;
 	gchar *value;
 
+	if (!session->result.last_key)
+		return;
+
 	str = session->current_header->str;
 
 	if (str[0] != ' ' && str[0] != '\t')
