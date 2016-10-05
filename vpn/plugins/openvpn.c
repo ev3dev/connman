@@ -312,6 +312,7 @@ static int task_append_config_data(struct vpn_provider *provider,
 static gboolean can_read_data(GIOChannel *chan,
                                 GIOCondition cond, gpointer data)
 {
+	void (*cbf)(const char *format, ...) = data;
 	gchar *str;
 	gsize size;
 
@@ -321,7 +322,7 @@ static gboolean can_read_data(GIOChannel *chan,
 	}
 
 	g_io_channel_read_line(chan, &str, &size, NULL, NULL);
-	printf(str);
+	cbf(str);
 	g_free(str);
 
 	return TRUE;
@@ -334,7 +335,7 @@ static int setup_log_read(int stdout_fd, int stderr_fd)
 
 	chan = g_io_channel_unix_new(stdout_fd);
 	g_io_channel_set_close_on_unref(chan, TRUE);
-	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, NULL);
+	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, connman_debug);
 	g_io_channel_unref(chan);
 
 	if (watch == 0)
@@ -342,7 +343,7 @@ static int setup_log_read(int stdout_fd, int stderr_fd)
 
 	chan = g_io_channel_unix_new(stderr_fd);
 	g_io_channel_set_close_on_unref(chan, TRUE);
-	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, NULL);
+	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, connman_error);
 	g_io_channel_unref(chan);
 
 	return watch == 0? -EIO : 0;
