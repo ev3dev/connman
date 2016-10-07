@@ -12,6 +12,7 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
+		--runstatedir='/run' \
 		--enable-debug \
 		--enable-l2tp \
 		--enable-openconnect \
