@@ -2,6 +2,7 @@ connman (1.33-1) unstable; urgency=medium
 
   [ Alexander Sack ]
   * document forwarding-info for deb822610-add-manpage-option.patch
+  * drop asac@ubuntu.com from Uploaders
 
   [ Alf Gaida ]
   * Cherry-picked upstream-version 1.33

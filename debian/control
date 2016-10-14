@@ -1,7 +1,6 @@
 Source: connman
 Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Alexander Sack <asac@ubuntu.com>,
-           Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>,
+Uploaders: Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>,
            Shawn Landden <shawn@churchofgit.com>,
            Alf Gaida <agaida@siduction.org>
 Section: net
