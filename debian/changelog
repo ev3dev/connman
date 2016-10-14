@@ -29,7 +29,7 @@ connman (1.33-1) unstable; urgency=medium
     - Marked connman-doc Multi-Arch: foreign
     - Marked connman-dev Multi-Arch: same
 
- -- Alf Gaida <agaida@siduction.org>  Thu, 13 Oct 2016 22:12:29 +0200
+ -- Alf Gaida <agaida@siduction.org>  Thu, 14 Oct 2016 16:50:00 +0100
 
 connman (1.32-1) unstable; urgency=medium
 
