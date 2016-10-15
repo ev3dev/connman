@@ -261,8 +261,9 @@ static int socket_open_and_bind(struct mnl_socket **n)
         err = mnl_socket_bind(nl, 1 << (NFNLGRP_NFTABLES-1),
 				MNL_SOCKET_AUTOPID);
         if (err < 0) {
+		err = errno;
 		mnl_socket_close(nl);
-                return -errno;
+                return -err;
 	}
 
         *n = nl;
