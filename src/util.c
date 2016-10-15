@@ -40,14 +40,19 @@ static int f = -1;
 
 int __connman_util_get_random(uint64_t *val)
 {
-	int r = 0;
+	int r;
 
 	if (!val)
 		return -EINVAL;
 
-	if (read(f, val, sizeof(uint64_t)) < 0) {
+	r = read(f, val, sizeof(uint64_t));
+	if (r < 0) {
 		r = -errno;
 		connman_warn_once("Could not read from "URANDOM);
+		*val = random();
+	} else if (r != sizeof(uint64_t)) {
+		r = -EIO;
+		connman_warn_once("Short read from "URANDOM);
 		*val = random();
 	}
 
