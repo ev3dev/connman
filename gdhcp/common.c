@@ -490,7 +490,11 @@ int dhcpv6_send_packet(int index, struct dhcpv6_packet *dhcp_pkt, int len)
 	if (fd < 0)
 		return -errno;
 
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+		int err = errno;
+		close(fd);
+		return -err;
+	}
 
 	memset(&src, 0, sizeof(src));
 	src.sin6_family = AF_INET6;
@@ -641,7 +645,11 @@ int dhcp_send_kernel_packet(struct dhcp_packet *dhcp_pkt,
 	if (fd < 0)
 		return -errno;
 
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+		int err = errno;
+		close(fd);
+		return -err;
+	}
 
 	memset(&client, 0, sizeof(client));
 	client.sin_family = AF_INET;
@@ -682,7 +690,11 @@ int dhcp_l3_socket(int port, const char *interface, int family)
 	if (fd < 0)
 		return -errno;
 
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+		int err = errno;
+		close(fd);
+		return -err;
+	}
 
 	if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
 				interface, strlen(interface) + 1) < 0) {
