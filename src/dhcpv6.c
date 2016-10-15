@@ -105,20 +105,14 @@ static void clear_timer(struct connman_dhcpv6 *dhcp)
 	}
 }
 
-static inline guint get_random(void)
-{
-	uint64_t val;
-
-	__connman_util_get_random(&val);
-
-	/* Make sure the value is always positive so strip MSB */
-	return ((uint32_t)val) >> 1;
-}
-
 static guint compute_random(guint val)
 {
+	uint64_t rand;
+
+	__connman_util_get_random(&rand);
+
 	return val - val / 10 +
-		(get_random() % (2 * 1000)) * val / 10 / 1000;
+		((guint) rand % (2 * 1000)) * val / 10 / 1000;
 }
 
 /* Calculate a random delay, RFC 3315 chapter 14 */
