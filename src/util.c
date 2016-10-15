@@ -36,7 +36,7 @@
 
 #define URANDOM "/dev/urandom"
 
-int f = -1;
+static int f = -1;
 
 int __connman_util_get_random(uint64_t *val)
 {
