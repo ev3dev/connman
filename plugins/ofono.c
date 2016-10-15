@@ -1801,7 +1801,8 @@ static void add_cdma_network(struct modem_data *modem)
 		context = network_context_alloc(modem->path);
 		modem->context_list = g_slist_prepend(modem->context_list,
 							context);
-	}
+	} else
+		context = modem->context_list->data;
 
 	if (!modem->name)
 		modem->name = g_strdup("CDMA Network");
