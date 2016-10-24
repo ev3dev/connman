@@ -24,7 +24,7 @@ Vcs-Git: https://anonscm.debian.org/git/collab-maint/connman.git
 Homepage: https://01.org/connman
 
 Package: connman
-Architecture: any
+Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          dbus,
@@ -57,7 +57,7 @@ Description: Intel Connection Manager daemon
  This package contains the connman daemon and its plugins.
 
 Package: connman-vpn
-Architecture: any
+Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Recommends: connman (= ${source:Version}),
@@ -87,7 +87,7 @@ Description: Intel Connection Manager daemon - VPN daemon
  applications. The VPN daemon can also be run standalone without connmand.
 
 Package: connman-dev
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Section: devel
 Depends: ${misc:Depends},

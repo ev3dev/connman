@@ -1,3 +1,11 @@
+connman (1.33-2) UNRELEASED; urgency=medium
+
+  * Restrict Architecture to linux-any, connman will never work on non 
+    linux systems - unless systemd will be ported for them
+  * debian/README.debian is always removed (Closes: #833297)
+
+ -- Alf Gaida <agaida@siduction.org>  Mon, 24 Oct 2016 21:13:23 +0200
+
 connman (1.33-1) unstable; urgency=medium
 
   [ Alexander Sack ]
