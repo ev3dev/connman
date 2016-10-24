@@ -211,22 +211,27 @@ static void tethering_changed(struct connman_technology *technology)
 	technology_save(technology);
 }
 
-void connman_technology_tethering_notify(struct connman_technology *technology,
+int connman_technology_tethering_notify(struct connman_technology *technology,
 							bool enabled)
 {
+	int err;
+
 	DBG("technology %p enabled %u", technology, enabled);
 
 	if (technology->tethering == enabled)
-		return;
+		return -EALREADY;
+
+	if (enabled) {
+		err = __connman_tethering_set_enabled();
+		if (err < 0)
+			return err;
+	} else
+		__connman_tethering_set_disabled();
 
 	technology->tethering = enabled;
-
 	tethering_changed(technology);
 
-	if (enabled)
-		__connman_tethering_set_enabled();
-	else
-		__connman_tethering_set_disabled();
+	return 0;
 }
 
 static int set_tethering(struct connman_technology *technology,
