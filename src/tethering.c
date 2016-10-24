@@ -181,7 +181,7 @@ static void tethering_restart(struct connman_ippool *pool, void *user_data)
 	__connman_tethering_set_enabled();
 }
 
-void __connman_tethering_set_enabled(void)
+int __connman_tethering_set_enabled(void)
 {
 	int index;
 	int err;
@@ -197,12 +197,12 @@ void __connman_tethering_set_enabled(void)
 	DBG("enabled %d", tethering_enabled + 1);
 
 	if (__sync_fetch_and_add(&tethering_enabled, 1) != 0)
-		return;
+		return 0;
 
 	err = __connman_bridge_create(BRIDGE_NAME);
 	if (err < 0) {
 		__sync_fetch_and_sub(&tethering_enabled, 1);
-		return;
+		return -EOPNOTSUPP;
 	}
 
 	index = connman_inet_ifindex(BRIDGE_NAME);
@@ -212,7 +212,7 @@ void __connman_tethering_set_enabled(void)
 		connman_error("Fail to create IP pool");
 		__connman_bridge_remove(BRIDGE_NAME);
 		__sync_fetch_and_sub(&tethering_enabled, 1);
-		return;
+		return -EADDRNOTAVAIL;
 	}
 
 	gateway = __connman_ippool_get_gateway(dhcp_ippool);
@@ -228,7 +228,7 @@ void __connman_tethering_set_enabled(void)
 		__connman_ippool_unref(dhcp_ippool);
 		__connman_bridge_remove(BRIDGE_NAME);
 		__sync_fetch_and_sub(&tethering_enabled, 1);
-		return;
+		return -EADDRNOTAVAIL;
 	}
 
 	ns = connman_setting_get_string_list("FallbackNameservers");
@@ -264,7 +264,7 @@ void __connman_tethering_set_enabled(void)
 		__connman_ippool_unref(dhcp_ippool);
 		__connman_bridge_remove(BRIDGE_NAME);
 		__sync_fetch_and_sub(&tethering_enabled, 1);
-		return;
+		return -EOPNOTSUPP;
 	}
 
 	prefixlen = connman_ipaddress_calc_netmask_len(subnet_mask);
@@ -276,7 +276,7 @@ void __connman_tethering_set_enabled(void)
 		__connman_ippool_unref(dhcp_ippool);
 		__connman_bridge_remove(BRIDGE_NAME);
 		__sync_fetch_and_sub(&tethering_enabled, 1);
-		return;
+		return -EOPNOTSUPP;
 	}
 
 	err = __connman_ipv6pd_setup(BRIDGE_NAME);
@@ -285,6 +285,8 @@ void __connman_tethering_set_enabled(void)
 			strerror(-err));
 
 	DBG("tethering started");
+
+	return 0;
 }
 
 void __connman_tethering_set_disabled(void)

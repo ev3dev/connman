@@ -620,7 +620,7 @@ int __connman_tethering_init(void);
 void __connman_tethering_cleanup(void);
 
 const char *__connman_tethering_get_bridge(void);
-void __connman_tethering_set_enabled(void);
+int __connman_tethering_set_enabled(void);
 void __connman_tethering_set_disabled(void);
 
 int __connman_private_network_request(DBusMessage *msg, const char *owner);
