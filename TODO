@@ -99,6 +99,20 @@ Core
    ObjectManager common to Linux desktops can be implemented.
 
 
+Tethering
+=========
+
+- Verify if bridge has been correctly created and configured
+
+   Priority: Low
+   Complexity: C1
+
+   When enabling tethering check if there was any error while creating and
+   configuring the bridge before continue. It has been done only for WiFi
+   technology, for other tethering technologies it should be evaluated
+   and implemented in case it is advantageous.
+
+
 WiFi
 ====
 
