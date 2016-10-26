@@ -378,6 +378,7 @@ static int stats_file_setup(struct stats_file *file)
 			strerror(errno), file->name);
 
 		TFR(close(file->fd));
+		file->fd = -1;
 		g_free(file->name);
 		file->name = NULL;
 
@@ -393,6 +394,7 @@ static int stats_file_setup(struct stats_file *file)
 	err = stats_file_remap(file, size);
 	if (err < 0) {
 		TFR(close(file->fd));
+		file->fd = -1;
 		g_free(file->name);
 		file->name = NULL;
 
@@ -649,6 +651,13 @@ static int stats_file_history_update(struct stats_file *data_file)
 	bzero(history_file, sizeof(struct stats_file));
 	bzero(temp_file, sizeof(struct stats_file));
 
+	/*
+	 * 0 is a valid file descriptor - fd needs to be initialized
+	 * to -1 to handle errors correctly
+	 */
+	history_file->fd = -1;
+	temp_file->fd = -1;
+
 	err = stats_open(history_file, data_file->history_name);
 	if (err < 0)
 		return err;
@@ -681,6 +690,12 @@ int __connman_stats_service_register(struct connman_service *service)
 		file = g_try_new0(struct stats_file, 1);
 		if (!file)
 			return -ENOMEM;
+
+		/*
+		 * 0 is a valid file descriptor - fd needs to be initialized
+		 * to -1 to handle errors correctly
+		 */
+		file->fd = -1;
 
 		g_hash_table_insert(stats_hash, service, file);
 	} else {

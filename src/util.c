@@ -63,7 +63,7 @@ int __connman_util_init(void)
 {
 	int r = 0;
 
-	if (f > 0)
+	if (f >= 0)
 		return 0;
 
 	f = open(URANDOM, O_RDONLY);
@@ -86,7 +86,7 @@ int __connman_util_init(void)
 
 void __connman_util_cleanup(void)
 {
-	if (f > 0)
+	if (f >= 0)
 		close(f);
 
 	f = -1;
