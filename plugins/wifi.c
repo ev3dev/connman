@@ -3139,12 +3139,13 @@ static void sta_remove_callback(int result,
 
 	if ((result < 0) || (info->wifi->ap_supported != WIFI_AP_SUPPORTED)) {
 		info->wifi->tethering = false;
+		connman_technology_tethering_notify(info->technology, false);
 
 		g_free(info->ifname);
 		g_free(info->ssid);
 		g_free(info);
 
-		if (info->wifi->ap_supported == WIFI_AP_SUPPORTED){
+		if (info->wifi->ap_supported == WIFI_AP_SUPPORTED) {
 			g_free(info->wifi->tethering_param->ssid);
 			g_free(info->wifi->tethering_param);
 			info->wifi->tethering_param = NULL;
@@ -3153,8 +3154,6 @@ static void sta_remove_callback(int result,
 	}
 
 	info->wifi->interface = NULL;
-
-	connman_technology_tethering_notify(info->technology, true);
 
 	g_supplicant_interface_create(info->ifname, driver, info->wifi->bridge,
 						ap_create_callback,
@@ -3171,7 +3170,7 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 	struct wifi_tethering_info *info;
 	const char *ifname;
 	unsigned int mode;
-	int err;
+	int err, berr = 0;
 
 	for (list = iface_list; list; list = list->next) {
 		wifi = list->data;
@@ -3230,6 +3229,10 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 		info->wifi->tethering = true;
 		info->wifi->ap_supported = WIFI_AP_SUPPORTED;
 
+		berr = connman_technology_tethering_notify(technology, true);
+		if (berr < 0)
+			goto failed;
+
 		err = g_supplicant_interface_remove(interface,
 						sta_remove_callback,
 							info);
@@ -3244,6 +3247,17 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 		g_free(info);
 		g_free(wifi->tethering_param);
 		wifi->tethering_param = NULL;
+
+		/*
+		 * Remove bridge if it was correctly created but remove
+		 * operation failed. Instead, if bridge creation failed then
+		 * break out and do not try again on another interface,
+		 * bridge set-up does not depend on it.
+		 */
+		if (berr == 0)
+			connman_technology_tethering_notify(technology, false);
+		else
+			break;
 	}
 
 	return -EOPNOTSUPP;
