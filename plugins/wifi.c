@@ -3138,7 +3138,7 @@ static void sta_remove_callback(int result,
 	DBG("ifname %s result %d ", info->ifname, result);
 
 	if ((result < 0) || (info->wifi->ap_supported != WIFI_AP_SUPPORTED)) {
-		info->wifi->tethering = true;
+		info->wifi->tethering = false;
 
 		g_free(info->ifname);
 		g_free(info->ssid);
