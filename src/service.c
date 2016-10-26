@@ -1164,7 +1164,7 @@ int __connman_service_nameserver_remove(struct connman_service *service,
 	if (!nameservers)
 		return 0;
 
-	for (i = 0; nameservers && nameservers[i]; i++)
+	for (i = 0; nameservers[i]; i++)
 		if (g_strcmp0(nameservers[i], nameserver) == 0) {
 			found = true;
 			break;
