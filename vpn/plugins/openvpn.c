@@ -159,7 +159,7 @@ static int ov_notify(DBusMessage *msg, struct vpn_provider *provider)
 {
 	DBusMessageIter iter, dict;
 	const char *reason, *key, *value;
-	char *address = NULL, *gateway = NULL, *peer = NULL;
+	char *address = NULL, *gateway = NULL, *peer = NULL, *netmask = NULL;
 	struct connman_ipaddress *ipaddress;
 	GSList *nameserver_list = NULL;
 
@@ -195,6 +195,9 @@ static int ov_notify(DBusMessage *msg, struct vpn_provider *provider)
 		if (!strcmp(key, "ifconfig_local"))
 			address = g_strdup(value);
 
+		if (!strcmp(key, "ifconfig_netmask"))
+			netmask = g_strdup(value);
+
 		if (!strcmp(key, "ifconfig_remote"))
 			peer = g_strdup(value);
 
@@ -221,11 +224,12 @@ static int ov_notify(DBusMessage *msg, struct vpn_provider *provider)
 		g_free(address);
 		g_free(gateway);
 		g_free(peer);
+		g_free(netmask);
 
 		return VPN_STATE_FAILURE;
 	}
 
-	connman_ipaddress_set_ipv4(ipaddress, address, NULL, gateway);
+	connman_ipaddress_set_ipv4(ipaddress, address, netmask, gateway);
 	connman_ipaddress_set_peer(ipaddress, peer);
 	vpn_provider_set_ipaddress(provider, ipaddress);
 
@@ -259,6 +263,7 @@ static int ov_notify(DBusMessage *msg, struct vpn_provider *provider)
 	g_free(address);
 	g_free(gateway);
 	g_free(peer);
+	g_free(netmask);
 	connman_ipaddress_free(ipaddress);
 
 	return VPN_STATE_CONNECT;
