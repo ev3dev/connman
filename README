@@ -131,6 +131,15 @@ For a working system, certain configuration options need to be enabled:
 		detected and only a runtime dependency. It is not needed to
 		build ConnMan.
 
+	--enable-iwd
+
+		Enable support for Wireless daemon for Linux
+
+		The IWD project does not have initial release so far,
+		therefore by default IWD support is not enabled.
+
+		It is safe to enable this option along WiFi support.
+
 	--disable-pacrunner
 
 		Disable support for PACrunner proxy handling

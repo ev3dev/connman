@@ -340,6 +340,11 @@ AC_ARG_ENABLE(wifi, AC_HELP_STRING([--disable-wifi],
 					[enable_wifi=${enableval}])
 AM_CONDITIONAL(WIFI, test "${enable_wifi}" != "no")
 
+AC_ARG_ENABLE(iwd, AC_HELP_STRING([--enable-iwd],
+				[enable iwd support]),
+					[enable_iwd=${enableval}])
+AM_CONDITIONAL(IWD, test "${enable_iwd}" = "yes")
+
 AC_ARG_ENABLE(bluetooth, AC_HELP_STRING([--disable-bluetooth],
 				[disable Bluetooth support]),
 					[enable_bluetooth=${enableval}])
