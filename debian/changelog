@@ -1,8 +1,12 @@
 connman (1.33-2) UNRELEASED; urgency=medium
 
+  [ Alf Gaida ]
   * Restrict Architecture to linux-any, connman will never work on non 
     linux systems - unless systemd will be ported for them
   * debian/README.debian is always removed (Closes: #833297)
+
+  [ Gianfranco Costamagna ]
+  * Enforce minimum autoconf version, to ease backporting.
 
  -- Alf Gaida <agaida@siduction.org>  Mon, 24 Oct 2016 21:13:23 +0200
 

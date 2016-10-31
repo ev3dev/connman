@@ -6,6 +6,7 @@ Uploaders: Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>,
 Section: net
 Priority: optional
 Build-Depends: debhelper (>= 10),
+               autoconf (>= 2.69-9~),
                libudev-dev,
                libglib2.0-dev,
                libdbus-1-dev,
