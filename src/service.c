@@ -1718,8 +1718,6 @@ static void append_nameservers(DBusMessageIter *iter,
 						CONNMAN_IPCONFIG_TYPE_ALL,
 						servers[i]);
 
-		DBG("servers[%d] %s available %d", i, servers[i], available);
-
 		if (available)
 			dbus_message_iter_append_basic(iter,
 					DBUS_TYPE_STRING, &servers[i]);
@@ -2980,8 +2978,6 @@ static DBusMessage *get_properties(DBusConnection *conn,
 	struct connman_service *service = user_data;
 	DBusMessage *reply;
 	DBusMessageIter array, dict;
-
-	DBG("service %p", service);
 
 	reply = dbus_message_new_method_return(msg);
 	if (!reply)
@@ -4505,10 +4501,8 @@ static void service_schedule_removed(struct connman_service *service)
 static bool allow_property_changed(struct connman_service *service)
 {
 	if (g_hash_table_lookup_extended(services_notify->add, service->path,
-					NULL, NULL)) {
-		DBG("no property updates for service %p", service);
+					NULL, NULL))
 		return false;
-	}
 
 	return true;
 }
