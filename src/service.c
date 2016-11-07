@@ -243,9 +243,9 @@ enum connman_service_security __connman_service_string2security(const char *str)
 
 	if (!strcmp(str, "psk"))
 		return CONNMAN_SERVICE_SECURITY_PSK;
-	if (!strcmp(str, "ieee8021x"))
+	if (!strcmp(str, "ieee8021x") || !strcmp(str, "8021x"))
 		return CONNMAN_SERVICE_SECURITY_8021X;
-	if (!strcmp(str, "none"))
+	if (!strcmp(str, "none") || !strcmp(str, "open"))
 		return CONNMAN_SERVICE_SECURITY_NONE;
 	if (!strcmp(str, "wep"))
 		return CONNMAN_SERVICE_SECURITY_WEP;
