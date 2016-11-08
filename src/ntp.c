@@ -351,11 +351,13 @@ static void decode_msg(void *base, size_t len, struct timeval *tv,
 
 		connman_info("ntp: adjust (slew): %+.6f sec", offset);
 	} else {
-		tmx.modes = ADJ_STATUS | ADJ_NANO | ADJ_SETOFFSET;
+		tmx.modes = ADJ_STATUS | ADJ_NANO | ADJ_SETOFFSET | ADJ_MAXERROR | ADJ_ESTERROR;
 
 		/* ADJ_NANO uses nanoseconds in the microseconds field */
 		tmx.time.tv_sec = (long)offset;
 		tmx.time.tv_usec = (offset - tmx.time.tv_sec) * NSEC_PER_SEC;
+		tmx.maxerror = 0;
+		tmx.esterror = 0;
 
 		/* the kernel expects -0.3s as {-1, 7000.000.000} */
 		if (tmx.time.tv_usec < 0) {
