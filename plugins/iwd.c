@@ -26,12 +26,14 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <linux/if_ether.h>
 
 #define CONNMAN_API_SUBJECT_TO_CHANGE
 #include <connman/plugin.h>
 #include <connman/dbus.h>
 #include <connman/network.h>
 #include <connman/technology.h>
+#include <connman/inet.h>
 #include <gdbus.h>
 
 static DBusConnection *connection;
@@ -78,6 +80,8 @@ struct iwd_device {
 	enum iwd_device_state state;
 	bool powered;
 	bool scanning;
+
+	struct connman_device *device;
 };
 
 struct iwd_network {
@@ -147,6 +151,17 @@ static bool proxy_get_bool(GDBusProxy *proxy, const char *property)
 	return value;
 }
 
+static void address2ident(const char *address, char *ident)
+{
+	int i;
+
+	for (i = 0; i < ETH_ALEN; i++) {
+		ident[i * 2] = address[i * 3];
+		ident[i * 2 + 1] = address[i * 3 + 1];
+	}
+	ident[ETH_ALEN * 2] = '\0';
+}
+
 static int cm_network_probe(struct connman_network *network)
 {
 	return -EOPNOTSUPP;
@@ -172,6 +187,18 @@ static struct connman_network_driver network_driver = {
 
 static int cm_device_probe(struct connman_device *device)
 {
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&iter, devices);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		struct iwd_device *iwdd = value;
+
+		if (device == iwdd->device)
+			return 0;
+	}
+
 	return -EOPNOTSUPP;
 }
 
@@ -179,8 +206,49 @@ static void cm_device_remove(struct connman_device *device)
 {
 }
 
+struct dev_cb_data {
+	char *path;
+	bool powered;
+};
+
+static void device_powered_cb(const DBusError *error, void *user_data)
+{
+	struct dev_cb_data *cbd = user_data;
+	struct iwd_device *iwdd;
+
+	iwdd = g_hash_table_lookup(devices, cbd->path);
+	if (!iwdd)
+		goto out;
+
+	if (dbus_error_is_set(error)) {
+		connman_warn("WiFi device %s not enabled %s",
+				cbd->path, error->message);
+		goto out;
+	}
+
+	connman_device_set_powered(iwdd->device, cbd->powered);
+out:
+	g_free(cbd->path);
+	g_free(cbd);
+}
+
 static int set_device_powered(struct connman_device *device, bool powered)
 {
+	struct iwd_device *iwdd = connman_device_get_data(device);
+	dbus_bool_t device_powered = powered;
+	struct dev_cb_data *cbd;
+
+	if (proxy_get_bool(iwdd->proxy, "Powered"))
+		return -EALREADY;
+
+	cbd = g_new(struct dev_cb_data, 1);
+	cbd->path = g_strdup(iwdd->path);
+	cbd->powered = powered;
+
+	g_dbus_proxy_set_property_basic(iwdd->proxy, "Powered",
+			DBUS_TYPE_BOOLEAN, &device_powered,
+			device_powered_cb, cbd, NULL);
+
 	return -EINPROGRESS;
 }
 
@@ -218,6 +286,36 @@ static struct connman_technology_driver tech_driver = {
 	.probe          = cm_tech_probe,
 	.remove         = cm_tech_remove,
 };
+
+static void add_device(const char *path, struct iwd_device *iwdd)
+{
+	char ident[ETH_ALEN * 2 + 1];
+
+	iwdd->device = connman_device_create("wifi", CONNMAN_DEVICE_TYPE_WIFI);
+	if (!iwdd->device)
+		return;
+
+	connman_device_set_data(iwdd->device, iwdd);
+
+	address2ident(iwdd->address, ident);
+	connman_device_set_ident(iwdd->device, ident);
+
+	if (connman_device_register(iwdd->device) < 0) {
+		g_hash_table_remove(devices, path);
+		return;
+	}
+
+	connman_device_set_powered(iwdd->device, iwdd->powered);
+}
+
+static void remove_device(struct iwd_device *iwdd)
+{
+	if (!iwdd->device)
+		return;
+
+	connman_device_unref(iwdd->device);
+	iwdd->device = NULL;
+}
 
 static void adapter_property_change(GDBusProxy *proxy, const char *name,
 		DBusMessageIter *iter, void *user_data)
@@ -328,6 +426,8 @@ static void device_free(gpointer data)
 		iwdd->proxy = NULL;
 	}
 
+	remove_device(iwdd);
+
 	g_free(iwdd->path);
 	g_free(iwdd->adapter);
 	g_free(iwdd->name);
@@ -422,6 +522,8 @@ static void create_device(GDBusProxy *proxy)
 
 	g_dbus_proxy_set_property_watch(iwdd->proxy,
 			device_property_change, NULL);
+
+	add_device(path, iwdd);
 }
 
 static void unregister_agent();
