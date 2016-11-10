@@ -1106,8 +1106,6 @@ static struct connman_ipconfig *create_ipv6config(int index)
 	struct connman_ipconfig *ipv6config;
 	struct connman_ipdevice *ipdevice;
 
-	DBG("index %d", index);
-
 	ipv6config = g_try_new0(struct connman_ipconfig, 1);
 	if (!ipv6config)
 		return NULL;
@@ -1134,7 +1132,7 @@ static struct connman_ipconfig *create_ipv6config(int index)
 
 	ipv6config->system = connman_ipaddress_alloc(AF_INET6);
 
-	DBG("ipconfig %p method %s", ipv6config,
+	DBG("ipconfig %p index %d method %s", ipv6config, index,
 		__connman_ipconfig_method2string(ipv6config->method));
 
 	return ipv6config;
@@ -1155,8 +1153,6 @@ struct connman_ipconfig *__connman_ipconfig_create(int index,
 	if (type == CONNMAN_IPCONFIG_TYPE_IPV6)
 		return create_ipv6config(index);
 
-	DBG("index %d", index);
-
 	ipconfig = g_try_new0(struct connman_ipconfig, 1);
 	if (!ipconfig)
 		return NULL;
@@ -1174,7 +1170,7 @@ struct connman_ipconfig *__connman_ipconfig_create(int index,
 
 	ipconfig->system = connman_ipaddress_alloc(AF_INET);
 
-	DBG("ipconfig %p", ipconfig);
+	DBG("ipconfig %p index %d", ipconfig, index);
 
 	return ipconfig;
 }
@@ -1307,8 +1303,6 @@ enum connman_ipconfig_method __connman_ipconfig_get_method(
 
 int __connman_ipconfig_address_add(struct connman_ipconfig *ipconfig)
 {
-	DBG("");
-
 	switch (ipconfig->method) {
 	case CONNMAN_IPCONFIG_METHOD_UNKNOWN:
 	case CONNMAN_IPCONFIG_METHOD_OFF:
@@ -1332,12 +1326,8 @@ int __connman_ipconfig_address_remove(struct connman_ipconfig *ipconfig)
 {
 	int err;
 
-	DBG("");
-
 	if (!ipconfig)
 		return 0;
-
-	DBG("method %d", ipconfig->method);
 
 	switch (ipconfig->method) {
 	case CONNMAN_IPCONFIG_METHOD_UNKNOWN:
@@ -1360,12 +1350,8 @@ int __connman_ipconfig_address_unset(struct connman_ipconfig *ipconfig)
 {
 	int err;
 
-	DBG("");
-
 	if (!ipconfig)
 		return 0;
-
-	DBG("method %d", ipconfig->method);
 
 	switch (ipconfig->method) {
 	case CONNMAN_IPCONFIG_METHOD_UNKNOWN:
@@ -1397,8 +1383,6 @@ int __connman_ipconfig_set_proxy_autoconfig(struct connman_ipconfig *ipconfig,
 {
 	struct connman_ipdevice *ipdevice;
 
-	DBG("ipconfig %p", ipconfig);
-
 	if (!ipconfig || ipconfig->index < 0)
 		return -ENODEV;
 
@@ -1416,8 +1400,6 @@ int __connman_ipconfig_set_proxy_autoconfig(struct connman_ipconfig *ipconfig,
 const char *__connman_ipconfig_get_proxy_autoconfig(struct connman_ipconfig *ipconfig)
 {
 	struct connman_ipdevice *ipdevice;
-
-	DBG("ipconfig %p", ipconfig);
 
 	if (!ipconfig || ipconfig->index < 0)
 		return NULL;
@@ -1753,8 +1735,6 @@ int __connman_ipconfig_ipv6_set_privacy(struct connman_ipconfig *ipconfig,
 	if (!ipconfig)
 		return -EINVAL;
 
-	DBG("ipconfig %p privacy %s", ipconfig, value);
-
 	privacy = string2privacy(value);
 
 	ipconfig->ipv6_privacy_config = privacy;
@@ -1769,8 +1749,6 @@ void __connman_ipconfig_append_ipv4(struct connman_ipconfig *ipconfig,
 {
 	struct connman_ipaddress *append_addr = NULL;
 	const char *str;
-
-	DBG("");
 
 	if (ipconfig->type != CONNMAN_IPCONFIG_TYPE_IPV4)
 		return;
@@ -1826,8 +1804,6 @@ void __connman_ipconfig_append_ipv6(struct connman_ipconfig *ipconfig,
 {
 	struct connman_ipaddress *append_addr = NULL;
 	const char *str, *privacy;
-
-	DBG("");
 
 	if (ipconfig->type != CONNMAN_IPCONFIG_TYPE_IPV6)
 		return;
@@ -1885,8 +1861,6 @@ void __connman_ipconfig_append_ipv6config(struct connman_ipconfig *ipconfig,
 {
 	const char *str, *privacy;
 
-	DBG("");
-
 	str = __connman_ipconfig_method2string(ipconfig->method);
 	if (!str)
 		return;
@@ -1928,8 +1902,6 @@ void __connman_ipconfig_append_ipv4config(struct connman_ipconfig *ipconfig,
 							DBusMessageIter *iter)
 {
 	const char *str;
-
-	DBG("");
 
 	str = __connman_ipconfig_method2string(ipconfig->method);
 	if (!str)
@@ -1980,8 +1952,6 @@ int __connman_ipconfig_set_config(struct connman_ipconfig *ipconfig,
 	int prefix_length = 0, privacy = 0;
 	DBusMessageIter dict;
 	int type = -1;
-
-	DBG("ipconfig %p", ipconfig);
 
 	if (dbus_message_iter_get_arg_type(array) != DBUS_TYPE_ARRAY)
 		return -EINVAL;
