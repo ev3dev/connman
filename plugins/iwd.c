@@ -34,9 +34,11 @@
 
 static DBusConnection *connection;
 static GDBusClient *client;
+static GDBusProxy *agent_proxy;
 static GHashTable *adapters;
 static GHashTable *devices;
 static GHashTable *networks;
+static bool agent_registered;
 
 #define IWD_SERVICE			"net.connman.iwd"
 #define IWD_PATH			"/"
@@ -44,6 +46,10 @@ static GHashTable *networks;
 #define IWD_ADAPTER_INTERFACE		"net.connman.iwd.Adapter"
 #define IWD_DEVICE_INTERFACE		"net.connman.iwd.Device"
 #define IWD_NETWORK_INTERFACE		"net.connman.iwd.Network"
+
+#define IWD_AGENT_INTERFACE		"net.connman.iwd.Agent"
+#define IWD_AGENT_ERROR_INTERFACE	"net.connman.iwd.Agent.Error"
+#define AGENT_PATH			"/net/connman/iwd_agent"
 
 enum iwd_device_state {
 	IWD_DEVICE_STATE_UNKNOWN,
@@ -344,12 +350,135 @@ static void create_device(GDBusProxy *proxy)
 			device_property_change, NULL);
 }
 
+static void unregister_agent();
+
+static DBusMessage *agent_release_method(DBusConnection *dbus_conn,
+					DBusMessage *message, void *user_data)
+{
+	unregister_agent();
+	return g_dbus_create_reply(message, DBUS_TYPE_INVALID);
+}
+
+static DBusMessage *get_reply_on_error(DBusMessage *message, int error)
+{
+	return g_dbus_create_error(message,
+		IWD_AGENT_ERROR_INTERFACE ".Failed", "Invalid parameters");
+}
+
+static DBusMessage *agent_request_passphrase(DBusConnection *dbus_conn,
+						DBusMessage *message,
+						void *user_data)
+{
+	struct iwd_network *iwdn;
+	DBusMessageIter iter;
+	const char *path;
+
+	DBG("");
+
+	dbus_message_iter_init(message, &iter);
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_OBJECT_PATH)
+		return get_reply_on_error(message, EINVAL);
+
+	dbus_message_iter_get_basic(&iter, &path);
+
+	iwdn = g_hash_table_lookup(networks, path);
+	if (!iwdn)
+		return get_reply_on_error(message, EINVAL);
+
+	return g_dbus_create_reply(message, DBUS_TYPE_INVALID);
+}
+
+static DBusMessage *agent_cancel(DBusConnection *dbus_conn,
+					DBusMessage *message, void *user_data)
+{
+	DBusMessageIter iter;
+	const char *reason;
+
+	dbus_message_iter_init(message, &iter);
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
+		return get_reply_on_error(message, EINVAL);
+
+	dbus_message_iter_get_basic(&iter, &reason);
+
+	DBG("cancel: %s", reason);
+
+	/*
+	 * We don't have to do anything here, because we asked the
+	 * user upfront for the passphrase. So
+	 * agent_request_passphrase() will always send a passphrase
+	 * immediately.
+	 */
+
+	return g_dbus_create_reply(message, DBUS_TYPE_INVALID);
+}
+
+static const GDBusMethodTable agent_methods[] = {
+	{ GDBUS_METHOD("Release", NULL, NULL, agent_release_method) },
+	{ GDBUS_METHOD("RequestPassphrase",
+			GDBUS_ARGS({ "path", "o" }),
+			GDBUS_ARGS({ "passphrase", "s" }),
+			agent_request_passphrase)},
+	{ GDBUS_METHOD("Cancel",
+			GDBUS_ARGS({ "reason", "s" }),
+			NULL, agent_cancel) },
+	{ },
+};
+
+static void agent_register_builder(DBusMessageIter *iter, void *user_data)
+{
+	const char *path = AGENT_PATH;
+
+	dbus_message_iter_append_basic(iter, DBUS_TYPE_OBJECT_PATH,
+				&path);
+}
+
 static void register_agent(GDBusProxy *proxy)
 {
+	if (!g_dbus_proxy_method_call(proxy,
+					"RegisterAgent",
+					agent_register_builder,
+					NULL, NULL, NULL))
+		return;
+
+	agent_proxy = g_dbus_proxy_ref(proxy);
 }
 
 static void unregister_agent()
 {
+	if (!agent_proxy)
+		return;
+
+	g_dbus_proxy_method_call(agent_proxy,
+					"UnregisterAgent",
+					agent_register_builder,
+					NULL, NULL, NULL);
+
+	g_dbus_proxy_unref(agent_proxy);
+	agent_proxy = NULL;
+}
+
+static void iwd_is_present(DBusConnection *conn, void *user_data)
+{
+	if (agent_registered)
+		return;
+
+	if (!g_dbus_register_interface(connection, AGENT_PATH,
+					IWD_AGENT_INTERFACE, agent_methods,
+					NULL, NULL, NULL, NULL))
+		return;
+
+	agent_registered = true;
+}
+
+static void iwd_is_out(DBusConnection *conn, void *user_data)
+{
+	if (agent_registered) {
+		g_dbus_unregister_interface(connection,
+					AGENT_PATH, IWD_AGENT_INTERFACE);
+		agent_registered = false;
+	}
 }
 
 static void create_network(GDBusProxy *proxy)
@@ -459,6 +588,8 @@ static int iwd_init(void)
 		goto out;
 	}
 
+	g_dbus_client_set_connect_watch(client, iwd_is_present, NULL);
+	g_dbus_client_set_disconnect_watch(client, iwd_is_out, NULL);
 	g_dbus_client_set_proxy_handlers(client, object_added, object_removed,
 			NULL, NULL);
 
