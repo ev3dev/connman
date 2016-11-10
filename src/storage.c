@@ -43,8 +43,6 @@ static GKeyFile *storage_load(const char *pathname)
 	GKeyFile *keyfile = NULL;
 	GError *error = NULL;
 
-	DBG("Loading %s", pathname);
-
 	keyfile = g_key_file_new();
 
 	if (!g_key_file_load_from_file(keyfile, pathname, 0, &error)) {
