@@ -91,6 +91,9 @@ struct iwd_network {
 	char *name;
 	char *type;
 	bool connected;
+
+	struct iwd_device *iwdd;
+	struct connman_network *network;
 };
 
 static enum iwd_device_state string2state(const char *str)
@@ -164,16 +167,133 @@ static void address2ident(const char *address, char *ident)
 
 static int cm_network_probe(struct connman_network *network)
 {
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&iter, networks);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		struct iwd_network *iwdn = value;
+
+		if (network == iwdn->network)
+			return 0;
+	}
+
 	return -EOPNOTSUPP;
+}
+
+static void update_network_connected(struct iwd_network *iwdn)
+{
+	struct iwd_device *iwdd;
+	int index;
+
+	iwdd = g_hash_table_lookup(devices, iwdn->device);
+	if (!iwdd)
+		return;
+
+	index = connman_inet_ifindex(iwdd->name);
+	if (index < 0)
+		return;
+
+	DBG("interface name %s index %d", iwdd->name, index);
+	connman_network_set_index(iwdn->network, index);
+	connman_network_set_connected(iwdn->network, true);
+}
+
+static void update_network_disconnected(struct iwd_network *iwdn)
+{
+	DBG("interface name %s", iwdn->name);
+	connman_network_set_connectable(iwdn->network, false);
+	connman_network_set_connected(iwdn->network, false);
+}
+
+static void cm_network_connect_cb(DBusMessage *message, void *user_data)
+{
+	const char *path = user_data;
+	struct iwd_network *iwdn;
+
+	iwdn = g_hash_table_lookup(networks, path);
+	if (!iwdn)
+		return;
+
+	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_ERROR) {
+		const char *dbus_error = dbus_message_get_error_name(message);
+
+		if (!strcmp(dbus_error, "net.connman.iwd.InProgress"))
+			return;
+
+		DBG("%s connect failed: %s", path, dbus_error);
+		connman_network_set_error(iwdn->network,
+					CONNMAN_NETWORK_ERROR_CONNECT_FAIL);
+		return;
+	}
+
+	update_network_connected(iwdn);
 }
 
 static int cm_network_connect(struct connman_network *network)
 {
+	struct iwd_network *iwdn = connman_network_get_data(network);
+
+	if (!iwdn)
+		return -EINVAL;
+
+	if (!g_dbus_proxy_method_call(iwdn->proxy, "Connect",
+			NULL, cm_network_connect_cb,
+			g_strdup(iwdn->path), g_free))
+		return -EIO;
+
+	connman_network_set_connectable(iwdn->network, true);
+	connman_network_set_associating(iwdn->network, true);
+
 	return -EINPROGRESS;
+}
+
+static void cm_network_disconnect_cb(DBusMessage *message, void *user_data)
+{
+	const char *path = user_data;
+	struct iwd_network *iwdn;
+
+	iwdn = g_hash_table_lookup(networks, path);
+	if (!iwdn)
+		return;
+
+	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_ERROR) {
+		const char *dbus_error = dbus_message_get_error_name(message);
+
+		if (!strcmp(dbus_error, "net.connman.iwd.NotConnected")) {
+			/* fall through */
+		} else {
+			DBG("%s disconnect failed: %s", path, dbus_error);
+			return;
+		}
+	}
+
+	/*
+	 * We end up in a tight loop in the error case. That is
+	 * when we can't connect, bail out in cm_network_connect_cb() with
+	 * an error.
+	 */
+	if (connman_network_get_connected(iwdn->network))
+		update_network_disconnected(iwdn);
 }
 
 static int cm_network_disconnect(struct connman_network *network)
 {
+	struct iwd_network *iwdn = connman_network_get_data(network);
+	struct iwd_device *iwdd;
+
+	if (!iwdn)
+		return -EINVAL;
+
+	iwdd = g_hash_table_lookup(devices, iwdn->device);
+	if (!iwdd)
+		return -EIO;
+
+	if (!g_dbus_proxy_method_call(iwdd->proxy, "Disconnect",
+			NULL, cm_network_disconnect_cb, g_strdup(iwdn->path), g_free))
+		return -EIO;
+
 	return -EINPROGRESS;
 }
 
@@ -287,6 +407,130 @@ static struct connman_technology_driver tech_driver = {
 	.remove         = cm_tech_remove,
 };
 
+static unsigned char calculate_strength(int strength)
+{
+	unsigned char res;
+
+	/*
+	 * Network's maximum signal strength expressed in 100 * dBm.
+	 * The value is the range of 0 (strongest signal) to -10000
+	 * (weakest signal)
+	 *
+	 * ConnMan expects it in the range from 100 (strongest) to 0
+	 * (weakest).
+	 */
+	res = (unsigned char)((strength * -10000) / 100);
+
+	return res;
+}
+
+static void _update_signal_strength(const char *path, int16_t signal_strength)
+{
+	struct iwd_network *iwdn;
+
+	iwdn = g_hash_table_lookup(networks, path);
+	if (!iwdn)
+		return;
+
+	if (!iwdn->network)
+		return;
+
+	connman_network_set_strength(iwdn->network,
+					calculate_strength(signal_strength));
+}
+
+static void ordered_networks_cb(DBusMessage *message, void *user_data)
+{
+	DBusMessageIter array, entry;
+
+	DBG("");
+
+	if (!dbus_message_iter_init(message, &array))
+		return;
+
+	if (dbus_message_iter_get_arg_type(&array) != DBUS_TYPE_ARRAY)
+		return;
+
+	dbus_message_iter_recurse(&array, &entry);
+	while (dbus_message_iter_get_arg_type(&entry) == DBUS_TYPE_STRUCT) {
+		DBusMessageIter value;
+		const char *path, *name, *type;
+		int16_t signal_strength;
+
+
+		dbus_message_iter_recurse(&entry, &value);
+
+		dbus_message_iter_get_basic(&value, &path);
+
+		dbus_message_iter_next(&value);
+		dbus_message_iter_get_basic(&value, &name);
+
+		dbus_message_iter_next(&value);
+		dbus_message_iter_get_basic(&value, &signal_strength);
+
+		dbus_message_iter_next(&value);
+		dbus_message_iter_get_basic(&value, &type);
+
+		_update_signal_strength(path, signal_strength);
+
+		dbus_message_iter_next(&entry);
+	}
+}
+
+static void update_signal_strength(struct iwd_device *iwdd)
+{
+	if (!g_dbus_proxy_method_call(iwdd->proxy,
+					"GetOrderedNetworks",
+					NULL, ordered_networks_cb,
+					NULL, NULL))
+		DBG("GetOrderedNetworks() failed");
+}
+
+static void add_network(const char *path, struct iwd_network *iwdn)
+{
+	struct iwd_device *iwdd;
+	const char *identifier;
+
+	iwdd = g_hash_table_lookup(devices, iwdn->device);
+	if (!iwdd)
+		return;
+
+	identifier = strrchr(path, '/');
+	identifier++; /* strip leading slash as well */
+	iwdn->network = connman_network_create(identifier,
+					CONNMAN_NETWORK_TYPE_WIFI);
+	connman_network_set_data(iwdn->network, iwdn);
+
+	connman_network_set_name(iwdn->network, iwdn->name);
+	connman_network_set_blob(iwdn->network, "WiFi.SSID", iwdn->name,
+					strlen(iwdn->name));
+	connman_network_set_string(iwdn->network, "WiFi.Security",
+					iwdn->type);
+
+	if (connman_device_add_network(iwdd->device, iwdn->network) < 0) {
+		connman_network_unref(iwdn->network);
+		iwdn->network = NULL;
+		return;
+	}
+	iwdn->iwdd = iwdd;
+
+	connman_network_set_available(iwdn->network, true);
+	connman_network_set_group(iwdn->network, identifier);
+}
+
+static void remove_network(struct iwd_network *iwdn)
+{
+	if (!iwdn->network)
+		return;
+
+	if (iwdn->iwdd)
+		connman_device_remove_network(iwdn->iwdd->device,
+						iwdn->network);
+
+	connman_network_unref(iwdn->network);
+	iwdn->network = NULL;
+}
+
 static void add_device(const char *path, struct iwd_device *iwdd)
 {
 	char ident[ETH_ALEN * 2 + 1];
@@ -308,11 +552,37 @@ static void add_device(const char *path, struct iwd_device *iwdd)
 	connman_device_set_powered(iwdd->device, iwdd->powered);
 }
 
+static void remove_device_networks(struct iwd_device *iwdd)
+{
+	GHashTableIter iter;
+	gpointer key, value;
+	struct iwd_network *iwdn;
+	GSList *list, *nets = NULL;
+
+	g_hash_table_iter_init(&iter, networks);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		iwdn = value;
+
+		if (!strcmp(iwdd->path, iwdn->device))
+			nets = g_slist_prepend(nets, iwdn);
+	}
+
+	for (list = nets; list; list = list->next) {
+		iwdn = list->data;
+		g_hash_table_remove(networks, iwdn->path);
+	}
+
+	g_slist_free(nets);
+}
+
 static void remove_device(struct iwd_device *iwdd)
 {
 	if (!iwdd->device)
 		return;
 
+	remove_device_networks(iwdd);
+	connman_device_unregister(iwdd->device);
 	connman_device_unref(iwdd->device);
 	iwdd->device = NULL;
 }
@@ -378,6 +648,10 @@ static void device_property_change(GDBusProxy *proxy, const char *name,
 		iwdd->scanning = scanning;
 
 		DBG("%s scanning %d", path, iwdd->scanning);
+
+		if (!iwdd->scanning)
+			update_signal_strength(iwdd);
+
 	}
 }
 
@@ -399,6 +673,11 @@ static void network_property_change(GDBusProxy *proxy, const char *name,
 		iwdn->connected = connected;
 
 		DBG("%s connected %d", path, iwdn->connected);
+
+		if (iwdn->connected)
+			update_network_connected(iwdn);
+		else
+			update_network_disconnected(iwdn);
 	}
 }
 
@@ -443,6 +722,8 @@ static void network_free(gpointer data)
 		g_dbus_proxy_unref(iwdn->proxy);
 		iwdn->proxy = NULL;
 	}
+
+	remove_network(iwdn);
 
 	g_free(iwdn->path);
 	g_free(iwdn->device);
@@ -547,7 +828,7 @@ static DBusMessage *agent_request_passphrase(DBusConnection *dbus_conn,
 {
 	struct iwd_network *iwdn;
 	DBusMessageIter iter;
-	const char *path;
+	const char *path, *passwd;
 
 	DBG("");
 
@@ -562,7 +843,10 @@ static DBusMessage *agent_request_passphrase(DBusConnection *dbus_conn,
 	if (!iwdn)
 		return get_reply_on_error(message, EINVAL);
 
-	return g_dbus_create_reply(message, DBUS_TYPE_INVALID);
+	passwd = connman_network_get_string(iwdn->network, "WiFi.Passphrase");
+
+	return g_dbus_create_reply(message, DBUS_TYPE_STRING, &passwd,
+					DBUS_TYPE_INVALID);
 }
 
 static DBusMessage *agent_cancel(DBusConnection *dbus_conn,
@@ -693,6 +977,8 @@ static void create_network(GDBusProxy *proxy)
 
 	g_dbus_proxy_set_property_watch(iwdn->proxy,
 			network_property_change, NULL);
+
+	add_network(path, iwdn);
 }
 
 static void object_added(GDBusProxy *proxy, void *user_data)
