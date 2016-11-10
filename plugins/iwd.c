@@ -30,6 +30,8 @@
 #define CONNMAN_API_SUBJECT_TO_CHANGE
 #include <connman/plugin.h>
 #include <connman/dbus.h>
+#include <connman/network.h>
+#include <connman/technology.h>
 #include <gdbus.h>
 
 static DBusConnection *connection;
@@ -144,6 +146,78 @@ static bool proxy_get_bool(GDBusProxy *proxy, const char *property)
 
 	return value;
 }
+
+static int cm_network_probe(struct connman_network *network)
+{
+	return -EOPNOTSUPP;
+}
+
+static int cm_network_connect(struct connman_network *network)
+{
+	return -EINPROGRESS;
+}
+
+static int cm_network_disconnect(struct connman_network *network)
+{
+	return -EINPROGRESS;
+}
+
+static struct connman_network_driver network_driver = {
+	.name		= "iwd",
+	.type           = CONNMAN_NETWORK_TYPE_WIFI,
+	.probe          = cm_network_probe,
+	.connect        = cm_network_connect,
+	.disconnect     = cm_network_disconnect,
+};
+
+static int cm_device_probe(struct connman_device *device)
+{
+	return -EOPNOTSUPP;
+}
+
+static void cm_device_remove(struct connman_device *device)
+{
+}
+
+static int set_device_powered(struct connman_device *device, bool powered)
+{
+	return -EINPROGRESS;
+}
+
+static int cm_device_enable(struct connman_device *device)
+{
+	return set_device_powered(device, true);
+}
+
+static int cm_device_disable(struct connman_device *device)
+{
+	return set_device_powered(device, false);
+}
+
+static struct connman_device_driver device_driver = {
+	.name		= "iwd",
+	.type		= CONNMAN_DEVICE_TYPE_WIFI,
+	.probe          = cm_device_probe,
+	.remove         = cm_device_remove,
+	.enable         = cm_device_enable,
+	.disable        = cm_device_disable,
+};
+
+static int cm_tech_probe(struct connman_technology *technology)
+{
+	return 0;
+}
+
+static void cm_tech_remove(struct connman_technology *technology)
+{
+}
+
+static struct connman_technology_driver tech_driver = {
+	.name		= "iwd",
+	.type		= CONNMAN_SERVICE_TYPE_WIFI,
+	.probe          = cm_tech_probe,
+	.remove         = cm_tech_remove,
+};
 
 static void adapter_property_change(GDBusProxy *proxy, const char *name,
 		DBusMessageIter *iter, void *user_data)
@@ -581,6 +655,24 @@ static int iwd_init(void)
 	networks = g_hash_table_new_full(g_str_hash, g_str_equal, NULL,
 			network_free);
 
+	if (connman_technology_driver_register(&tech_driver) < 0) {
+		connman_warn("Failed to initialize technology for IWD");
+		goto out;
+	}
+
+	if (connman_device_driver_register(&device_driver) < 0) {
+		connman_warn("Failed to initialize device driver for "
+				IWD_SERVICE);
+		connman_technology_driver_unregister(&tech_driver);
+		goto out;
+	}
+
+	if (connman_network_driver_register(&network_driver) < 0) {
+		connman_technology_driver_unregister(&tech_driver);
+		connman_device_driver_unregister(&device_driver);
+		goto out;
+	}
+
 	client = g_dbus_client_new(connection, IWD_SERVICE, IWD_PATH);
 	if (!client) {
 		connman_warn("Failed to initialize D-Bus client for "
@@ -613,6 +705,10 @@ out:
 
 static void iwd_exit(void)
 {
+	connman_network_driver_unregister(&network_driver);
+	connman_device_driver_unregister(&device_driver);
+	connman_technology_driver_unregister(&tech_driver);
+
 	g_dbus_client_unref(client);
 
 	g_hash_table_destroy(networks);
