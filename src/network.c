@@ -924,13 +924,9 @@ struct connman_network *connman_network_create(const char *identifier,
 	struct connman_network *network;
 	char *ident;
 
-	DBG("identifier %s type %d", identifier, type);
-
 	network = g_try_new0(struct connman_network, 1);
 	if (!network)
 		return NULL;
-
-	DBG("network %p", network);
 
 	network->refcount = 1;
 
@@ -946,6 +942,8 @@ struct connman_network *connman_network_create(const char *identifier,
 
 	network_list = g_slist_prepend(network_list, network);
 
+	DBG("network %p identifier %s type %s", network, identifier,
+		type2string(type));
 	return network;
 }
 
@@ -1718,8 +1716,6 @@ int connman_network_set_name(struct connman_network *network,
 int connman_network_set_strength(struct connman_network *network,
 						uint8_t strength)
 {
-	DBG("network %p strengh %d", network, strength);
-
 	network->strength = strength;
 
 	return 0;
@@ -1733,8 +1729,6 @@ uint8_t connman_network_get_strength(struct connman_network *network)
 int connman_network_set_frequency(struct connman_network *network,
 						uint16_t frequency)
 {
-	DBG("network %p frequency %d", network, frequency);
-
 	network->frequency = frequency;
 
 	return 0;
@@ -1748,8 +1742,6 @@ uint16_t connman_network_get_frequency(struct connman_network *network)
 int connman_network_set_wifi_channel(struct connman_network *network,
 						uint16_t channel)
 {
-	DBG("network %p wifi channel %d", network, channel);
-
 	network->wifi.channel = channel;
 
 	return 0;
@@ -1771,8 +1763,6 @@ uint16_t connman_network_get_wifi_channel(struct connman_network *network)
 int connman_network_set_string(struct connman_network *network,
 					const char *key, const char *value)
 {
-	DBG("network %p key %s value %s", network, key, value);
-
 	if (g_strcmp0(key, "Name") == 0)
 		return connman_network_set_name(network, value);
 
@@ -1838,8 +1828,6 @@ int connman_network_set_string(struct connman_network *network,
 const char *connman_network_get_string(struct connman_network *network,
 							const char *key)
 {
-	DBG("network %p key %s", network, key);
-
 	if (g_str_equal(key, "Path"))
 		return network->path;
 	else if (g_str_equal(key, "Name"))
@@ -1887,8 +1875,6 @@ const char *connman_network_get_string(struct connman_network *network,
 int connman_network_set_bool(struct connman_network *network,
 					const char *key, bool value)
 {
-	DBG("network %p key %s value %d", network, key, value);
-
 	if (g_strcmp0(key, "Roaming") == 0)
 		network->roaming = value;
 	else if (g_strcmp0(key, "WiFi.WPS") == 0)
@@ -1909,8 +1895,6 @@ int connman_network_set_bool(struct connman_network *network,
 bool connman_network_get_bool(struct connman_network *network,
 							const char *key)
 {
-	DBG("network %p key %s", network, key);
-
 	if (g_str_equal(key, "Roaming"))
 		return network->roaming;
 	else if (g_str_equal(key, "WiFi.WPS"))
@@ -1933,8 +1917,6 @@ bool connman_network_get_bool(struct connman_network *network,
 int connman_network_set_blob(struct connman_network *network,
 			const char *key, const void *data, unsigned int size)
 {
-	DBG("network %p key %s size %d", network, key, size);
-
 	if (g_str_equal(key, "WiFi.SSID")) {
 		g_free(network->wifi.ssid);
 		network->wifi.ssid = g_try_malloc(size);
@@ -1961,8 +1943,6 @@ int connman_network_set_blob(struct connman_network *network,
 const void *connman_network_get_blob(struct connman_network *network,
 					const char *key, unsigned int *size)
 {
-	DBG("network %p key %s", network, key);
-
 	if (g_str_equal(key, "WiFi.SSID")) {
 		if (size)
 			*size = network->wifi.ssid_len;
