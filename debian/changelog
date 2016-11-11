@@ -4,6 +4,9 @@ connman (1.33-2) UNRELEASED; urgency=medium
   * Restrict Architecture to linux-any, connman will never work on non 
     linux systems - unless systemd will be ported for them
   * debian/README.debian is always removed (Closes: #833297)
+  * Make connman postinst and postrm more complete
+    - Added exit 0
+    - Delete left over /etc/resolv.conf (Closes: #843535)
 
   [ Gianfranco Costamagna ]
   * Enforce minimum autoconf version, to ease backporting.
