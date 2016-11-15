@@ -418,12 +418,9 @@ static int table_cmd(struct mnl_socket *nl, struct nftnl_table *t,
 	/* The current table commands do not support any callback returns. */
         err = send_and_dispatch(nl, mnl_nlmsg_batch_head(batch),
 				mnl_nlmsg_batch_size(batch), 0, NULL);
-        if (err < 0)
-                return err;
 
         mnl_nlmsg_batch_stop(batch);
-
-        return 0;
+        return err;
 }
 
 static int chain_cmd(struct mnl_socket *nl, struct nftnl_chain *chain,
@@ -451,12 +448,9 @@ static int chain_cmd(struct mnl_socket *nl, struct nftnl_chain *chain,
 
         err = send_and_dispatch(nl, mnl_nlmsg_batch_head(batch),
 			mnl_nlmsg_batch_size(batch), cb_type, cb_val);
-        if (err < 0)
-                return err;
 
         mnl_nlmsg_batch_stop(batch);
-
-        return 0;
+        return err;
 }
 
 static int rule_cmd(struct mnl_socket *nl, struct nftnl_rule *rule,
