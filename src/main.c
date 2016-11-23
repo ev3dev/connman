@@ -67,6 +67,7 @@ static struct {
 	char **pref_timeservers;
 	unsigned int *auto_connect;
 	unsigned int *preferred_techs;
+	unsigned int *always_connected_techs;
 	char **fallback_nameservers;
 	unsigned int timeout_inputreq;
 	unsigned int timeout_browserlaunch;
@@ -81,6 +82,7 @@ static struct {
 	.pref_timeservers = NULL,
 	.auto_connect = NULL,
 	.preferred_techs = NULL,
+	.always_connected_techs = NULL,
 	.fallback_nameservers = NULL,
 	.timeout_inputreq = DEFAULT_INPUT_REQUEST_TIMEOUT,
 	.timeout_browserlaunch = DEFAULT_BROWSER_LAUNCH_TIMEOUT,
@@ -95,6 +97,7 @@ static struct {
 #define CONF_BG_SCAN                    "BackgroundScanning"
 #define CONF_PREF_TIMESERVERS           "FallbackTimeservers"
 #define CONF_AUTO_CONNECT               "DefaultAutoConnectTechnologies"
+#define CONF_ALWAYS_CONNECTED_TECHS     "AlwaysConnectedTechnologies"
 #define CONF_PREFERRED_TECHS            "PreferredTechnologies"
 #define CONF_FALLBACK_NAMESERVERS       "FallbackNameservers"
 #define CONF_TIMEOUT_INPUTREQ           "InputRequestTimeout"
@@ -110,6 +113,7 @@ static const char *supported_options[] = {
 	CONF_BG_SCAN,
 	CONF_PREF_TIMESERVERS,
 	CONF_AUTO_CONNECT,
+	CONF_ALWAYS_CONNECTED_TECHS,
 	CONF_PREFERRED_TECHS,
 	CONF_FALLBACK_NAMESERVERS,
 	CONF_TIMEOUT_INPUTREQ,
@@ -288,6 +292,17 @@ static void parse_config(GKeyFile *config)
 
 	if (!error)
 		connman_settings.preferred_techs =
+			parse_service_types(str_list, len);
+
+	g_strfreev(str_list);
+
+	g_clear_error(&error);
+
+	str_list = __connman_config_get_string_list(config, "General",
+			CONF_ALWAYS_CONNECTED_TECHS, &len, &error);
+
+	if (!error)
+		connman_settings.always_connected_techs =
 			parse_service_types(str_list, len);
 
 	g_strfreev(str_list);
@@ -571,6 +586,9 @@ unsigned int *connman_setting_get_uint_list(const char *key)
 
 	if (g_str_equal(key, CONF_PREFERRED_TECHS))
 		return connman_settings.preferred_techs;
+
+	if (g_str_equal(key, CONF_ALWAYS_CONNECTED_TECHS))
+		return connman_settings.always_connected_techs;
 
 	return NULL;
 }
