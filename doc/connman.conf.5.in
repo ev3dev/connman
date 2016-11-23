@@ -67,6 +67,12 @@ for this entry when empty is ethernet,wifi,cellular.
 Services that are automatically connected must have been
 set up and saved to storage beforehand.
 .TP
+.BI AlwaysConnectedTechnologies= technology\fR[,...]
+List of technoolgies which are always connected regardless
+of PreferredTechnologies setting (AutoConnect = true). The
+default value is empty and this feature is disabled unless
+explicitely enabled in the config file.
+.TP
 .BI PreferredTechnologies= technology\fR[,...]
 List of preferred technologies from the most preferred
 one to the least preferred one separated by commas ",".
