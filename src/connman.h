@@ -244,6 +244,9 @@ int __connman_inet_del_default_from_table(uint32_t table_id, int ifindex, const 
 int __connman_inet_get_address_netmask(int ifindex,
 		struct sockaddr_in *address, struct sockaddr_in *netmask);
 
+bool __connman_inet_isrootnfs_device(const char *devname);
+char **__connman_inet_get_pnp_nameservers(const char *pnp_file);
+
 #include <connman/resolver.h>
 
 int __connman_resolver_init(gboolean dnsproxy);

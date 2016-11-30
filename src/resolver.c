@@ -659,6 +659,14 @@ int __connman_resolver_init(gboolean dnsproxy)
 
 	DBG("dnsproxy %d", dnsproxy);
 
+	/* get autoip nameservers */
+	ns = __connman_inet_get_pnp_nameservers(NULL);
+	for (i = 0; ns && ns[i]; i += 1) {
+		DBG("pnp server %s", ns[i]);
+		append_resolver(i, NULL, ns[i], 86400, 0);
+	}
+	g_strfreev(ns);
+
 	if (!dnsproxy)
 		return 0;
 

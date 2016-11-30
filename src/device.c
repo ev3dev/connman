@@ -1321,6 +1321,11 @@ nodevice:
 	}
 
 list:
+	if (__connman_inet_isrootnfs_device(devname)) {
+		DBG("ignoring device %s (rootnfs)", devname);
+		return true;
+	}
+
 	blacklisted_interfaces =
 		connman_setting_get_string_list("NetworkInterfaceBlacklist");
 	if (!blacklisted_interfaces)

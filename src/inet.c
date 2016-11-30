@@ -2964,3 +2964,297 @@ out:
 	close(sk);
 	return ret;
 }
+
+static int get_nfs_server_ip(const char *cmdline_file, const char *pnp_file,
+				struct in_addr *addr)
+{
+	char *s, *nfsargs;
+	size_t len;
+	char addrstr[INET_ADDRSTRLEN];
+	struct in_addr taddr;
+	GError *error = NULL;
+	char *cmdline = NULL;
+	char *pnp = NULL;
+	char **args = NULL;
+	char **pnpent = NULL;
+	char **pp = NULL;
+	int err = -1;
+
+	if (!cmdline_file)
+		cmdline_file = "/proc/cmdline";
+	if (!pnp_file)
+		pnp_file = "/proc/net/pnp";
+	if (!addr)
+		addr = &taddr;
+	addr->s_addr = INADDR_NONE;
+
+	if (!g_file_get_contents(cmdline_file, &cmdline, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				cmdline_file, error->message);
+		goto out;
+	}
+
+	if (!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				pnp_file, error->message);
+		goto out;
+	}
+
+	len = strlen(cmdline);
+	if (len <= 1) {
+		/* too short */
+		goto out;
+	}
+	/* remove newline */
+	if (cmdline[len - 1] == '\n')
+		cmdline[--len] = '\0';
+
+	/* split in arguments (seperated by space) */
+	args = g_strsplit(cmdline, " ", 0);
+	if (!args) {
+		connman_error("%s: Cannot split cmdline \"%s\"\n", __func__,
+				cmdline);
+		goto out;
+	}
+
+	/* split in entries (by newlines) */
+	pnpent = g_strsplit(pnp, "\n", 0);
+	if (!pnpent) {
+		connman_error("%s: Cannot split pnp at file \"%s\"\n", __func__,
+				pnp_file);
+		goto out;
+	}
+
+	/* first find root argument */
+	for (pp = args; *pp; pp++) {
+		if (!strcmp(*pp, "root=/dev/nfs"))
+			break;
+	}
+	/* no rootnfs found */
+	if (!*pp)
+		goto out;
+
+	/* locate nfsroot argument */
+	for (pp = args; *pp; pp++) {
+		if (!strncmp(*pp, "nfsroot=", strlen("nfsroot=")))
+			break;
+	}
+	/* no nfsroot argument found */
+	if (!*pp)
+		goto out;
+
+	/* determine if nfsroot server is provided */
+	nfsargs = strchr(*pp, '=');
+	if (!nfsargs)
+		goto out;
+	nfsargs++;
+
+	/* find whether serverip is present */
+	s = strchr(nfsargs, ':');
+	if (s) {
+		len = s - nfsargs;
+		s = nfsargs;
+	} else {
+		/* no serverip, use bootserver */
+		for (pp = pnpent; *pp; pp++) {
+			if (!strncmp(*pp, "bootserver ", strlen("bootserver ")))
+				break;
+		}
+		/* no bootserver found */
+		if (!*pp)
+			goto out;
+		s = *pp + strlen("bootserver ");
+		len = strlen(s);
+	}
+
+	/* copy to addr string buffer */
+	if (len >= sizeof(addrstr)) {
+		connman_error("%s: Bad server\n", __func__);
+		goto out;
+	}
+	memcpy(addrstr, s, len);
+	addrstr[len] = '\0';
+
+	err = inet_pton(AF_INET, addrstr, addr);
+	if (err <= 0) {
+		connman_error("%s: Cannot convert to numeric addr \"%s\"\n",
+				__func__, addrstr);
+		err = -1;
+		goto out;
+	}
+
+	/* all done */
+	err = 0;
+out:
+	g_strfreev(pnpent);
+	g_strfreev(args);
+	if (error)
+		g_error_free(error);
+	g_free(pnp);
+	g_free(cmdline);
+
+	return err;
+}
+
+/* get interface out of which peer is reachable (IPv4 only) */
+static int get_peer_iface(struct in_addr *addr, char *ifname)
+{
+	struct ifaddrs *ifaddr, *ifa;
+	struct sockaddr_in saddr, *ifsaddr;
+	socklen_t socklen;
+	int s;
+	int err = -1;
+
+	/* Obtain address(es) matching host/port */
+	err = getifaddrs(&ifaddr);
+	if (err < 0) {
+		connman_error("%s: getifaddrs() failed %d (%s)\n",
+				__func__, errno, strerror(errno));
+		return -1;
+	}
+
+	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (s < 0) {
+		connman_error("%s: socket() failed %d (%s)\n",
+				__func__, errno, strerror(errno));
+		return -1;
+	}
+
+	memset(&saddr, 0, sizeof(saddr));
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = 0;	/* any port */
+	saddr.sin_addr = *addr;
+
+	/* no need to bind, connect will select iface */
+	err = connect(s, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
+	if (err < 0) {
+		connman_error("%s: connect() failed: %d (%s)\n",
+				__func__, errno, strerror(errno));
+		goto out;
+	}
+
+	socklen = sizeof(saddr);
+	err = getsockname(s, (struct sockaddr *)&saddr, &socklen);
+	if (err < 0) {
+		connman_error("%s: getsockname() failed: %d (%s)\n",
+				__func__, errno, strerror(errno));
+		goto out;
+	}
+
+	err = -1;
+	for (ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
+		if (!ifa->ifa_addr)
+			continue;
+
+		/* only IPv4 address */
+		if (ifa->ifa_addr->sa_family != AF_INET)
+			continue;
+
+		ifsaddr = (struct sockaddr_in *)ifa->ifa_addr;
+
+		/* match address? */
+		if (ifsaddr->sin_addr.s_addr == saddr.sin_addr.s_addr)
+			break;
+	}
+
+	if (ifa) {
+		err = 0;
+		if (ifname)
+			strcpy(ifname, ifa->ifa_name);
+	}
+
+out:
+	close(s);
+
+	freeifaddrs(ifaddr);
+
+	return err;
+}
+
+bool __connman_inet_isrootnfs_device(const char *devname)
+{
+	struct in_addr addr;
+	char ifname[IFNAMSIZ];
+
+	return get_nfs_server_ip(NULL, NULL, &addr) == 0 &&
+	       get_peer_iface(&addr, ifname) == 0 &&
+	       strcmp(devname, ifname) == 0;
+}
+
+char **__connman_inet_get_pnp_nameservers(const char *pnp_file)
+{
+	char **pp;
+	char *s;
+	int pass, count;
+	GError *error = NULL;
+	char *pnp = NULL;
+	char **pnpent = NULL;
+	char **nameservers = NULL;
+
+	if (!pnp_file)
+		pnp_file = "/proc/net/pnp";
+
+	if (!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				pnp_file, error->message);
+		goto out;
+	}
+
+	/* split in entries (by newlines) */
+	pnpent = g_strsplit(pnp, "\n", 0);
+	if (!pnpent) {
+		connman_error("%s: Cannot split pnp \"%s\"\n", __func__,
+				pnp_file);
+		goto out;
+	}
+
+	/*
+	 * Perform two passes to retreive a char ** array of
+	 * nameservers that are not 0.0.0.0
+	 *
+	 * The first pass counts them, the second fills in the
+	 * array.
+	 */
+	count = 0;
+	nameservers = NULL;
+	for (pass = 1; pass <= 2; pass++) {
+
+		/* at the start of the second pass allocate */
+		if (pass == 2)
+			nameservers = g_new(char *, count + 1);
+
+		count = 0;
+		for (pp = pnpent; *pp; pp++) {
+			/* match 'nameserver ' at the start of each line */
+			if (strncmp(*pp, "nameserver ", strlen("nameserver ")))
+				continue;
+
+			/* compare it against 0.0.0.0 */
+			s = *pp + strlen("nameserver ");
+			if (!strcmp(s, "0.0.0.0"))
+				continue;
+
+			/* on second pass fill in array */
+			if (pass == 2)
+				nameservers[count] = g_strdup(s);
+			count++;
+		}
+
+		/* no nameservers? */
+		if (count == 0)
+			goto out;
+
+		/* and terminate char ** array with NULL */
+		if (pass == 2)
+			nameservers[count] = NULL;
+
+	}
+
+out:
+	g_strfreev(pnpent);
+	g_free(pnp);
+	if (error)
+		g_error_free(error);
+
+	return nameservers;
+}
