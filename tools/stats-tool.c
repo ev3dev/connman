@@ -794,7 +794,7 @@ static void swap_and_close_files(struct stats_file *history_file,
 	munmap(history_file->addr, history_file->len);
 	munmap(temp_file->addr, temp_file->len);
 
-	TFR(close(temp_file->fd));
+	close(temp_file->fd);
 
 	unlink(history_file->name);
 
@@ -802,7 +802,7 @@ static void swap_and_close_files(struct stats_file *history_file,
 		return;
 
 	unlink(temp_file->name);
-	TFR(close(history_file->fd));
+	close(history_file->fd);
 }
 
 static void history_file_update(struct stats_file *data_file,
