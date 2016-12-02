@@ -4512,6 +4512,26 @@ static void add_network_security_eap(DBusMessageIter *dict,
 						     DBUS_TYPE_STRING,
 						     &ssid->anonymous_identity);
 
+	if(ssid->subject_match)
+		supplicant_dbus_dict_append_basic(dict, "subject_match",
+						     DBUS_TYPE_STRING,
+						     &ssid->subject_match);
+
+	if(ssid->altsubject_match)
+		supplicant_dbus_dict_append_basic(dict, "altsubject_match",
+						     DBUS_TYPE_STRING,
+						     &ssid->altsubject_match);
+
+	if(ssid->domain_suffix_match)
+		supplicant_dbus_dict_append_basic(dict, "domain_suffix_match",
+						     DBUS_TYPE_STRING,
+						     &ssid->domain_suffix_match);
+
+	if(ssid->domain_match)
+		supplicant_dbus_dict_append_basic(dict, "domain_match",
+						     DBUS_TYPE_STRING,
+						     &ssid->domain_match);
+
 	g_free(eap_value);
 }
 

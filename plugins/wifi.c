@@ -88,6 +88,10 @@ struct hidden_params {
 	unsigned int ssid_len;
 	char *identity;
 	char *anonymous_identity;
+	char *subject_match;
+	char *altsubject_match;
+	char *domain_suffix_match;
+	char *domain_match;
 	char *passphrase;
 	char *security;
 	GSupplicantScanParams *scan_params;
@@ -2058,6 +2062,14 @@ static void ssid_init(GSupplicantSSID *ssid, struct connman_network *network)
 						"WiFi.AnonymousIdentity");
 	ssid->ca_cert_path = connman_network_get_string(network,
 							"WiFi.CACertFile");
+	ssid->subject_match = connman_network_get_string(network,
+							"WiFi.SubjectMatch");
+	ssid->altsubject_match = connman_network_get_string(network,
+							"WiFi.AltSubjectMatch");
+	ssid->domain_suffix_match = connman_network_get_string(network,
+							"WiFi.DomainSuffixMatch");
+	ssid->domain_match = connman_network_get_string(network,
+							"WiFi.DomainMatch");
 	ssid->client_cert_path = connman_network_get_string(network,
 							"WiFi.ClientCertFile");
 	ssid->private_key_path = connman_network_get_string(network,

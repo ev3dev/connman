@@ -82,6 +82,10 @@ struct connman_network {
 		char *anonymous_identity;
 		char *agent_identity;
 		char *ca_cert_path;
+		char *subject_match;
+		char *altsubject_match;
+		char *domain_suffix_match;
+		char *domain_match;
 		char *client_cert_path;
 		char *private_key_path;
 		char *private_key_passphrase;
@@ -893,6 +897,10 @@ static void network_destruct(struct connman_network *network)
 	g_free(network->wifi.anonymous_identity);
 	g_free(network->wifi.agent_identity);
 	g_free(network->wifi.ca_cert_path);
+	g_free(network->wifi.subject_match);
+	g_free(network->wifi.altsubject_match);
+	g_free(network->wifi.domain_suffix_match);
+	g_free(network->wifi.domain_match);
 	g_free(network->wifi.client_cert_path);
 	g_free(network->wifi.private_key_path);
 	g_free(network->wifi.private_key_passphrase);
@@ -1796,6 +1804,18 @@ int connman_network_set_string(struct connman_network *network,
 	} else if (g_str_equal(key, "WiFi.CACertFile")) {
 		g_free(network->wifi.ca_cert_path);
 		network->wifi.ca_cert_path = g_strdup(value);
+	} else if (g_str_equal(key, "WiFi.SubjectMatch")) {
+		g_free(network->wifi.subject_match);
+		network->wifi.subject_match = g_strdup(value);
+	} else if (g_str_equal(key, "WiFi.AltSubjectMatch")) {
+		g_free(network->wifi.altsubject_match);
+		network->wifi.altsubject_match = g_strdup(value);
+	} else if (g_str_equal(key, "WiFi.DomainSuffixMatch")) {
+		g_free(network->wifi.domain_suffix_match);
+		network->wifi.domain_suffix_match = g_strdup(value);
+	} else if (g_str_equal(key, "WiFi.DomainMatch")) {
+		g_free(network->wifi.domain_match);
+		network->wifi.domain_match = g_strdup(value);
 	} else if (g_str_equal(key, "WiFi.ClientCertFile")) {
 		g_free(network->wifi.client_cert_path);
 		network->wifi.client_cert_path = g_strdup(value);
@@ -1850,6 +1870,14 @@ const char *connman_network_get_string(struct connman_network *network,
 		return network->wifi.agent_identity;
 	else if (g_str_equal(key, "WiFi.CACertFile"))
 		return network->wifi.ca_cert_path;
+	else if (g_str_equal(key, "WiFi.SubjectMatch"))
+		return network->wifi.subject_match;
+	else if (g_str_equal(key, "WiFi.AltSubjectMatch"))
+		return network->wifi.altsubject_match;
+	else if (g_str_equal(key, "WiFi.DomainSuffixMatch"))
+		return network->wifi.domain_suffix_match;
+	else if (g_str_equal(key, "WiFi.DomainMatch"))
+		return network->wifi.domain_match;
 	else if (g_str_equal(key, "WiFi.ClientCertFile"))
 		return network->wifi.client_cert_path;
 	else if (g_str_equal(key, "WiFi.PrivateKeyFile"))

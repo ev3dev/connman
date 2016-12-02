@@ -104,6 +104,10 @@ struct connman_service {
 	char *anonymous_identity;
 	char *agent_identity;
 	char *ca_cert_file;
+	char *subject_match;
+	char *altsubject_match;
+	char *domain_suffix_match;
+	char *domain_match;
 	char *client_cert_file;
 	char *private_key_file;
 	char *private_key_passphrase;
@@ -2868,6 +2872,66 @@ void __connman_service_set_anonymous_identity(struct connman_service *service,
 					service->anonymous_identity);
 }
 
+void __connman_service_set_subject_match(struct connman_service *service,
+						const char *subject_match)
+{
+	if (service->immutable || service->hidden)
+		return;
+
+	g_free(service->subject_match);
+	service->subject_match = g_strdup(subject_match);
+
+	if (service->network)
+		connman_network_set_string(service->network,
+					"WiFi.SubjectMatch",
+					service->subject_match);
+}
+
+void __connman_service_set_altsubject_match(struct connman_service *service,
+						const char *altsubject_match)
+{
+	if (service->immutable || service->hidden)
+		return;
+
+	g_free(service->altsubject_match);
+	service->altsubject_match = g_strdup(altsubject_match);
+
+	if (service->network)
+		connman_network_set_string(service->network,
+					"WiFi.AltSubjectMatch",
+					service->altsubject_match);
+}
+
+void __connman_service_set_domain_suffix_match(struct connman_service *service,
+						const char *domain_suffix_match)
+{
+	if (service->immutable || service->hidden)
+		return;
+
+	g_free(service->domain_suffix_match);
+	service->domain_suffix_match = g_strdup(domain_suffix_match);
+
+	if (service->network)
+		connman_network_set_string(service->network,
+					"WiFi.DomainSuffixMatch",
+					service->domain_suffix_match);
+}
+
+void __connman_service_set_domain_match(struct connman_service *service,
+						const char *domain_match)
+{
+	if (service->immutable || service->hidden)
+		return;
+
+	g_free(service->domain_match);
+	service->domain_match = g_strdup(domain_match);
+
+	if (service->network)
+		connman_network_set_string(service->network,
+					"WiFi.DomainMatch",
+					service->domain_match);
+}
+
 void __connman_service_set_agent_identity(struct connman_service *service,
 						const char *agent_identity)
 {
@@ -4195,6 +4259,18 @@ bool __connman_service_remove(struct connman_service *service)
 	g_free(service->anonymous_identity);
 	service->anonymous_identity = NULL;
 
+	g_free(service->subject_match);
+	service->subject_match = NULL;
+
+	g_free(service->altsubject_match);
+	service->altsubject_match = NULL;
+
+	g_free(service->domain_suffix_match);
+	service->domain_suffix_match = NULL;
+
+	g_free(service->domain_match);
+	service->domain_match = NULL;
+
 	g_free(service->agent_identity);
 	service->agent_identity = NULL;
 
@@ -4651,6 +4727,10 @@ static void service_free(gpointer user_data)
 	g_free(service->anonymous_identity);
 	g_free(service->agent_identity);
 	g_free(service->ca_cert_file);
+	g_free(service->subject_match);
+	g_free(service->altsubject_match);
+	g_free(service->domain_suffix_match);
+	g_free(service->domain_match);
 	g_free(service->client_cert_file);
 	g_free(service->private_key_file);
 	g_free(service->private_key_passphrase);
@@ -5148,6 +5228,18 @@ void __connman_service_set_string(struct connman_service *service,
 	} else if (g_str_equal(key, "CACertFile")) {
 		g_free(service->ca_cert_file);
 		service->ca_cert_file = g_strdup(value);
+	} else if (g_str_equal(key, "SubjectMatch")) {
+		g_free(service->subject_match);
+		service->subject_match = g_strdup(value);
+	} else if (g_str_equal(key, "AltSubjectMatch")) {
+		g_free(service->altsubject_match);
+		service->altsubject_match = g_strdup(value);
+	} else if (g_str_equal(key, "DomainSuffixMatch")) {
+		g_free(service->domain_suffix_match);
+		service->domain_suffix_match = g_strdup(value);
+	} else if (g_str_equal(key, "DomainMatch")) {
+		g_free(service->domain_match);
+		service->domain_match = g_strdup(value);
 	} else if (g_str_equal(key, "ClientCertFile")) {
 		g_free(service->client_cert_file);
 		service->client_cert_file = g_strdup(value);
@@ -5988,6 +6080,22 @@ static void prepare_8021x(struct connman_service *service)
 	if (service->ca_cert_file)
 		connman_network_set_string(service->network, "WiFi.CACertFile",
 							service->ca_cert_file);
+
+	if (service->subject_match)
+		connman_network_set_string(service->network, "WiFi.SubjectMatch",
+							service->subject_match);
+
+	if (service->altsubject_match)
+		connman_network_set_string(service->network, "WiFi.AltSubjectMatch",
+							service->altsubject_match);
+
+	if (service->domain_suffix_match)
+		connman_network_set_string(service->network, "WiFi.DomainSuffixMatch",
+							service->domain_suffix_match);
+
+	if (service->domain_match)
+		connman_network_set_string(service->network, "WiFi.DomainMatch",
+							service->domain_match);
 
 	if (service->client_cert_file)
 		connman_network_set_string(service->network,
