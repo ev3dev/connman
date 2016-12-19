@@ -321,10 +321,8 @@ static gboolean can_read_data(GIOChannel *chan,
 	gchar *str;
 	gsize size;
 
-	if (cond == G_IO_HUP) {
-		g_io_channel_unref(chan);
+	if (cond & (G_IO_NVAL | G_IO_ERR | G_IO_HUP))
 		return FALSE;
-	}
 
 	g_io_channel_read_line(chan, &str, &size, NULL, NULL);
 	cbf(str);
@@ -340,7 +338,8 @@ static int setup_log_read(int stdout_fd, int stderr_fd)
 
 	chan = g_io_channel_unix_new(stdout_fd);
 	g_io_channel_set_close_on_unref(chan, TRUE);
-	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, connman_debug);
+	watch = g_io_add_watch(chan, G_IO_IN | G_IO_NVAL | G_IO_ERR | G_IO_HUP,
+			       can_read_data, connman_debug);
 	g_io_channel_unref(chan);
 
 	if (watch == 0)
@@ -348,7 +347,8 @@ static int setup_log_read(int stdout_fd, int stderr_fd)
 
 	chan = g_io_channel_unix_new(stderr_fd);
 	g_io_channel_set_close_on_unref(chan, TRUE);
-	watch = g_io_add_watch(chan, G_IO_IN, can_read_data, connman_error);
+	watch = g_io_add_watch(chan, G_IO_IN | G_IO_NVAL | G_IO_ERR | G_IO_HUP,
+			       can_read_data, connman_error);
 	g_io_channel_unref(chan);
 
 	return watch == 0? -EIO : 0;
