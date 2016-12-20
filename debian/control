@@ -13,7 +13,7 @@ Build-Depends: debhelper (>= 10),
                gtk-doc-tools,
                libgnutls28-dev,
                libreadline-dev,
-               iptables-dev,
+               libxtables-dev,
                wpasupplicant,
                libbluetooth-dev,
                ppp-dev,
@@ -29,7 +29,8 @@ Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          dbus,
-         lsb-base
+         lsb-base,
+	 iptables
 Recommends: bluez,
             wpasupplicant,
             ofono

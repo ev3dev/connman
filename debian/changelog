@@ -11,6 +11,9 @@ connman (1.33-2) UNRELEASED; urgency=medium
   [ Gianfranco Costamagna ]
   * Enforce minimum autoconf version, to ease backporting.
 
+  [ Arturo Borrero Gonzalez ]
+  * Fix dependency to iptables/libxtables (Closes: #845383)
+
  -- Alf Gaida <agaida@siduction.org>  Mon, 24 Oct 2016 21:13:23 +0200
 
 connman (1.33-1) unstable; urgency=medium
