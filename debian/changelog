@@ -1,4 +1,4 @@
-connman (1.33-2) UNRELEASED; urgency=medium
+connman (1.33-2) unstable; urgency=medium
 
   [ Alf Gaida ]
   * Restrict Architecture to linux-any, connman will never work on non 
