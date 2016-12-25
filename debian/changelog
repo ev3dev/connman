@@ -1,3 +1,11 @@
+connman (1.33-3) unstable; urgency=high
+
+  * Fix connman.postrm (Closes: #849345)
+    - don't remove state-dir unless when purge
+    - make removing the resolv.conf symlink more sophisticated 
+
+ -- Alf Gaida <agaida@siduction.org>  Mon, 26 Dec 2016 00:53:20 +0100
+
 connman (1.33-2) unstable; urgency=medium
 
   [ Alf Gaida ]
