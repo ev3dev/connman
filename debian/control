@@ -34,10 +34,7 @@ Depends: ${shlibs:Depends},
 Recommends: bluez,
             wpasupplicant,
             ofono
-Suggests: indicator-network
-Conflicts: network-manager,
-           wicd-daemon,
-           resolvconf
+Suggests: connman-vpn
 Description: Intel Connection Manager daemon
  The Linux Connection Manager project provides a daemon for managing
  Internet connections within embedded devices running the Linux
