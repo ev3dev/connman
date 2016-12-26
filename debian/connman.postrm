@@ -11,13 +11,13 @@ set -e
 case "$1" in
     purge)
         [ -d /var/lib/connman ] && rm -rf /var/lib/connman
-        if [ "$(ls -l /etc/resolv.conf | grep connman)" ]; then
+        if [ "$(readlink /etc/resolv.conf | grep connman)" ]; then
             rm -f /etc/resolv.conf
         fi
     ;;
 
     remove)
-        if [ "$(ls -l /etc/resolv.conf | grep connman)" ]; then
+        if [ "$(readlink /etc/resolv.conf | grep connman)" ]; then
             rm -f /etc/resolv.conf
         fi
     ;;
