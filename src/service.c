@@ -320,6 +320,8 @@ static const char *error2string(enum connman_service_error error)
 		return "auth-failed";
 	case CONNMAN_SERVICE_ERROR_INVALID_KEY:
 		return "invalid-key";
+	case CONNMAN_SERVICE_ERROR_BLOCKED:
+		return "blocked";
 	}
 
 	return NULL;

@@ -1256,6 +1256,16 @@ static void set_connect_error(struct connman_network *network)
 					CONNMAN_SERVICE_ERROR_CONNECT_FAILED);
 }
 
+static void set_blocked_error(struct connman_network *network)
+{
+	struct connman_service *service;
+
+	service = connman_service_lookup_from_network(network);
+
+	__connman_service_indicate_error(service,
+					CONNMAN_SERVICE_ERROR_BLOCKED);
+}
+
 void connman_network_set_ipv4_method(struct connman_network *network,
 					enum connman_ipconfig_method method)
 {
@@ -1309,6 +1319,9 @@ void connman_network_set_error(struct connman_network *network,
 		break;
 	case CONNMAN_NETWORK_ERROR_CONNECT_FAIL:
 		set_connect_error(network);
+		break;
+	case CONNMAN_NETWORK_ERROR_BLOCKED:
+		set_blocked_error(network);
 		break;
 	}
 
