@@ -479,6 +479,7 @@ if POLKIT
 else
 	$(AM_V_GEN)cp $(srcdir)/vpn/vpn-dbus.conf $@
 endif
+CLEANFILES += vpn/connman-vpn-dbus.conf
 endif
 
 if SELINUX
