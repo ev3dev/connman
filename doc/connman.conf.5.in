@@ -131,6 +131,11 @@ Default value is false.
 Automatically enable Anycast 6to4 if possible. This is not recommended, as the
 use of 6to4 will generally lead to a severe degradation of connection quality.
 See RFC6343.  Default value is false (as recommended by RFC6343 section 4.1).
+.TP
+.BI VendorClassID= string
+Set DHCP option 60 (Vendor Class ID) to the given string. This option can
+be used by DHCP servers to identify specific clients without having to
+rely on MAC address ranges, etc
 .SH "EXAMPLE"
 The following example configuration disables hostname updates and enables
 ethernet tethering.

@@ -536,6 +536,7 @@ static int dhcp_initialize(struct connman_dhcp *dhcp)
 	GDHCPClient *dhcp_client;
 	GDHCPClientError error;
 	int index;
+	const char *vendor_class_id;
 
 	DBG("dhcp %p", dhcp);
 
@@ -578,6 +579,11 @@ static int dhcp_initialize(struct connman_dhcp *dhcp)
 
 	g_dhcp_client_set_request(dhcp_client, G_DHCP_ROUTER);
 	g_dhcp_client_set_request(dhcp_client, G_DHCP_SUBNET);
+
+	vendor_class_id = connman_option_get_string("VendorClassID");
+	if (vendor_class_id)
+		g_dhcp_client_set_send(dhcp_client, G_DHCP_VENDOR_CLASS_ID,
+					vendor_class_id);
 
 	g_dhcp_client_register_event(dhcp_client,
 			G_DHCP_CLIENT_EVENT_LEASE_AVAILABLE,

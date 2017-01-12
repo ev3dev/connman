@@ -77,6 +77,7 @@ static struct {
 	char **tethering_technologies;
 	bool persistent_tethering_mode;
 	bool enable_6to4;
+	char *vendor_class_id;
 } connman_settings  = {
 	.bg_scan = true,
 	.pref_timeservers = NULL,
@@ -92,6 +93,7 @@ static struct {
 	.tethering_technologies = NULL,
 	.persistent_tethering_mode = false,
 	.enable_6to4 = false,
+	.vendor_class_id = NULL,
 };
 
 #define CONF_BG_SCAN                    "BackgroundScanning"
@@ -108,6 +110,7 @@ static struct {
 #define CONF_TETHERING_TECHNOLOGIES      "TetheringTechnologies"
 #define CONF_PERSISTENT_TETHERING_MODE  "PersistentTetheringMode"
 #define CONF_ENABLE_6TO4                "Enable6to4"
+#define CONF_VENDOR_CLASS_ID            "VendorClassID"
 
 static const char *supported_options[] = {
 	CONF_BG_SCAN,
@@ -124,6 +127,7 @@ static const char *supported_options[] = {
 	CONF_TETHERING_TECHNOLOGIES,
 	CONF_PERSISTENT_TETHERING_MODE,
 	CONF_ENABLE_6TO4,
+	CONF_VENDOR_CLASS_ID,
 	NULL
 };
 
@@ -246,6 +250,7 @@ static void parse_config(GKeyFile *config)
 	char **interfaces;
 	char **str_list;
 	char **tethering;
+        char *vendor_class_id;
 	gsize len;
 	int timeout;
 
@@ -380,6 +385,13 @@ static void parse_config(GKeyFile *config)
 					CONF_ENABLE_6TO4, &error);
 	if (!error)
 		connman_settings.enable_6to4 = boolean;
+
+	g_clear_error(&error);
+
+	vendor_class_id = __connman_config_get_string(config, "General",
+					CONF_VENDOR_CLASS_ID, &error);
+	if (!error)
+		connman_settings.vendor_class_id = vendor_class_id;
 
 	g_clear_error(&error);
 }
@@ -532,6 +544,9 @@ static GOptionEntry options[] = {
 
 const char *connman_option_get_string(const char *key)
 {
+	if (g_str_equal(key, CONF_VENDOR_CLASS_ID))
+		return connman_settings.vendor_class_id;
+
 	if (g_strcmp0(key, "wifi") == 0) {
 		if (!option_wifi)
 			return "nl80211,wext";
