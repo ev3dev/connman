@@ -1975,10 +1975,12 @@ static void settings_changed(struct connman_service *service,
 {
 	enum connman_ipconfig_type type;
 
+	type = __connman_ipconfig_get_config_type(ipconfig);
+
+	__connman_notifier_ipconfig_changed(service, ipconfig);
+
 	if (!allow_property_changed(service))
 		return;
-
-	type = __connman_ipconfig_get_config_type(ipconfig);
 
 	if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
 		connman_dbus_property_changed_dict(service->path,
@@ -1988,8 +1990,6 @@ static void settings_changed(struct connman_service *service,
 		connman_dbus_property_changed_dict(service->path,
 					CONNMAN_SERVICE_INTERFACE, "IPv6",
 					append_ipv6, service);
-
-	__connman_notifier_ipconfig_changed(service, ipconfig);
 }
 
 static void ipv4_configuration_changed(struct connman_service *service)
