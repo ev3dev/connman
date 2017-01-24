@@ -203,7 +203,7 @@ static void resolv_result(GResolvResultStatus status,
 	 * We cannot unref the resolver here as resolv struct is manipulated
 	 * by gresolv.c after we return from this callback.
 	 */
-	g_timeout_add_seconds(0, remove_resolv, data);
+	g_idle_add(remove_resolv, data);
 
 	data->resolv_id = 0;
 }
