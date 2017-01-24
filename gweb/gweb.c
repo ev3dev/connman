@@ -1348,8 +1348,7 @@ static guint do_request(GWeb *web, const char *url,
 			g_free(session->address);
 			session->address = g_strdup(host);
 		}
-		session->address_action = g_timeout_add(0, already_resolved,
-							session);
+		session->address_action = g_idle_add(already_resolved, session);
 	} else {
 		session->resolv_action = g_resolv_lookup_hostname(web->resolv,
 					host, resolv_result, session);
