@@ -961,8 +961,7 @@ static int nameservers_changed_cb(void *user_data)
 static void nameservers_changed(struct connman_service *service)
 {
 	if (!service->nameservers_timeout)
-		service->nameservers_timeout = g_timeout_add_seconds(0,
-							nameservers_changed_cb,
+		service->nameservers_timeout = g_idle_add(nameservers_changed_cb,
 							service);
 }
 
@@ -4001,7 +4000,7 @@ void __connman_service_auto_connect(enum connman_service_connect_reason reason)
 	if (!__connman_session_policy_autoconnect(reason))
 		return;
 
-	autoconnect_timeout = g_timeout_add_seconds(0, run_auto_connect,
+	autoconnect_timeout = g_idle_add(run_auto_connect,
 						GUINT_TO_POINTER(reason));
 }
 
@@ -4055,7 +4054,7 @@ static void vpn_auto_connect(void)
 		return;
 
 	vpn_autoconnect_timeout =
-		g_timeout_add_seconds(0, run_vpn_auto_connect, NULL);
+		g_idle_add(run_vpn_auto_connect, NULL);
 }
 
 bool

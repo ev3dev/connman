@@ -1397,7 +1397,7 @@ static int try_provision_service(struct connman_config_service *config,
 		virtual->service = service;
 		virtual->vfile = config->virtual_file;
 
-		g_timeout_add(0, remove_virtual_config, virtual);
+		g_idle_add(remove_virtual_config, virtual);
 
 		return 0;
 	}

@@ -176,7 +176,7 @@ static int start_dhcp_server(struct connman_peer *peer)
 	if (err < 0)
 		goto error;
 
-	g_timeout_add_seconds(0, dhcp_server_started, connman_peer_ref(peer));
+	g_idle_add(dhcp_server_started, connman_peer_ref(peer));
 
 	return 0;
 
