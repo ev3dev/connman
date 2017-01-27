@@ -2310,7 +2310,6 @@ int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
 						inet_rtnl_timeout_cb, data);
 
 		data->channel = g_io_channel_unix_new(rtnl->fd);
-		g_io_channel_set_close_on_unref(data->channel, TRUE);
 
 		g_io_channel_set_encoding(data->channel, NULL, NULL);
 		g_io_channel_set_buffered(data->channel, FALSE);
