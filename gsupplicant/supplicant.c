@@ -143,6 +143,7 @@ static GHashTable *bss_mapping;
 static GHashTable *peer_mapping;
 static GHashTable *group_mapping;
 static GHashTable *pending_peer_connection;
+static GHashTable *config_file_table;
 
 struct _GSupplicantWpsCredentials {
 	unsigned char ssid[32];
@@ -2223,6 +2224,15 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 			g_free(interface->bridge);
 			interface->bridge = g_strdup(str);
 		}
+	} else if (g_strcmp0(key, "ConfigFile") == 0) {
+		const char *str = NULL;
+
+		dbus_message_iter_get_basic(iter, &str);
+		if (str && strlen(str) > 0 && interface->ifname) {
+			SUPPLICANT_DBG("New {%s, %s}", interface->ifname, str);
+			g_hash_table_replace(config_file_table,
+				g_strdup(interface->ifname), g_strdup(str));
+		}
 	} else if (g_strcmp0(key, "CurrentBSS") == 0) {
 		interface_bss_added_without_keys(iter, interface);
 	} else if (g_strcmp0(key, "CurrentNetwork") == 0) {
@@ -2456,6 +2466,7 @@ static void signal_name_owner_changed(const char *path, DBusMessageIter *iter)
 		g_hash_table_remove_all(bss_mapping);
 		g_hash_table_remove_all(peer_mapping);
 		g_hash_table_remove_all(group_mapping);
+		g_hash_table_remove_all(config_file_table);
 		g_hash_table_remove_all(interface_table);
 		callback_system_killed();
 	}
@@ -3725,6 +3736,7 @@ static void interface_create_params(DBusMessageIter *iter, void *user_data)
 {
 	struct interface_create_data *data = user_data;
 	DBusMessageIter dict;
+	char *config_file = NULL;
 
 	SUPPLICANT_DBG("");
 
@@ -3740,6 +3752,14 @@ static void interface_create_params(DBusMessageIter *iter, void *user_data)
 	if (data->bridge)
 		supplicant_dbus_dict_append_basic(&dict, "BridgeIfname",
 					DBUS_TYPE_STRING, &data->bridge);
+
+	config_file = g_hash_table_lookup(config_file_table, data->ifname);
+	if (config_file) {
+		SUPPLICANT_DBG("[%s] ConfigFile %s", data->ifname, config_file);
+
+		supplicant_dbus_dict_append_basic(&dict, "ConfigFile",
+					DBUS_TYPE_STRING, &config_file);
+	}
 
 	supplicant_dbus_dict_close(iter, &dict);
 }
@@ -5557,6 +5577,8 @@ int g_supplicant_register(const GSupplicantCallbacks *callbacks)
 								NULL, NULL);
 	pending_peer_connection = g_hash_table_new_full(g_str_hash, g_str_equal,
 								NULL, NULL);
+	config_file_table = g_hash_table_new_full(g_str_hash, g_str_equal,
+								g_free, g_free);
 
 	supplicant_dbus_setup(connection);
 
@@ -5623,6 +5645,11 @@ void g_supplicant_unregister(const GSupplicantCallbacks *callbacks)
 
 		dbus_connection_remove_filter(connection,
 						g_supplicant_filter, NULL);
+	}
+
+	if (config_file_table) {
+		g_hash_table_destroy(config_file_table);
+		config_file_table = NULL;
 	}
 
 	if (bss_mapping) {
