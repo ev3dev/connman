@@ -600,6 +600,7 @@ void connman_session_set_default_config(struct connman_session_config *config)
 	config->ecall = FALSE;
 
 	g_slist_free(config->allowed_bearers);
+	config->allowed_bearers = NULL;
 	add_default_bearer_types(&config->allowed_bearers);
 }
 
