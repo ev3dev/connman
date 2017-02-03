@@ -1159,6 +1159,7 @@ static DBusMessage *change_session(DBusConnection *conn,
 
 			session->active = false;
 			session_deactivate(session);
+			update_session_state(session);
 
 			g_slist_free(info->config.allowed_bearers);
 			session->user_allowed_bearers = allowed_bearers;
@@ -1186,6 +1187,7 @@ static DBusMessage *change_session(DBusConnection *conn,
 
 			session->active = false;
 			session_deactivate(session);
+			update_session_state(session);
 
 			g_free(session->user_allowed_interface);
 			/* empty string means allow any interface */
