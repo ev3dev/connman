@@ -351,6 +351,7 @@ static void add_default_route(struct connman_session *session)
 {
 	struct connman_ipconfig *ipconfig;
 	int err;
+	struct in_addr addr = { INADDR_ANY };
 
 	if (!session->service)
 		return;
@@ -358,6 +359,9 @@ static void add_default_route(struct connman_session *session)
 	ipconfig = __connman_service_get_ip4config(session->service);
 	session->index = __connman_ipconfig_get_index(ipconfig);
 	session->gateway = g_strdup(__connman_ipconfig_get_gateway(ipconfig));
+
+	if (!session->gateway)
+		session->gateway = g_strdup(inet_ntoa(addr));
 
 	DBG("index %d routing table %d default gateway %s",
 		session->index, session->mark, session->gateway);
