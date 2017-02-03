@@ -1688,16 +1688,22 @@ static bool session_match_service(struct connman_session *session,
 {
 	enum connman_service_type bearer_type;
 	enum connman_service_type service_type;
+	enum connman_service_type current_service_type;
 	GSList *list;
 	char *ifname;
 
 	if (policy && policy->allowed)
 		return policy->allowed(session, service);
 
+	current_service_type = connman_service_get_type(session->service);
+
 	for (list = session->info->config.allowed_bearers; list; list = list->next) {
 		bearer_type = GPOINTER_TO_INT(list->data);
 		service_type = connman_service_get_type(service);
 		ifname = connman_service_get_interface(service);
+
+		if (bearer_type == current_service_type)
+			return false;
 
 		if (bearer_type == service_type &&
 			(session->info->config.allowed_interface == NULL ||
