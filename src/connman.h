@@ -1013,7 +1013,8 @@ int __connman_firewall_enable_snat(struct firewall_context *ctx,
 int __connman_firewall_disable_snat(struct firewall_context *ctx);
 int __connman_firewall_enable_marking(struct firewall_context *ctx,
 					enum connman_session_id_type id_type,
-					char *id, uint32_t mark);
+					char *id, const char *src_ip,
+					uint32_t mark);
 int __connman_firewall_disable_marking(struct firewall_context *ctx);
 
 int __connman_firewall_init(void);

@@ -798,9 +798,70 @@ err:
 	return -ENOMEM;
 }
 
+static int build_rule_src_ip(const char *src_ip, uint32_t mark, struct nftnl_rule **res)
+{
+	struct nftnl_rule *rule;
+	struct nftnl_expr *expr;
+	int err;
+	in_addr_t s_addr;
+
+	/*
+	 * # nft --debug netlink add rule connman route-output \
+	 *	ip saddr 192.168.10.31 mark set 1234
+	 *
+	 *	ip connman route-output
+	 *	  [ payload load 4b @ network header + 12 => reg 1 ]
+	 *	  [ cmp eq reg 1 0x1f0aa8c0 ]
+	 *	  [ immediate reg 1 0x000004d2 ]
+	 *	  [ meta set mark with reg 1 ]
+	 */
+
+	rule = nftnl_rule_alloc();
+	if (!rule)
+		return -ENOMEM;
+
+	nftnl_rule_set(rule, NFTNL_RULE_TABLE, CONNMAN_TABLE);
+	nftnl_rule_set(rule, NFTNL_RULE_CHAIN, CONNMAN_CHAIN_ROUTE_OUTPUT);
+
+	/* family ipv4 */
+	nftnl_rule_set_u32(rule, NFTNL_RULE_FAMILY, NFPROTO_IPV4);
+
+	/* source IP */
+	err = add_payload(rule, NFT_PAYLOAD_NETWORK_HEADER, NFT_REG_1,
+			offsetof(struct iphdr, saddr), sizeof(struct in_addr));
+	if (err < 0)
+		goto err;
+
+	s_addr = inet_addr(src_ip);
+	err = add_cmp(rule, NFT_REG_1, NFT_CMP_EQ, &s_addr, sizeof(s_addr));
+	if (err < 0)
+		goto err;
+
+	expr = nftnl_expr_alloc("immediate");
+	if (!expr)
+		goto err;
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_IMM_DREG, NFT_REG_1);
+	nftnl_expr_set(expr, NFTNL_EXPR_IMM_DATA, &mark, sizeof(mark));
+	nftnl_rule_add_expr(rule, expr);
+
+	expr = nftnl_expr_alloc("meta");
+	if (!expr)
+		goto err;
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_KEY, NFT_META_MARK);
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_SREG, NFT_REG_1);
+	nftnl_rule_add_expr(rule, expr);
+
+	*res = rule;
+	return 0;
+
+err:
+	return -ENOMEM;
+}
+
 int __connman_firewall_enable_marking(struct firewall_context *ctx,
 					enum connman_session_id_type id_type,
-					char *id, uint32_t mark)
+					char *id, const char *src_ip,
+					uint32_t mark)
 {
 	struct nftnl_rule *rule;
 	struct mnl_socket *nl;
@@ -810,29 +871,44 @@ int __connman_firewall_enable_marking(struct firewall_context *ctx,
 
 	DBG("");
 
-
-	if (id_type != CONNMAN_SESSION_ID_TYPE_UID)
+	if (id_type == CONNMAN_SESSION_ID_TYPE_UID) {
+		pw = getpwnam(id);
+		if (!pw)
+			return -EINVAL;
+		uid = pw->pw_uid;
+	}
+	else if (!src_ip)
 		return -ENOTSUP;
-
-	pw = getpwnam(id);
-	if (!pw)
-		return -EINVAL;
-	uid = pw->pw_uid;
 
         err = socket_open_and_bind(&nl);
         if (err < 0)
 		return err;
 
-	err = build_rule_marking(uid, mark, &rule);
-	if (err < 0)
-		goto out;
+	if (id_type == CONNMAN_SESSION_ID_TYPE_UID) {
+		err = build_rule_marking(uid, mark, &rule);
+		if (err < 0)
+			goto out;
 
-	ctx->rule.chain = CONNMAN_CHAIN_ROUTE_OUTPUT;
-	err = rule_cmd(nl, rule, NFT_MSG_NEWRULE, NFPROTO_IPV4,
-			NLM_F_APPEND|NLM_F_CREATE|NLM_F_ACK,
-			CALLBACK_RETURN_HANDLE, &ctx->rule.handle);
+		ctx->rule.chain = CONNMAN_CHAIN_ROUTE_OUTPUT;
+		err = rule_cmd(nl, rule, NFT_MSG_NEWRULE, NFPROTO_IPV4,
+				NLM_F_APPEND|NLM_F_CREATE|NLM_F_ACK,
+				CALLBACK_RETURN_HANDLE, &ctx->rule.handle);
 
-	nftnl_rule_free(rule);
+		nftnl_rule_free(rule);
+	}
+
+	if (src_ip) {
+		err = build_rule_src_ip(src_ip, mark, &rule);
+		if (err < 0)
+			goto out;
+
+		ctx->rule.chain = CONNMAN_CHAIN_ROUTE_OUTPUT;
+		err = rule_cmd(nl, rule, NFT_MSG_NEWRULE, NFPROTO_IPV4,
+				NLM_F_APPEND|NLM_F_CREATE|NLM_F_ACK,
+				CALLBACK_RETURN_HANDLE, &ctx->rule.handle);
+
+		nftnl_rule_free(rule);
+	}
 out:
 	mnl_socket_close(nl);
 	return err;

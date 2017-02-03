@@ -495,7 +495,8 @@ static void firewall_disable_connmark(void)
 
 int __connman_firewall_enable_marking(struct firewall_context *ctx,
 					enum connman_session_id_type id_type,
-					char *id, uint32_t mark)
+					char *id, const char *src_ip,
+					uint32_t mark)
 {
 	int err;
 
@@ -514,9 +515,17 @@ int __connman_firewall_enable_marking(struct firewall_context *ctx,
 				"-m owner --gid-owner %s -j MARK --set-mark %d",
 					id, mark);
 		break;
+	case CONNMAN_SESSION_ID_TYPE_UNKNOWN:
+		break;
 	case CONNMAN_SESSION_ID_TYPE_LSM:
 	default:
 		return -EINVAL;
+	}
+
+	if (src_ip) {
+		firewall_add_rule(ctx, "mangle", "OUTPUT",
+				"-s %s -j MARK --set-mark %d",
+					src_ip, mark);
 	}
 
 	return firewall_enable_rules(ctx);
