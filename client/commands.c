@@ -1896,6 +1896,7 @@ static int session_config(char *args[], int num,
 	int index = 0, res = 0;
 	struct config_append append;
 	char c;
+	char *ifname;
 
 	while (index < num && args[index]) {
 		append.opts = &args[index];
@@ -1920,6 +1921,18 @@ static int session_config(char *args[], int num,
 					session_path, session_config_return,
 					"ConnectionType", "ConnectionType",
 					DBUS_TYPE_STRING, &args[index + 1]);
+			append.values = 2;
+			break;
+		case 'i':
+			if (index + 1 < num)
+				ifname = args[index + 1];
+			else
+				ifname = "";
+
+			res = __connmanctl_dbus_session_change(connection,
+					session_path, session_config_return,
+					"AllowedInterface", "AllowedInterface",
+					DBUS_TYPE_STRING, &ifname);
 			append.values = 2;
 			break;
 
@@ -2209,6 +2222,7 @@ static struct connman_option monitor_options[] = {
 static struct connman_option session_options[] = {
 	{"bearers", 'b', "<technology1> [<technology2> [...]]"},
 	{"type", 't', "local|internet|any"},
+	{"ifname", 'i', "[<interface_name>]"},
 	{ NULL, }
 };
 
