@@ -273,21 +273,33 @@ static int init_firewall_session(struct connman_session *session)
 {
 	struct firewall_context *fw;
 	int err;
+	struct connman_ipconfig *ipconfig = NULL;
+	const char *addr = NULL;
 
-	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN)
+	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN &&
+			!session->info->config.source_ip_rule)
 		return 0;
 
 	DBG("");
+
+	if (session->info->config.source_ip_rule) {
+		ipconfig = __connman_service_get_ip4config(session->service);
+		if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN && !ipconfig)
+			return 0;
+	}
 
 	fw = __connman_firewall_create();
 	if (!fw)
 		return -ENOMEM;
 
+	if (session->info->config.source_ip_rule && ipconfig) {
+		addr = __connman_ipconfig_get_local(ipconfig);
+	}
+
 	err =__connman_firewall_enable_marking(fw,
 					session->policy_config->id_type,
 					session->policy_config->id,
-					NULL,
-					session->mark);
+					addr, session->mark);
 	if (err < 0) {
 		__connman_firewall_destroy(fw);
 		return err;
@@ -314,7 +326,11 @@ static int init_routing_table(struct connman_session *session)
 {
 	int err;
 
-	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN)
+	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN &&
+			!session->info->config.source_ip_rule)
+		return 0;
+
+	if (!session->service)
 		return 0;
 
 	DBG("");
@@ -432,9 +448,16 @@ static void cleanup_routing_table(struct connman_session *session)
 	del_default_route(session);
 }
 
+static void update_firewall(struct connman_session *session)
+{
+	cleanup_firewall_session(session);
+	init_firewall_session(session);
+}
+
 static void update_routing_table(struct connman_session *session)
 {
-	del_default_route(session);
+	cleanup_routing_table(session);
+	init_routing_table(session);
 	add_default_route(session);
 }
 
@@ -521,6 +544,7 @@ struct creation_data {
 	enum connman_session_type type;
 	GSList *allowed_bearers;
 	char *allowed_interface;
+	bool source_ip_rule;
 };
 
 static void cleanup_creation_data(struct creation_data *creation_data)
@@ -899,6 +923,17 @@ static void append_notify(DBusMessageIter *dict,
 		info_last->config.allowed_interface = info->config.allowed_interface;
 	}
 
+	if (session->append_all ||
+			info->config.source_ip_rule != info_last->config.source_ip_rule) {
+		dbus_bool_t source_ip_rule = FALSE;
+		if (info->config.source_ip_rule)
+			source_ip_rule = TRUE;
+		connman_dbus_dict_append_basic(dict, "SourceIPRule",
+						DBUS_TYPE_BOOLEAN,
+						&source_ip_rule);
+		info_last->config.source_ip_rule = info->config.source_ip_rule;
+	}
+
 	session->append_all = false;
 }
 
@@ -919,7 +954,8 @@ static bool compute_notifiable_changes(struct connman_session *session)
 
 	if (info->config.allowed_bearers != info_last->config.allowed_bearers ||
 			info->config.type != info_last->config.type ||
-			info->config.allowed_interface != info_last->config.allowed_interface)
+			info->config.allowed_interface != info_last->config.allowed_interface ||
+			info->config.source_ip_rule != info_last->config.source_ip_rule)
 		return true;
 
 	return false;
@@ -1167,6 +1203,17 @@ static DBusMessage *change_session(DBusConnection *conn,
 			goto err;
 		}
 		break;
+	case DBUS_TYPE_BOOLEAN:
+		if (g_str_equal(name, "SourceIPRule")) {
+			dbus_bool_t source_ip_rule;
+			dbus_message_iter_get_basic(&value, &source_ip_rule);
+
+			info->config.source_ip_rule = source_ip_rule;
+			update_session_state(session);
+		} else {
+			goto err;
+		}
+		break;
 	default:
 		goto err;
 	}
@@ -1268,6 +1315,7 @@ static int session_policy_config_cb(struct connman_session *session,
 		goto err;
 
 	session->policy_config = config;
+	session->info->config.source_ip_rule = creation_data->source_ip_rule;
 
 	session->mark = session_mark++;
 	session->index = -1;
@@ -1333,6 +1381,7 @@ static int session_policy_config_cb(struct connman_session *session,
 	info_last->config.roaming_policy = info->config.roaming_policy;
 	info_last->config.allowed_bearers = info->config.allowed_bearers;
 	info_last->config.allowed_interface = info->config.allowed_interface;
+	info_last->config.source_ip_rule = info->config.source_ip_rule;
 
 	session->append_all = true;
 
@@ -1427,7 +1476,22 @@ int __connman_session_create(DBusMessage *msg)
 				err = -EINVAL;
 				goto err;
 			}
+			break;
+		case DBUS_TYPE_BOOLEAN:
+			if (g_str_equal(key, "SourceIPRule")) {
+				dbus_bool_t source_ip_rule;
+				dbus_message_iter_get_basic(&value, &source_ip_rule);
+				creation_data->source_ip_rule = source_ip_rule;
+			} else {
+				err = -EINVAL;
+				goto err;
+			}
+			break;
+		default:
+			err = -EINVAL;
+			goto err;
 		}
+
 		dbus_message_iter_next(&array);
 	}
 
@@ -1611,6 +1675,7 @@ static void update_session_state(struct connman_session *session)
 
 	DBG("session %p state %s", session, state2string(state));
 
+	update_firewall(session);
 	update_routing_table(session);
 	update_nat_rules(session);
 	session_notify(session);
