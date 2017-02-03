@@ -1897,6 +1897,7 @@ static int session_config(char *args[], int num,
 	struct config_append append;
 	char c;
 	char *ifname;
+	dbus_bool_t source_ip_rule;
 
 	while (index < num && args[index]) {
 		append.opts = &args[index];
@@ -1933,6 +1934,29 @@ static int session_config(char *args[], int num,
 					session_path, session_config_return,
 					"AllowedInterface", "AllowedInterface",
 					DBUS_TYPE_STRING, &ifname);
+			append.values = 2;
+			break;
+		case 's':
+			if (!args[index + 1]) {
+				res = -EINVAL;
+				break;
+			}
+			switch (parse_boolean(args[index + 1])) {
+			case 1:
+				source_ip_rule = TRUE;
+				break;
+			case 0:
+				source_ip_rule = FALSE;
+				break;
+			default:
+				res = -EINVAL;
+				break;
+			}
+
+			res = __connmanctl_dbus_session_change(connection,
+					session_path, session_config_return,
+					"SourceIPRule", "SourceIPRule",
+					DBUS_TYPE_BOOLEAN, &source_ip_rule);
 			append.values = 2;
 			break;
 
@@ -2223,6 +2247,7 @@ static struct connman_option session_options[] = {
 	{"bearers", 'b', "<technology1> [<technology2> [...]]"},
 	{"type", 't', "local|internet|any"},
 	{"ifname", 'i', "[<interface_name>]"},
+	{"srciprule", 's', "yes|no"},
 	{ NULL, }
 };
 
