@@ -63,6 +63,7 @@ struct connman_session {
 	struct connman_service *service_last;
 	struct connman_session_config *policy_config;
 	GSList *user_allowed_bearers;
+	char *user_allowed_interface;
 
 	bool ecall;
 
@@ -467,6 +468,7 @@ static void free_session(struct connman_session *session)
 
 	destroy_policy_config(session);
 	g_slist_free(session->info->config.allowed_bearers);
+	g_free(session->info->config.allowed_interface);
 	g_free(session->owner);
 	g_free(session->session_path);
 	g_free(session->notify_path);
@@ -505,6 +507,7 @@ static void cleanup_session(gpointer user_data)
 	update_session_state(session);
 
 	g_slist_free(session->user_allowed_bearers);
+	g_free(session->user_allowed_interface);
 
 	free_session(session);
 }
@@ -516,6 +519,7 @@ struct creation_data {
 	/* user config */
 	enum connman_session_type type;
 	GSList *allowed_bearers;
+	char *allowed_interface;
 };
 
 static void cleanup_creation_data(struct creation_data *creation_data)
@@ -527,6 +531,7 @@ static void cleanup_creation_data(struct creation_data *creation_data)
 		dbus_message_unref(creation_data->pending);
 
 	g_slist_free(creation_data->allowed_bearers);
+	g_free(creation_data->allowed_interface);
 	g_free(creation_data);
 }
 
@@ -726,6 +731,17 @@ static void apply_policy_on_bearers(GSList *policy_bearers, GSList *bearers,
 	}
 }
 
+static char * apply_policy_on_interface(const char *policy_interface,
+				const char *user_interface)
+{
+	if (policy_interface)
+		return g_strdup(policy_interface);
+	else if (user_interface)
+		return g_strdup(user_interface);
+	else
+		return NULL;
+}
+
 const char *connman_session_get_owner(struct connman_session *session)
 {
 	return session->owner;
@@ -871,6 +887,17 @@ static void append_notify(DBusMessageIter *dict,
 		info_last->config.allowed_bearers = info->config.allowed_bearers;
 	}
 
+	if (session->append_all ||
+			info->config.allowed_interface != info_last->config.allowed_interface) {
+		char *ifname = info->config.allowed_interface;
+		if (!ifname)
+			ifname = "*";
+		connman_dbus_dict_append_basic(dict, "AllowedInterface",
+						DBUS_TYPE_STRING,
+						&ifname);
+		info_last->config.allowed_interface = info->config.allowed_interface;
+	}
+
 	session->append_all = false;
 }
 
@@ -890,7 +917,8 @@ static bool compute_notifiable_changes(struct connman_session *session)
 		return true;
 
 	if (info->config.allowed_bearers != info_last->config.allowed_bearers ||
-			info->config.type != info_last->config.type)
+			info->config.type != info_last->config.type ||
+			info->config.allowed_interface != info_last->config.allowed_interface)
 		return true;
 
 	return false;
@@ -944,6 +972,7 @@ int connman_session_config_update(struct connman_session *session)
 {
 	struct session_info *info = session->info;
 	GSList *allowed_bearers;
+	char *allowed_interface;
 	int err;
 
 	DBG("session %p", session);
@@ -969,6 +998,10 @@ int connman_session_config_update(struct connman_session *session)
 		session->user_allowed_bearers,
 		&allowed_bearers);
 
+	allowed_interface = apply_policy_on_interface(
+		session->policy_config->allowed_interface,
+		session->user_allowed_interface);
+
 	if (session->active)
 		set_active_session(session, false);
 
@@ -977,6 +1010,9 @@ int connman_session_config_update(struct connman_session *session)
 
 	g_slist_free(info->config.allowed_bearers);
 	info->config.allowed_bearers = allowed_bearers;
+
+	g_free(info->config.allowed_interface);
+	info->config.allowed_interface = allowed_interface;
 
 	session_activate(session);
 
@@ -1106,6 +1142,26 @@ static DBusMessage *change_session(DBusConnection *conn,
 			info->config.type = apply_policy_on_type(
 				session->policy_config->type,
 				connman_session_parse_connection_type(val));
+		} else if (g_str_equal(name, "AllowedInterface")) {
+			dbus_message_iter_get_basic(&value, &val);
+			if (session->active)
+				set_active_session(session, false);
+
+			session->active = false;
+			session_deactivate(session);
+
+			g_free(session->user_allowed_interface);
+			/* empty string means allow any interface */
+			if (!g_strcmp0(val, ""))
+				session->user_allowed_interface = NULL;
+			else
+				session->user_allowed_interface = g_strdup(val);
+
+			info->config.allowed_interface = apply_policy_on_interface(
+				session->policy_config->allowed_interface,
+				session->user_allowed_interface);
+
+			session_activate(session);
 		} else {
 			goto err;
 		}
@@ -1239,10 +1295,17 @@ static int session_policy_config_cb(struct connman_session *session,
 	session->user_allowed_bearers = creation_data->allowed_bearers;
 	creation_data->allowed_bearers = NULL;
 
+	session->user_allowed_interface = creation_data->allowed_interface;
+	creation_data->allowed_interface = NULL;
+
 	apply_policy_on_bearers(
 			session->policy_config->allowed_bearers,
 			session->user_allowed_bearers,
 			&info->config.allowed_bearers);
+
+	info->config.allowed_interface = apply_policy_on_interface(
+		session->policy_config->allowed_interface,
+		session->user_allowed_interface);
 
 	g_hash_table_replace(session_hash, session->session_path, session);
 
@@ -1268,6 +1331,7 @@ static int session_policy_config_cb(struct connman_session *session,
 	info_last->config.priority = info->config.priority;
 	info_last->config.roaming_policy = info->config.roaming_policy;
 	info_last->config.allowed_bearers = info->config.allowed_bearers;
+	info_last->config.allowed_interface = info->config.allowed_interface;
 
 	session->append_all = true;
 
@@ -1355,6 +1419,9 @@ int __connman_session_create(DBusMessage *msg)
 					connman_session_parse_connection_type(val);
 
 				user_connection_type = true;
+			} else if (g_str_equal(key, "AllowedInterface")) {
+				dbus_message_iter_get_basic(&value, &val);
+				creation_data->allowed_interface = g_strdup(val);
 			} else {
 				err = -EINVAL;
 				goto err;
@@ -1554,6 +1621,7 @@ static bool session_match_service(struct connman_session *session,
 	enum connman_service_type bearer_type;
 	enum connman_service_type service_type;
 	GSList *list;
+	char *ifname;
 
 	if (policy && policy->allowed)
 		return policy->allowed(session, service);
@@ -1561,9 +1629,16 @@ static bool session_match_service(struct connman_session *session,
 	for (list = session->info->config.allowed_bearers; list; list = list->next) {
 		bearer_type = GPOINTER_TO_INT(list->data);
 		service_type = connman_service_get_type(service);
+		ifname = connman_service_get_interface(service);
 
-		if (bearer_type == service_type)
-			return true;
+		if (bearer_type == service_type &&
+			(session->info->config.allowed_interface == NULL ||
+			!g_strcmp0(session->info->config.allowed_interface, "*") ||
+			!g_strcmp0(session->info->config.allowed_interface, ifname))) {
+				g_free(ifname);
+				return true;
+		}
+		g_free(ifname);
 	}
 
 	return false;
