@@ -1842,9 +1842,9 @@ static void handle_service_state_offline(struct connman_service *service,
 
 		session->service = NULL;
 		update_session_state(session);
+		session_activate(session);
 	}
 }
-
 
 static void service_state_changed(struct connman_service *service,
 				enum connman_service_state state)
