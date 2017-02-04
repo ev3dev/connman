@@ -720,18 +720,18 @@ static int parse_bearers(DBusMessageIter *iter, GSList **list)
 	return 0;
 }
 
-static void filter_bearer(GSList *policy_bearers,
-				enum connman_service_type bearer,
+static void filter_bearer(GSList *bearers,
+				enum connman_service_type policy,
 				GSList **list)
 {
-	enum connman_service_type policy;
+	enum connman_service_type bearer;
 	GSList *it;
 
-	if (!policy_bearers)
+	if (!bearers)
 		return;
 
-	for (it = policy_bearers; it; it = it->next) {
-		policy = GPOINTER_TO_INT(it->data);
+	for (it = bearers; it; it = it->next) {
+		bearer = GPOINTER_TO_INT(it->data);
 
 		if (policy != bearer)
 			continue;
@@ -744,15 +744,15 @@ static void filter_bearer(GSList *policy_bearers,
 static void apply_policy_on_bearers(GSList *policy_bearers, GSList *bearers,
 				GSList **list)
 {
-	enum connman_service_type bearer;
+	enum connman_service_type policy_bearer;
 	GSList *it;
 
 	*list = NULL;
 
-	for (it = bearers; it; it = it->next) {
-		bearer = GPOINTER_TO_INT(it->data);
+	for (it = policy_bearers; it; it = it->next) {
+		policy_bearer = GPOINTER_TO_INT(it->data);
 
-		filter_bearer(policy_bearers, bearer, list);
+		filter_bearer(bearers, policy_bearer, list);
 	}
 }
 
