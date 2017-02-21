@@ -389,7 +389,11 @@ During the online check procedure, ConnMan will temporarily install
 a host route to both the ipv4.connman.net and ipv6.connman.net so that
 the online check query can be directed via the correct network
 interface which the connected service is using. This host route is
-automatically removed when the online check is done.
+automatically removed when the online check is done. While ConnMan has no
+option to skip or diaable the online check, note that the server expressly
+does not log any connection information, including IPv4/6 addresses of
+connecting clients. The server runtime logs cycle in RAM memory depending
+on amount of connections processed.
 
 ConnMan sends this very minimal information in http header when doing
 the online check request (example):
