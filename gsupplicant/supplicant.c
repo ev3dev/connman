@@ -2111,10 +2111,37 @@ static void interface_bss_removed(DBusMessageIter *iter, void *user_data)
 
 static void set_config_methods(DBusMessageIter *iter, void *user_data)
 {
-	const char *config_methods = "push_button";
+	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, user_data);
+}
 
-	dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
-							&config_methods);
+static void wps_property(const char *key, DBusMessageIter *iter,
+							void *user_data)
+{
+	GSupplicantInterface *interface = user_data;
+
+	if (!interface)
+		return;
+
+	SUPPLICANT_DBG("key: %s", key);
+
+	if (g_strcmp0(key, "ConfigMethods") == 0) {
+		const char *config_methods = "push_button", *str = NULL;
+
+		dbus_message_iter_get_basic(iter, &str);
+		if (str && strlen(str) > 0) {
+			/* It was already set at wpa_s level, don't modify it. */
+			SUPPLICANT_DBG("%s", str);
+			return;
+		}
+
+		supplicant_dbus_property_set(interface->path,
+			SUPPLICANT_INTERFACE ".Interface.WPS",
+			"ConfigMethods", DBUS_TYPE_STRING_AS_STRING,
+			set_config_methods, NULL, &config_methods, NULL);
+
+		SUPPLICANT_DBG("No value. Set %s", config_methods);
+	}
+
 }
 
 static void interface_property(const char *key, DBusMessageIter *iter,
@@ -2143,11 +2170,9 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 		debug_strvalmap("Mode capability", mode_capa_map,
 						interface->mode_capa);
 
-
-		supplicant_dbus_property_set(interface->path,
+		supplicant_dbus_property_get_all(interface->path,
 				SUPPLICANT_INTERFACE ".Interface.WPS",
-				"ConfigMethods", DBUS_TYPE_STRING_AS_STRING,
-				set_config_methods, NULL, NULL, NULL);
+				wps_property, interface, interface);
 
 		if (interface->ready)
 			callback_interface_added(interface);
