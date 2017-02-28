@@ -511,6 +511,21 @@ static bool parse_debug(const char *key, const char *value,
 	return true;
 }
 
+static bool parse_noplugin(const char *key, const char *value,
+					gpointer user_data, GError **error)
+{
+	if (option_noplugin) {
+		char *prev = option_noplugin;
+
+		option_noplugin = g_strconcat(prev, ",", value, NULL);
+		g_free(prev);
+	} else {
+		option_noplugin = g_strdup(value);
+	}
+
+	return true;
+}
+
 static GOptionEntry options[] = {
 	{ "config", 'c', 0, G_OPTION_ARG_STRING, &option_config,
 				"Load the specified configuration file "
@@ -524,7 +539,7 @@ static GOptionEntry options[] = {
 			"Specify networking interface to ignore", "DEV" },
 	{ "plugin", 'p', 0, G_OPTION_ARG_STRING, &option_plugin,
 				"Specify plugins to load", "NAME,..." },
-	{ "noplugin", 'P', 0, G_OPTION_ARG_STRING, &option_noplugin,
+	{ "noplugin", 'P', 0, G_OPTION_ARG_CALLBACK, &parse_noplugin,
 				"Specify plugins not to load", "NAME,..." },
 	{ "wifi", 'W', 0, G_OPTION_ARG_STRING, &option_wifi,
 				"Specify driver for WiFi/Supplicant", "NAME" },
