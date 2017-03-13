@@ -1077,6 +1077,10 @@ static DBusMessage *scan(DBusConnection *conn, DBusMessage *msg, void *data)
 	DBG("technology %p request from %s", technology,
 			dbus_message_get_sender(msg));
 
+	if (technology->type == CONNMAN_SERVICE_TYPE_P2P &&
+				!technology->enabled)
+		return __connman_error_permission_denied(msg);
+
 	dbus_message_ref(msg);
 	technology->scan_pending =
 		g_slist_prepend(technology->scan_pending, msg);
