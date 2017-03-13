@@ -3904,6 +3904,7 @@ static void interface_remove_result(const char *error,
 
 	if (error) {
 		err = -EIO;
+		SUPPLICANT_DBG("error: %s", error);
 		goto done;
 	}
 
@@ -4946,6 +4947,8 @@ static void network_remove_result(const char *error,
 
 	if (error) {
 		result = -EIO;
+		SUPPLICANT_DBG("error: %s", error);
+
 		if (g_strcmp0("org.freedesktop.DBus.Error.UnknownMethod",
 						error) == 0)
 			result = -ECONNABORTED;
@@ -5013,6 +5016,8 @@ static void interface_disconnect_result(const char *error,
 
 	if (error) {
 		result = -EIO;
+		SUPPLICANT_DBG("error: %s", error);
+
 		if (g_strcmp0("org.freedesktop.DBus.Error.UnknownMethod",
 						error) == 0)
 			result = -ECONNABORTED;
@@ -5182,8 +5187,10 @@ static void interface_p2p_connect_result(const char *error,
 
 	SUPPLICANT_DBG("");
 
-	if (error)
+	if (error) {
+		SUPPLICANT_DBG("error: %s", error);
 		err = parse_supplicant_error(iter);
+	}
 
 	if (data->callback)
 		data->callback(err, data->interface, data->user_data);
