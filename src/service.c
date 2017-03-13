@@ -5981,13 +5981,17 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 	case CONNMAN_SERVICE_STATE_CONFIGURATION:
 		break;
 	case CONNMAN_SERVICE_STATE_READY:
-		if (type == CONNMAN_IPCONFIG_TYPE_IPV4) {
-			check_proxy_setup(service);
-			service_rp_filter(service, true);
-		} else {
-			service->online_check_count = 1;
-			__connman_wispr_start(service, type);
-		}
+		if (connman_setting_get_bool("EnableOnlineCheck"))
+			if (type == CONNMAN_IPCONFIG_TYPE_IPV4) {
+				check_proxy_setup(service);
+				service_rp_filter(service, true);
+			} else {
+				service->online_check_count = 1;
+				__connman_wispr_start(service, type);
+			}
+		else
+			connman_info("Online check disabled. "
+				"Default service remains in READY state.");
 		break;
 	case CONNMAN_SERVICE_STATE_ONLINE:
 		break;

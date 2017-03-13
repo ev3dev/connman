@@ -78,6 +78,7 @@ static struct {
 	bool persistent_tethering_mode;
 	bool enable_6to4;
 	char *vendor_class_id;
+	bool enable_online_check;
 } connman_settings  = {
 	.bg_scan = true,
 	.pref_timeservers = NULL,
@@ -94,6 +95,7 @@ static struct {
 	.persistent_tethering_mode = false,
 	.enable_6to4 = false,
 	.vendor_class_id = NULL,
+	.enable_online_check = true,
 };
 
 #define CONF_BG_SCAN                    "BackgroundScanning"
@@ -111,6 +113,7 @@ static struct {
 #define CONF_PERSISTENT_TETHERING_MODE  "PersistentTetheringMode"
 #define CONF_ENABLE_6TO4                "Enable6to4"
 #define CONF_VENDOR_CLASS_ID            "VendorClassID"
+#define CONF_ENABLE_ONLINE_CHECK        "EnableOnlineCheck"
 
 static const char *supported_options[] = {
 	CONF_BG_SCAN,
@@ -128,6 +131,7 @@ static const char *supported_options[] = {
 	CONF_PERSISTENT_TETHERING_MODE,
 	CONF_ENABLE_6TO4,
 	CONF_VENDOR_CLASS_ID,
+	CONF_ENABLE_ONLINE_CHECK,
 	NULL
 };
 
@@ -394,6 +398,16 @@ static void parse_config(GKeyFile *config)
 		connman_settings.vendor_class_id = vendor_class_id;
 
 	g_clear_error(&error);
+
+	boolean = __connman_config_get_bool(config, "General",
+					CONF_ENABLE_ONLINE_CHECK, &error);
+	if (!error) {
+		connman_settings.enable_online_check = boolean;
+		if (!boolean)
+			connman_info("Online check disabled by main config.");
+	}
+
+	g_clear_error(&error);
 }
 
 static int config_init(const char *file)
@@ -588,6 +602,9 @@ bool connman_setting_get_bool(const char *key)
 
 	if (g_str_equal(key, CONF_ENABLE_6TO4))
 		return connman_settings.enable_6to4;
+
+	if (g_str_equal(key, CONF_ENABLE_ONLINE_CHECK))
+		return connman_settings.enable_online_check;
 
 	return false;
 }
