@@ -1802,13 +1802,13 @@ static int wifi_scan(enum connman_service_type type,
 	if (wifi->p2p_device)
 		return 0;
 
+	if (wifi->tethering)
+		return -EBUSY;
+
 	if (type == CONNMAN_SERVICE_TYPE_P2P)
 		return p2p_find(device);
 
 	DBG("device %p wifi %p hidden ssid %s", device, wifi->interface, ssid);
-
-	if (wifi->tethering)
-		return 0;
 
 	scanning = connman_device_get_scanning(device);
 
