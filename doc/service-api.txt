@@ -91,8 +91,9 @@ Methods		dict GetProperties()  [deprecated]
 			to false, but that is currently not supported.
 
 			In the case a connection attempt failed and the
-			service is in the State=failure, this method can
-			also be used to reset the service.
+			service is in the state "failure", "idle" or
+			"disconnect", this method can also be used
+			to reset the service.
 
 			Calling this method on Ethernet devices, hidden WiFi
 			services or provisioned services will cause an error
