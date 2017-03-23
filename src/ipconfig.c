@@ -2335,6 +2335,8 @@ int __connman_ipconfig_save(struct connman_ipconfig *ipconfig,
 	if (ipconfig->address->gateway)
 		g_key_file_set_string(keyfile, identifier,
 			key, ipconfig->address->gateway);
+	else
+		g_key_file_remove_key(keyfile, identifier, key, NULL);
 	g_free(key);
 
 	return 0;
