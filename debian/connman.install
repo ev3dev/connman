@@ -1,3 +1,4 @@
+src/main.conf /etc/connman/
 etc/dbus-1/system.d/connman.conf
 lib/systemd/system/connman.service
 lib/systemd/system/connman-wait-online.service
