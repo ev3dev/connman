@@ -841,7 +841,6 @@ static void extract_ipv4_settings(DBusMessageIter *array,
 
 	connman_ipaddress_free(context->ipv4_address);
 	context->ipv4_address = NULL;
-	context->index = -1;
 
 	if (dbus_message_iter_get_arg_type(array) != DBUS_TYPE_ARRAY)
 		return;
@@ -944,7 +943,6 @@ static void extract_ipv6_settings(DBusMessageIter *array,
 
 	connman_ipaddress_free(context->ipv6_address);
 	context->ipv6_address = NULL;
-	context->index = -1;
 
 	if (dbus_message_iter_get_arg_type(array) != DBUS_TYPE_ARRAY)
 		return;
