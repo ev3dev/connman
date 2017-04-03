@@ -138,7 +138,7 @@ be used by DHCP servers to identify specific clients without having to
 rely on MAC address ranges, etc
 .TP
 .BI EnableOnlineCheck=true\ \fR|\fB\ false
-Enable or disable use of http get as on online status check.
+Enable or disable use of HTTP GET as an online status check.
 When a service is in a READY state, and is selected as default,
 ConnMan will issue an HTTP GET request to verify that end-to-end
 connectivity is successful. Only then the service will be
@@ -154,15 +154,5 @@ ethernet tethering.
 AllowHostnameUpdates = false
 TetheringTechnologies = ethernet,wifi,bluetooth,gadget
 .fi
-.SH "NOTES"
-When a service is connected, ConnMan tries to detect if it has internet
-connectivity or not. During this online check procedure, ConnMan will
-temporarily install a host route to both the ipv4.connman.net and
-ipv6.connman.net so that the online check query can be directed via the
-correct network interface which the connected service is using.
-
-Currently there is no option to skip or disable this online check. ConnMan,
-however, limits transmitted data to a minimum. See the ConnMan README for
-more information.
 .SH "SEE ALSO"
 .BR connman (8)
