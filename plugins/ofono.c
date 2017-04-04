@@ -2498,16 +2498,19 @@ static void remove_modem(gpointer data)
 	if (modem->call_set_property) {
 		dbus_pending_call_cancel(modem->call_set_property);
 		dbus_pending_call_unref(modem->call_set_property);
+		modem->call_set_property = NULL;
 	}
 
 	if (modem->call_get_properties) {
 		dbus_pending_call_cancel(modem->call_get_properties);
 		dbus_pending_call_unref(modem->call_get_properties);
+		modem->call_get_properties = NULL;
 	}
 
 	if (modem->call_get_contexts) {
 		dbus_pending_call_cancel(modem->call_get_contexts);
 		dbus_pending_call_unref(modem->call_get_contexts);
+		modem->call_get_contexts = NULL;
 	}
 
 	/* Must remove the contexts before the device */
