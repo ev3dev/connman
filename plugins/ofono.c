@@ -2697,6 +2697,9 @@ static int network_connect(struct connman_network *network)
 
 	DBG("%s network %p", modem->path, network);
 
+	if (!g_hash_table_lookup(modem_hash, modem->path))
+		return -ENODEV;
+
 	context = get_context_with_network(modem->context_list, network);
 	if (!context)
 		return -ENODEV;
@@ -2717,6 +2720,9 @@ static int network_disconnect(struct connman_network *network)
 	struct modem_data *modem = connman_network_get_data(network);
 
 	DBG("%s network %p", modem->path, network);
+
+	if (!g_hash_table_lookup(modem_hash, modem->path))
+		return -ENODEV;
 
 	context = get_context_with_network(modem->context_list, network);
 	if (!context)
