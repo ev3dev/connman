@@ -577,7 +577,7 @@ int dhcp_send_raw_packet(struct dhcp_packet *dhcp_pkt,
 				offsetof(struct ip_udp_dhcp_packet, udp),
 	};
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_IP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return -errno;
 

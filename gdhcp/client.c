@@ -1269,7 +1269,7 @@ static int dhcp_l2_socket(int ifindex)
 		.filter = (struct sock_filter *) filter_instr,
 	};
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_IP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return -errno;
 

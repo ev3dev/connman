@@ -72,7 +72,7 @@ int ipv4ll_send_arp_packet(uint8_t* source_eth, uint32_t source_ip,
 	uint32_t ip_target;
 	int fd, n;
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ARP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return -errno;
 
@@ -117,7 +117,7 @@ int ipv4ll_arp_socket(int ifindex)
 	int fd;
 	struct sockaddr_ll sock;
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ARP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return fd;
 
