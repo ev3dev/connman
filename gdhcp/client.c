@@ -1676,8 +1676,10 @@ static gboolean continue_rebound(gpointer user_data)
 	switch_listening_mode(dhcp_client, L2);
 	send_request(dhcp_client);
 
-	if (dhcp_client->t2_timeout> 0)
+	if (dhcp_client->t2_timeout> 0) {
 		g_source_remove(dhcp_client->t2_timeout);
+		dhcp_client->t2_timeout = 0;
+	}
 
 	/*recalculate remaining rebind time*/
 	dhcp_client->T2 >>= 1;
