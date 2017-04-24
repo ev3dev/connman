@@ -466,12 +466,6 @@ static void cleanup_nat_rules(struct connman_session *session)
 	del_nat_rules(session);
 }
 
-static void update_nat_rules(struct connman_session *session)
-{
-	del_nat_rules(session);
-	add_nat_rules(session);
-}
-
 static void destroy_policy_config(struct connman_session *session)
 {
 	if (!policy) {
@@ -1678,8 +1672,9 @@ static void update_session_state(struct connman_session *session)
 	DBG("session %p state %s", session, state2string(state));
 
 	update_firewall(session);
+	del_nat_rules(session);
 	update_routing_table(session);
-	update_nat_rules(session);
+	add_nat_rules(session);
 	session_notify(session);
 }
 
