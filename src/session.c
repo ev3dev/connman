@@ -73,6 +73,7 @@ struct connman_session {
 	int index;
 	char *gateway;
 	bool policy_routing;
+	bool snat_enabled;
 };
 
 struct connman_service_info {
@@ -394,6 +395,10 @@ static void del_nat_rules(struct connman_session *session)
 {
 	struct fw_snat *fw_snat;
 
+	if (!session->snat_enabled)
+		return;
+
+	session->snat_enabled = false;
 	fw_snat = fw_snat_lookup(session->index);
 
 	if (!fw_snat)
@@ -415,19 +420,24 @@ static void add_nat_rules(struct connman_session *session)
 
 	ipconfig = __connman_service_get_ip4config(session->service);
 	index = __connman_ipconfig_get_index(ipconfig);
+	ifname = connman_inet_ifname(index);
+	addr = __connman_ipconfig_get_local(ipconfig);
 
+	if (!addr)
+		return;
+
+	session->snat_enabled = true;
 	fw_snat = fw_snat_lookup(index);
 	if (fw_snat) {
 		fw_snat_ref(session, fw_snat);
 		return;
 	}
 
-	ifname = connman_inet_ifname(index);
-	addr = __connman_ipconfig_get_local(ipconfig);
-
 	err = fw_snat_create(session, index, ifname, addr);
-	if (err < 0)
+	if (err < 0) {
 		DBG("failed to add SNAT rule");
+		session->snat_enabled = false;
+	}
 
 	g_free(ifname);
 }
