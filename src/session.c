@@ -1900,7 +1900,7 @@ static void ipconfig_changed(struct connman_service *service,
 			continue;
 
 		if (session->service && session->service == service) {
-			update_routing_table(session);
+			update_session_state(session);
 
 			if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
 				ipconfig_ipv4_changed(session);
