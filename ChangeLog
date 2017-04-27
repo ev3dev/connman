@@ -1,3 +1,29 @@
+ver 1.34:
+	Fix issue with recognizing bonding interfaces.
+	Fix issue with adjtimex usage for kernel clock tuning.
+	Fix issue with IP configuration on dual configuration.
+	Fix issue with service ordering via PreferredTechnologies.
+	Fix issue with Bluetooth state changes before disconnection.
+	Fix issue with WiFi connected flag after disconnection.
+	Fix issue with handling WiFi service disconnect reason.
+	Fix issue with memory leak for WiFi Display information.
+	Fix issue with callbacks after WPS disconnection.
+	Fix issue with potentially leaking addrinfo memory.
+	Fix issue with handling of malformed HTTP response.
+	Fix issue with error handling when enabling Tethering.
+	Fix issue with nameserver and search domain ordering.
+	Fix issue with updating nameservers after DNS changed.
+	Fix issue with updating nameservers during address change.
+	Fix issue with updating timeservers during address change.
+	Fix issue with order of subnet and router DHCP options.
+	Fix issue with socket creating and bind latency for DHCP.
+	Add support for DHCP Vendor Class ID configuration setting.
+	Add support for configuration for service online check handling.
+	Add support for additional 802.1X certificate options.
+	Add support for automatically detecting root NFS.
+	Add support for nftables based firewalls.
+	Add support for new Wireless Daemon (iwd).
+
 ver 1.33:
 	Fix issue with old IP address from DHCP.
 	Fix issue with DHCP lease timer handling.
