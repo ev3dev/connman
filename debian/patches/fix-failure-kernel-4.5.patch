@@ -4,10 +4,8 @@ Description: ugly fix for kernel commit 1ffad83dffd675cd742286ae82dca7d746cb0da8
 
 Author: Gianfranco Costamagna <locutusofborg@debian.org>
 
-Index: connman-1.32/src/firewall.c
-===================================================================
---- connman-1.32.orig/src/firewall.c
-+++ connman-1.32/src/firewall.c
+--- a/src/firewall-iptables.c
++++ b/src/firewall-iptables.c
 @@ -25,6 +25,7 @@
  
  #include <errno.h>
@@ -16,10 +14,8 @@ Index: connman-1.32/src/firewall.c
  #include <xtables.h>
  #include <linux/netfilter_ipv4/ip_tables.h>
  
-Index: connman-1.32/src/iptables.c
-===================================================================
---- connman-1.32.orig/src/iptables.c
-+++ connman-1.32/src/iptables.c
+--- a/src/iptables.c
++++ b/src/iptables.c
 @@ -30,6 +30,7 @@
  #include <unistd.h>
  #include <sys/errno.h>
