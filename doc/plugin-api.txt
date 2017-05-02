@@ -37,7 +37,7 @@ Technology infrastructure
 
 A Technology in ConnMan is an abstract representation of the different
 kinds of technologies it supports such as WiFi, Ethernet, Bluetooth and
-Celullar. The technologies support are added to ConnMan through plugins, such
+Celullar. The technologies supported are added to ConnMan through plugins, such
 as plugins/bluetooth.c for the Bluetooth Technology or plugins/wifi.c for the
 WiFi Technology. Each new technology plugin needs to register itself as a
 Technology with ConnMan. As an example we will take a look at the Bluetooth
@@ -65,7 +65,7 @@ plugin initialization function, bluetooth_init() in this example:
 
 	connman_technology_driver_register(&tech_driver);
 
-In this document the error check is supressed for the sake of simplicity.
+In this document the error check is suppressed for the sake of simplicity.
 All plugins should check return values in driver registration functions.
 
 After this call ConnMan becomes aware of the new Technology plugin and will
@@ -74,7 +74,7 @@ the Bluetooth plugin for example probe() would be called when a Bluetooth
 adapter is recognized. A Technology is only probed if there exists at least
 one device of such technology plugged into the system.
 
-Complementary, the technology must be unregistered on the plugin exit function
+Complementary, the technology must be unregistered by the plugin exit function
 through 'connman_technology_driver_unregister()'.
 
 Device infrastructure
@@ -101,7 +101,7 @@ And to register the driver:
 'connman_device_driver_register()' is called during the plugin initialization
 process, not necessarily at the plugin init function.
 
-In this document the error check is supressed for the sake of simplicity.
+In this document the error check is suppressed for the sake of simplicity.
 All plugins should check return values in driver registration functions.
 
 Additionally code to handle the detection of new devices needs to be written
@@ -130,7 +130,7 @@ its API documentation.
 Network infrastructure
 ======================
 
-The Connection Manager provides a mean to plugins handle the specifics of
+The Connection Manager provides a means to plugins to handle the specifics of
 establishing/handling a connection for each type of Technology. For the
 bluetooth plugin a connman_network_driver needs to be registered:
 
@@ -147,12 +147,12 @@ And then call the register function:
 
 	connman_network_driver_register(&network_driver);
 
-In this document the error check is supressed for the sake of simplicity.
+In this document the error check is suppressed for the sake of simplicity.
 All plugins should check return values in driver registration functions.
 
 The next step would be the probe of a Network entity, for the bluetooth
 plugin this would happen when a new device that supports the PAN NAP role is
-paired with the system. ConnMan then call connman_device_add_network() to
+paired with the system. ConnMan then calls connman_device_add_network() to
 associate the new Network with the existing Device entity (the local Bluetooth
 Adapter).
 

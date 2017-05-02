@@ -84,6 +84,15 @@ The following options are valid if Type is "wifi"
   to fsid.
 - Identity: Identity string for EAP.
 - AnonymousIdentity: Anonymous Identity string for EAP.
+- SubjectMatch: Substring to be matched against the subject of the
+  authentication server certificate for EAP.
+- AltSubjectMatch: Semicolon separated string of entries to be matched against
+  the alternative subject name of the authentication server certificate for EAP.
+- DomainSuffixMatch: Constraint for server domain name. If set, this FQDN is
+  used as a suffix match requirement for the authentication server certificate
+  for EAP.
+- DomainMatch: This FQDN is used as a full match requirement for the
+  authentication server certificate for EAP.
 - Phase2: Phase2 (inner authentication with TLS tunnel) authentication method.
   Prefix the value with "EAP-" to indicate the usage of an EAP-based inner
   authentication method (should only be used with EAP = TTLS).

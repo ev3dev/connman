@@ -131,6 +131,15 @@ For a working system, certain configuration options need to be enabled:
 		detected and only a runtime dependency. It is not needed to
 		build ConnMan.
 
+	--enable-iwd
+
+		Enable support for Wireless daemon for Linux
+
+		The IWD project does not have initial release so far,
+		therefore by default IWD support is not enabled.
+
+		It is safe to enable this option along WiFi support.
+
 	--disable-pacrunner
 
 		Disable support for PACrunner proxy handling
@@ -346,6 +355,22 @@ network. While the same setup works well for a WiFi or ethernet
 uplink.
 
 
+GnuTLS
+======
+
+When using GnuTLS be aware that depending on the configuration of
+GnuTLS does either an lazy or eager initialization of an internal
+entropy pool using /dev/urandom. On eager initialization the loading
+of ConnMan will be delayed by the link loader until the entropy pool
+is filled. On smaller system this can easily delay the startup of
+ConnMan by several seconds (we had reports of 25 seconds and more
+delay).
+
+GnuTLS allows to switch back to lazy evaluation when the environment
+variable GNUTLS_NO_EXPLICIT_INIT. For more details please read
+the man page to gnutls_global_init(3).
+
+
 Online check
 ============
 
@@ -360,11 +385,17 @@ from ipv4.connman.net (for IPv4 connectivity) and ipv6.connman.net
 (for IPv6 connectivity). The used URL looks like this
 http://ipv{4|6}.connman.net/online/status.html
 
+See connman.conf(5) for the EnableOnlineCheck option, if you need to
+disable the feature.
+
 During the online check procedure, ConnMan will temporarily install
 a host route to both the ipv4.connman.net and ipv6.connman.net so that
 the online check query can be directed via the correct network
 interface which the connected service is using. This host route is
-automatically removed when the online check is done.
+automatically removed when the online check is done. Note that the server
+expressly does not log any connection information, including IPv4/6
+addresses of connecting clients. The server runtime logs cycle in RAM
+memory depending on amount of connections processed.
 
 ConnMan sends this very minimal information in http header when doing
 the online check request (example):

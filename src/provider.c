@@ -141,12 +141,8 @@ int connman_provider_disconnect(struct connman_provider *provider)
 		provider_indicate_state(provider,
 					CONNMAN_SERVICE_STATE_DISCONNECT);
 
-	if (err < 0) {
-		if (err != -EINPROGRESS)
-			return err;
-
-		return -EINPROGRESS;
-	}
+	if (err < 0)
+		return err;
 
 	if (provider->vpn_service)
 		provider_indicate_state(provider,

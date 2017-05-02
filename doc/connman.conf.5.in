@@ -67,6 +67,12 @@ for this entry when empty is ethernet,wifi,cellular.
 Services that are automatically connected must have been
 set up and saved to storage beforehand.
 .TP
+.BI AlwaysConnectedTechnologies= technology\fR[,...]
+List of technoolgies which are always connected regardless
+of PreferredTechnologies setting (AutoConnect = true). The
+default value is empty and this feature is disabled unless
+explicitely enabled in the config file.
+.TP
 .BI PreferredTechnologies= technology\fR[,...]
 List of preferred technologies from the most preferred
 one to the least preferred one separated by commas ",".
@@ -125,6 +131,20 @@ Default value is false.
 Automatically enable Anycast 6to4 if possible. This is not recommended, as the
 use of 6to4 will generally lead to a severe degradation of connection quality.
 See RFC6343.  Default value is false (as recommended by RFC6343 section 4.1).
+.TP
+.BI VendorClassID= string
+Set DHCP option 60 (Vendor Class ID) to the given string. This option can
+be used by DHCP servers to identify specific clients without having to
+rely on MAC address ranges, etc
+.TP
+.BI EnableOnlineCheck=true\ \fR|\fB\ false
+Enable or disable use of HTTP GET as an online status check.
+When a service is in a READY state, and is selected as default,
+ConnMan will issue an HTTP GET request to verify that end-to-end
+connectivity is successful. Only then the service will be
+transitioned to ONLINE state.
+If this setting is false, the default service will remain in READY state.
+Default value is true.
 .SH "EXAMPLE"
 The following example configuration disables hostname updates and enables
 ethernet tethering.

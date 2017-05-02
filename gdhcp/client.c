@@ -1269,7 +1269,7 @@ static int dhcp_l2_socket(int ifindex)
 		.filter = (struct sock_filter *) filter_instr,
 	};
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_IP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return -errno;
 
@@ -1676,8 +1676,10 @@ static gboolean continue_rebound(gpointer user_data)
 	switch_listening_mode(dhcp_client, L2);
 	send_request(dhcp_client);
 
-	if (dhcp_client->t2_timeout> 0)
+	if (dhcp_client->t2_timeout> 0) {
 		g_source_remove(dhcp_client->t2_timeout);
+		dhcp_client->t2_timeout = 0;
+	}
 
 	/*recalculate remaining rebind time*/
 	dhcp_client->T2 >>= 1;
@@ -2289,6 +2291,8 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 		if (dhcp_client->type == G_DHCP_IPV6) {
 			re = dhcpv6_recv_l3_packet(&packet6, buf, sizeof(buf),
 						dhcp_client->listener_sockfd);
+			if (re < 0)
+			    return TRUE;
 			pkt_len = re;
 			pkt = packet6;
 			xid = packet6->transaction_id[0] << 16 |
@@ -2350,10 +2354,6 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 		if (!message_type)
 			return TRUE;
 	}
-
-	if (!message_type && !client_id)
-		/* No message type / client id option, ignore package */
-		return TRUE;
 
 	debug(dhcp_client, "received DHCP packet xid 0x%04x "
 		"(current state %d)", ntohl(xid), dhcp_client->state);
@@ -3117,13 +3117,14 @@ GDHCPClientError g_dhcp_client_set_id(GDHCPClient *dhcp_client)
 	return G_DHCP_CLIENT_ERROR_NONE;
 }
 
-/* Now only support send hostname */
+/* Now only support send hostname and vendor class ID */
 GDHCPClientError g_dhcp_client_set_send(GDHCPClient *dhcp_client,
 		unsigned char option_code, const char *option_value)
 {
 	uint8_t *binary_option;
 
-	if (option_code == G_DHCP_HOST_NAME && option_value) {
+	if ((option_code == G_DHCP_HOST_NAME ||
+		option_code == G_DHCP_VENDOR_CLASS_ID) && option_value) {
 		binary_option = alloc_dhcp_string_option(option_code,
 							option_value);
 		if (!binary_option)

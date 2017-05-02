@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/timex.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -66,9 +67,13 @@ struct ntp_msg {
 
 #define OFFSET_1900_1970  2208988800UL	/* 1970 - 1900 in seconds */
 
-#define STEPTIME_MIN_OFFSET  0.128
+#define STEPTIME_MIN_OFFSET  0.4
 
 #define LOGTOD(a)  ((a) < 0 ? 1. / (1L << -(a)) : 1L << (int)(a))
+#define NSEC_PER_SEC  ((uint64_t)1000000000ULL)
+#ifndef ADJ_SETOFFSET
+#define ADJ_SETOFFSET		0x0100  /* add 'time' to current time */
+#endif
 
 #define NTP_SEND_TIMEOUT       2
 #define NTP_SEND_RETRIES       3
@@ -167,8 +172,7 @@ static void send_packet(int fd, struct sockaddr *server, uint32_t timeout)
 	memset(&msg, 0, sizeof(msg));
 	msg.flags = NTP_FLAGS_ENCODE(NTP_FLAG_LI_NOTINSYNC, NTP_FLAG_VN_VER4,
 	    NTP_FLAG_MD_CLIENT);
-	msg.poll = 4;	// min
-	msg.poll = 10;	// max
+	msg.poll = 10;
 	msg.precision = NTP_PRECISION_S;
 
 	if (server->sa_family == AF_INET) {
@@ -247,6 +251,7 @@ static void decode_msg(void *base, size_t len, struct timeval *tv,
 	double m_delta, org, rec, xmt, dst;
 	double delay, offset;
 	static guint transmit_delay;
+	struct timex tmx = {};
 
 	if (len < sizeof(*msg)) {
 		connman_error("Invalid response from time server");
@@ -336,39 +341,45 @@ static void decode_msg(void *base, size_t len, struct timeval *tv,
 
 	poll_id = g_timeout_add_seconds(transmit_delay, next_poll, NULL);
 
-	connman_info("ntp: time slew %+.6f s", offset);
-
 	if (offset < STEPTIME_MIN_OFFSET && offset > -STEPTIME_MIN_OFFSET) {
-		struct timeval adj;
+		tmx.modes = ADJ_STATUS | ADJ_NANO | ADJ_OFFSET | ADJ_TIMECONST | ADJ_MAXERROR | ADJ_ESTERROR;
+		tmx.status = STA_PLL;
+		tmx.offset = offset * NSEC_PER_SEC;
+		tmx.constant = msg->poll - 4;
+		tmx.maxerror = 0;
+		tmx.esterror = 0;
 
-		adj.tv_sec = (long) offset;
-		adj.tv_usec = (offset - adj.tv_sec) * 1000000;
-
-		DBG("adjusting time %ld seconds, %ld msecs", adj.tv_sec, adj.tv_usec);
-
-		if (adjtime(&adj, &adj) < 0) {
-			connman_error("Failed to adjust time");
-			return;
-		}
-
-		DBG("remaining adjustment %ld seconds, %ld msecs", adj.tv_sec, adj.tv_usec);
+		connman_info("ntp: adjust (slew): %+.6f sec", offset);
 	} else {
-		struct timeval cur;
-		double dtime;
+		tmx.modes = ADJ_STATUS | ADJ_NANO | ADJ_SETOFFSET | ADJ_MAXERROR | ADJ_ESTERROR;
 
-		gettimeofday(&cur, NULL);
-		dtime = offset + cur.tv_sec + 1.0e-6 * cur.tv_usec;
-		cur.tv_sec = (long) dtime;
-		cur.tv_usec = (dtime - cur.tv_sec) * 1000000;
+		/* ADJ_NANO uses nanoseconds in the microseconds field */
+		tmx.time.tv_sec = (long)offset;
+		tmx.time.tv_usec = (offset - tmx.time.tv_sec) * NSEC_PER_SEC;
+		tmx.maxerror = 0;
+		tmx.esterror = 0;
 
-		DBG("setting time: %ld seconds, %ld msecs", cur.tv_sec, cur.tv_usec);
-
-		if (settimeofday(&cur, NULL) < 0) {
-			connman_error("Failed to set time");
-			return;
+		/* the kernel expects -0.3s as {-1, 7000.000.000} */
+		if (tmx.time.tv_usec < 0) {
+			tmx.time.tv_sec  -= 1;
+			tmx.time.tv_usec += NSEC_PER_SEC;
 		}
 
+		connman_info("ntp: adjust (jump): %+.6f sec", offset);
 	}
+
+	if (NTP_FLAGS_LI_DECODE(msg->flags) & NTP_FLAG_LI_ADDSECOND)
+		tmx.status |= STA_INS;
+	else if (NTP_FLAGS_LI_DECODE(msg->flags) & NTP_FLAG_LI_DELSECOND)
+		tmx.status |= STA_DEL;
+
+	if (adjtimex(&tmx) < 0) {
+		connman_error("Failed to adjust time");
+		return;
+	}
+
+	DBG("interval/delta/delay/drift %fs/%+.3fs/%.3fs/%+ldppm",
+		LOGTOD(msg->poll), offset, delay, tmx.freq / 65536);
 }
 
 static gboolean received_data(GIOChannel *channel, GIOCondition condition,
@@ -476,6 +487,7 @@ static void start_ntp(char *server)
 	family = info->ai_family;
 
 	memcpy(&timeserver_addr, info->ai_addr, info->ai_addrlen);
+	freeaddrinfo(info);
 	memset(&in6addr, 0, sizeof(in6addr));
 
 	if (family == AF_INET) {
@@ -493,7 +505,6 @@ static void start_ntp(char *server)
 		connman_error("Family is neither ipv4 nor ipv6");
 		return;
 	}
-	freeaddrinfo(info);
 
 	DBG("server %s family %d", server, family);
 

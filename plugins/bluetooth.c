@@ -206,7 +206,7 @@ static void pan_connect_cb(DBusMessage *message, void *user_data)
 	DBusMessageIter iter;
 
 	pan = g_hash_table_lookup(networks, path);
-	if (!pan) {
+	if (!pan || !pan->network) {
 		DBG("network already removed");
 		return;
 	}
@@ -218,6 +218,7 @@ static void pan_connect_cb(DBusMessage *message, void *user_data)
 
 		if (strcmp(dbus_error,
 				"org.bluez.Error.AlreadyConnected") != 0) {
+			connman_network_set_associating(pan->network, false);
 			connman_network_set_error(pan->network,
 				CONNMAN_NETWORK_ERROR_ASSOCIATE_FAIL);
 			return;
@@ -272,7 +273,7 @@ static void pan_disconnect_cb(DBusMessage *message, void *user_data)
 	struct bluetooth_pan *pan;
 
 	pan = g_hash_table_lookup(networks, path);
-	if (!pan) {
+	if (!pan || !pan->network) {
 		DBG("network already removed");
 		return;
 	}

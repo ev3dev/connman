@@ -401,8 +401,7 @@ int connman_task_stop(struct connman_task *task)
 	if (task->pid > 0) {
 		kill(task->pid, SIGTERM);
 
-		g_timeout_add_seconds(0, check_kill,
-				GINT_TO_POINTER(task->pid));
+		g_idle_add(check_kill, GINT_TO_POINTER(task->pid));
 	}
 
 	return 0;

@@ -65,6 +65,8 @@ struct connman_session_config {
 	enum connman_session_type type;
 	bool ecall;
 	GSList *allowed_bearers;
+	char *allowed_interface;
+	bool source_ip_rule;
 };
 
 typedef int (* connman_session_config_func_t) (struct connman_session *session,

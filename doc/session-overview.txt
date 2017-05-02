@@ -92,3 +92,34 @@ The default session configuration does not enable the per application
 routing. Sessions are still useful in this setup, because the
 notification of sessions is still available, e.g. the online/offline
 notification.
+
+
+Multiple per-session routing tables
+===================================
+
+Sessions can be used in an environment with multiple network interfaces,
+where an application needs to direct outside traffic through a selected
+interface(s). ConnMan can maintain multiple sessions in a connected
+stated, and the application can dynamically, on a per-socket basis,
+select which session is used to route traffic.
+
+Example use cases are:
+- monitoring liveness of multiple connected interfaces, by sending
+  end-to-end heartbeat traffic on all of them in parallel.
+- prioritising traffic - e.g. sensitive data can be transferred over a slow,
+  but secure connection, while big, public downloads use a second session
+
+By default, ConnMan maintains only one online service. So it is impossible
+to send external traffic (routed through a gateway) on multiple interfaces.
+In order to enable this functionality, an application needs to issue the
+following API calls:
+- create multiple sessions, one for each interface to be used
+- set each session's AllowedInterface config field to the required interface
+  name (eth0, eth1, wlan0, ppp0, etc.)
+- set each session's SourceIPRule config field to true
+- connect each session (or the service it is using)
+
+That will instruct ConnMan to create multiple routing tables, with default
+routes in them. After that, the application can issue a bind() call on each
+socket, using required interface's source IP address. The bind() call must
+be made before a connect() call on a socket.

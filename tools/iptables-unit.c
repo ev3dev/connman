@@ -406,112 +406,6 @@ static void test_nat_basic1(void)
 	g_free(service);
 }
 
-static void test_firewall_basic0(void)
-{
-	struct firewall_context *ctx;
-	int err;
-
-	ctx = __connman_firewall_create();
-	g_assert(ctx);
-
-	err = __connman_firewall_add_rule(ctx, "filter", "INPUT",
-					"-m mark --mark 999 -j LOG");
-	g_assert(err >= 0);
-
-	err = __connman_firewall_enable(ctx);
-	g_assert(err == 0);
-
-	assert_rule_exists("filter", ":connman-INPUT - [0:0]");
-	assert_rule_exists("filter", "-A INPUT -j connman-INPUT");
-	assert_rule_exists("filter", "-A connman-INPUT -m mark --mark 0x3e7 -j LOG");
-
-	err = __connman_firewall_disable(ctx);
-	g_assert(err == 0);
-
-	assert_rule_not_exists("filter", ":connman-INPUT - [0:0]");
-	assert_rule_not_exists("filter", "-A INPUT -j connman-INPUT");
-	assert_rule_not_exists("filter", "-A connman-INPUT -m mark --mark 0x3e7 -j LOG");
-
-	__connman_firewall_destroy(ctx);
-}
-
-static void test_firewall_basic1(void)
-{
-	struct firewall_context *ctx;
-	int err;
-
-	ctx = __connman_firewall_create();
-	g_assert(ctx);
-
-	err = __connman_firewall_add_rule(ctx, "filter", "INPUT",
-					"-m mark --mark 999 -j LOG");
-	g_assert(err >= 0);
-
-	err = __connman_firewall_add_rule(ctx, "filter", "OUTPUT",
-					"-m mark --mark 999 -j LOG");
-	g_assert(err >= 0);
-
-	err = __connman_firewall_enable(ctx);
-	g_assert(err == 0);
-
-	err = __connman_firewall_disable(ctx);
-	g_assert(err == 0);
-
-	__connman_firewall_destroy(ctx);
-}
-
-static void test_firewall_basic2(void)
-{
-	struct firewall_context *ctx;
-	int err;
-
-	ctx = __connman_firewall_create();
-	g_assert(ctx);
-
-	err = __connman_firewall_add_rule(ctx, "mangle", "INPUT",
-					"-j CONNMARK --restore-mark");
-	g_assert(err >= 0);
-
-	err = __connman_firewall_add_rule(ctx, "mangle", "POSTROUTING",
-					"-j CONNMARK --save-mark");
-	g_assert(err >= 0);
-
-	err = __connman_firewall_enable(ctx);
-	g_assert(err == 0);
-
-	err = __connman_firewall_disable(ctx);
-	g_assert(err == 0);
-
-	__connman_firewall_destroy(ctx);
-}
-
-static void test_firewall_basic3(void)
-{
-	struct firewall_context *ctx;
-	int err, id;
-
-	ctx = __connman_firewall_create();
-	g_assert(ctx);
-
-	id = __connman_firewall_add_rule(ctx, "mangle", "INPUT",
-					"-j CONNMARK --restore-mark");
-	g_assert(id >= 0);
-
-	err = __connman_firewall_enable_rule(ctx, id);
-	g_assert(err == 0);
-
-	err = __connman_firewall_disable_rule(ctx, id);
-	g_assert(err == 0);
-
-	err = __connman_firewall_remove_rule(ctx, id);
-	g_assert(err == 0);
-
-	err = __connman_firewall_disable(ctx);
-	g_assert(err == -ENOENT);
-
-	__connman_firewall_destroy(ctx);
-}
-
 static gchar *option_debug = NULL;
 
 static bool parse_debug(const char *key, const char *value,
@@ -558,7 +452,6 @@ int main(int argc, char *argv[])
 			"Unit Tests Connection Manager", VERSION);
 
 	__connman_iptables_init();
-	__connman_firewall_init();
 	__connman_nat_init();
 
 	g_test_add_func("/iptables/chain0", test_iptables_chain0);
@@ -571,15 +464,10 @@ int main(int argc, char *argv[])
 	g_test_add_func("/iptables/target0", test_iptables_target0);
 	g_test_add_func("/nat/basic0", test_nat_basic0);
 	g_test_add_func("/nat/basic1", test_nat_basic1);
-	g_test_add_func("/firewall/basic0", test_firewall_basic0);
-	g_test_add_func("/firewall/basic1", test_firewall_basic1);
-	g_test_add_func("/firewall/basic2", test_firewall_basic2);
-	g_test_add_func("/firewall/basic3", test_firewall_basic3);
 
 	err = g_test_run();
 
 	__connman_nat_cleanup();
-	__connman_firewall_cleanup();
 	__connman_iptables_cleanup();
 
 	g_free(option_debug);

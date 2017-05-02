@@ -100,9 +100,9 @@ static int resolvfile_export(void)
 	 * MAXDNSRCH/MAXNS entries are used.
 	 */
 
-	for (count = 0, list = g_list_last(resolvfile_list);
+	for (count = 0, list = g_list_first(resolvfile_list);
 						list && (count < MAXDNSRCH);
-						list = g_list_previous(list)) {
+						list = g_list_next(list)) {
 		struct resolvfile_entry *entry = list->data;
 
 		if (!entry->domain)
@@ -118,9 +118,9 @@ static int resolvfile_export(void)
 	if (count)
 		g_string_append_printf(content, "\n");
 
-	for (count = 0, list = g_list_last(resolvfile_list);
+	for (count = 0, list = g_list_first(resolvfile_list);
 						list && (count < MAXNS);
-						list = g_list_previous(list)) {
+						list = g_list_next(list)) {
 		struct resolvfile_entry *entry = list->data;
 
 		if (!entry->server)
@@ -658,6 +658,14 @@ int __connman_resolver_init(gboolean dnsproxy)
 	char **ns;
 
 	DBG("dnsproxy %d", dnsproxy);
+
+	/* get autoip nameservers */
+	ns = __connman_inet_get_pnp_nameservers(NULL);
+	for (i = 0; ns && ns[i]; i += 1) {
+		DBG("pnp server %s", ns[i]);
+		append_resolver(i, NULL, ns[i], 86400, 0);
+	}
+	g_strfreev(ns);
 
 	if (!dnsproxy)
 		return 0;

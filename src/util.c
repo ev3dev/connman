@@ -36,18 +36,23 @@
 
 #define URANDOM "/dev/urandom"
 
-int f = -1;
+static int f = -1;
 
 int __connman_util_get_random(uint64_t *val)
 {
-	int r = 0;
+	int r;
 
 	if (!val)
 		return -EINVAL;
 
-	if (read(f, val, sizeof(uint64_t)) < 0) {
+	r = read(f, val, sizeof(uint64_t));
+	if (r < 0) {
 		r = -errno;
 		connman_warn_once("Could not read from "URANDOM);
+		*val = random();
+	} else if (r != sizeof(uint64_t)) {
+		r = -EIO;
+		connman_warn_once("Short read from "URANDOM);
 		*val = random();
 	}
 
@@ -58,7 +63,7 @@ int __connman_util_init(void)
 {
 	int r = 0;
 
-	if (f > 0)
+	if (f >= 0)
 		return 0;
 
 	f = open(URANDOM, O_RDONLY);
@@ -81,7 +86,7 @@ int __connman_util_init(void)
 
 void __connman_util_cleanup(void)
 {
-	if (f > 0)
+	if (f >= 0)
 		close(f);
 
 	f = -1;
