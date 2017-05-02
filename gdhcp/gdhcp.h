@@ -79,6 +79,7 @@ typedef enum {
 #define G_DHCP_HOST_NAME	0x0c
 #define G_DHCP_MTU		0x1a
 #define G_DHCP_NTP_SERVER	0x2a
+#define G_DHCP_VENDOR_CLASS_ID	0x3c
 #define G_DHCP_CLIENT_ID	0x3d
 
 #define G_DHCPV6_CLIENTID	1

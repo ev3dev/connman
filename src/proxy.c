@@ -123,7 +123,7 @@ unsigned int connman_proxy_lookup(const char *interface, const char *url,
 	lookup->url = g_strdup(url);
 	lookup->service = connman_service_ref(service);
 
-	lookup->watch = g_timeout_add_seconds(0, lookup_callback, lookup);
+	lookup->watch = g_idle_add(lookup_callback, lookup);
 	if (lookup->watch == 0) {
 		g_free(lookup->url);
 		g_free(lookup);

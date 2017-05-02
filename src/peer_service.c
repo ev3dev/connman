@@ -293,9 +293,6 @@ int __connman_peer_service_register(const char *owner, DBusMessage *msg,
 	if (service) {
 		DBG("Found one existing service %p", service);
 
-		if (g_strcmp0(service->owner, owner))
-			ret = -EBUSY;
-
 		if (service->pending)
 			ret = -EINPROGRESS;
 		else

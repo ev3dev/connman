@@ -37,7 +37,6 @@ static GHashTable *session_hash;
 static GHashTable *service_hash;
 static struct connman_session *ecall_session;
 static uint32_t session_mark = 256;
-static struct firewall_context *global_firewall = NULL;
 
 enum connman_session_state {
 	CONNMAN_SESSION_STATE_DISCONNECTED   = 0,
@@ -64,22 +63,32 @@ struct connman_session {
 	struct connman_service *service_last;
 	struct connman_session_config *policy_config;
 	GSList *user_allowed_bearers;
+	char *user_allowed_interface;
 
 	bool ecall;
 
 	enum connman_session_id_type id_type;
 	struct firewall_context *fw;
-	int snat_id;
 	uint32_t mark;
 	int index;
 	char *gateway;
 	bool policy_routing;
+	bool snat_enabled;
 };
 
 struct connman_service_info {
 	struct connman_service *service;
 	GSList *sessions;
 };
+
+struct fw_snat {
+	GSList *sessions;
+	int id;
+	int index;
+	struct firewall_context *fw;
+};
+
+GSList *fw_snat_list;
 
 static struct connman_session_policy *policy;
 static void session_activate(struct connman_session *session);
@@ -197,102 +206,109 @@ static char *service2bearer(enum connman_service_type type)
 	return "";
 }
 
-static int init_firewall(void)
+static struct fw_snat *fw_snat_lookup(int index)
 {
-	struct firewall_context *fw;
+	struct fw_snat *fw_snat;
+	GSList *list;
+
+	for (list = fw_snat_list; list; list = list->next) {
+		fw_snat = list->data;
+
+		if (fw_snat->index == index)
+			return fw_snat;
+	}
+	return NULL;
+}
+
+static int fw_snat_create(struct connman_session *session,
+				int index, const char *ifname, const char *addr)
+{
+	struct fw_snat *fw_snat;
 	int err;
 
-	if (global_firewall)
-		return 0;
+	fw_snat = g_new0(struct fw_snat, 1);
 
-	fw = __connman_firewall_create();
+	fw_snat->fw = __connman_firewall_create();
+	fw_snat->index = index;
 
-	err = __connman_firewall_add_rule(fw, "mangle", "INPUT",
-					"-j CONNMARK --restore-mark");
-	if (err < 0)
+	fw_snat->id = __connman_firewall_enable_snat(fw_snat->fw,
+						index, ifname, addr);
+	if (fw_snat->id < 0) {
+		err = fw_snat->id;
 		goto err;
+	}
 
-	err = __connman_firewall_add_rule(fw, "mangle", "POSTROUTING",
-					"-j CONNMARK --save-mark");
-	if (err < 0)
-		goto err;
-
-	err = __connman_firewall_enable(fw);
-	if (err < 0)
-		goto err;
-
-	global_firewall = fw;
+	fw_snat_list = g_slist_prepend(fw_snat_list, fw_snat);
+	fw_snat->sessions = g_slist_prepend(fw_snat->sessions, session);
 
 	return 0;
-
 err:
-	__connman_firewall_destroy(fw);
-
+	__connman_firewall_destroy(fw_snat->fw);
+	g_free(fw_snat);
 	return err;
 }
 
-static void cleanup_firewall(void)
+static void fw_snat_ref(struct connman_session *session,
+				struct fw_snat *fw_snat)
 {
-	if (!global_firewall)
+	if (g_slist_find(fw_snat->sessions, session))
+		return;
+	fw_snat->sessions = g_slist_prepend(fw_snat->sessions, session);
+}
+
+static void fw_snat_unref(struct connman_session *session,
+				struct fw_snat *fw_snat)
+{
+	fw_snat->sessions = g_slist_remove(fw_snat->sessions, session);
+	if (fw_snat->sessions)
 		return;
 
-	__connman_firewall_disable(global_firewall);
-	__connman_firewall_destroy(global_firewall);
+	fw_snat_list = g_slist_remove(fw_snat_list, fw_snat);
+
+	__connman_firewall_disable_snat(fw_snat->fw);
+	__connman_firewall_destroy(fw_snat->fw);
+	g_free(fw_snat);
 }
 
 static int init_firewall_session(struct connman_session *session)
 {
 	struct firewall_context *fw;
 	int err;
+	struct connman_ipconfig *ipconfig = NULL;
+	const char *addr = NULL;
 
-	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN)
+	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN &&
+			!session->info->config.source_ip_rule)
 		return 0;
 
 	DBG("");
 
-	err = init_firewall();
-	if (err < 0)
-		return err;
+	if (session->info->config.source_ip_rule) {
+		ipconfig = __connman_service_get_ip4config(session->service);
+		if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN && !ipconfig)
+			return 0;
+	}
 
 	fw = __connman_firewall_create();
 	if (!fw)
 		return -ENOMEM;
 
-	switch (session->policy_config->id_type) {
-	case CONNMAN_SESSION_ID_TYPE_UID:
-		err = __connman_firewall_add_rule(fw, "mangle", "OUTPUT",
-				"-m owner --uid-owner %s -j MARK --set-mark %d",
-						session->policy_config->id,
-						session->mark);
-		break;
-	case CONNMAN_SESSION_ID_TYPE_GID:
-		err = __connman_firewall_add_rule(fw, "mangle", "OUTPUT",
-				"-m owner --gid-owner %s -j MARK --set-mark %d",
-						session->policy_config->id,
-						session->mark);
-		break;
-	case CONNMAN_SESSION_ID_TYPE_LSM:
-	default:
-		err = -EINVAL;
+	if (session->info->config.source_ip_rule && ipconfig) {
+		addr = __connman_ipconfig_get_local(ipconfig);
 	}
 
-	if (err < 0)
-		goto err;
-
+	err =__connman_firewall_enable_marking(fw,
+					session->policy_config->id_type,
+					session->policy_config->id,
+					addr, session->mark);
+	if (err < 0) {
+		__connman_firewall_destroy(fw);
+		return err;
+	}
 	session->id_type = session->policy_config->id_type;
-
-	err = __connman_firewall_enable(fw);
-	if (err)
-		goto err;
-
 	session->fw = fw;
 
 	return 0;
-
-err:
-	__connman_firewall_destroy(fw);
-
-	return err;
 }
 
 static void cleanup_firewall_session(struct connman_session *session)
@@ -300,7 +316,8 @@ static void cleanup_firewall_session(struct connman_session *session)
 	if (!session->fw)
 		return;
 
-	__connman_firewall_disable(session->fw);
+	__connman_firewall_disable_marking(session->fw);
+	__connman_firewall_disable_snat(session->fw);
 	__connman_firewall_destroy(session->fw);
 
 	session->fw = NULL;
@@ -310,7 +327,11 @@ static int init_routing_table(struct connman_session *session)
 {
 	int err;
 
-	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN)
+	if (session->policy_config->id_type == CONNMAN_SESSION_ID_TYPE_UNKNOWN &&
+			!session->info->config.source_ip_rule)
+		return 0;
+
+	if (!session->service)
 		return 0;
 
 	DBG("");
@@ -349,6 +370,7 @@ static void add_default_route(struct connman_session *session)
 {
 	struct connman_ipconfig *ipconfig;
 	int err;
+	struct in_addr addr = { INADDR_ANY };
 
 	if (!session->service)
 		return;
@@ -356,6 +378,9 @@ static void add_default_route(struct connman_session *session)
 	ipconfig = __connman_service_get_ip4config(session->service);
 	session->index = __connman_ipconfig_get_index(ipconfig);
 	session->gateway = g_strdup(__connman_ipconfig_get_gateway(ipconfig));
+
+	if (!session->gateway)
+		session->gateway = g_strdup(inet_ntoa(addr));
 
 	DBG("index %d routing table %d default gateway %s",
 		session->index, session->mark, session->gateway);
@@ -368,59 +393,53 @@ static void add_default_route(struct connman_session *session)
 
 static void del_nat_rules(struct connman_session *session)
 {
-	int err;
+	struct fw_snat *fw_snat;
 
-	if (!session->fw || session->snat_id == 0)
+	if (!session->snat_enabled)
 		return;
 
-	err = __connman_firewall_disable_rule(session->fw, session->snat_id);
-	if (err < 0) {
-		DBG("could not disable SNAT rule");
+	session->snat_enabled = false;
+	fw_snat = fw_snat_lookup(session->index);
+
+	if (!fw_snat)
 		return;
-	}
 
-	err = __connman_firewall_remove_rule(session->fw, session->snat_id);
-	if (err < 0)
-		DBG("could not remove SNAT rule");
-
-
-	session->snat_id = 0;
+	fw_snat_unref(session, fw_snat);
 }
 
 static void add_nat_rules(struct connman_session *session)
 {
 	struct connman_ipconfig *ipconfig;
+	struct fw_snat *fw_snat;
 	const char *addr;
+	int index, err;
 	char *ifname;
-	int index, id, err;
 
-	if (!session->fw)
+	if (!session->service)
 		return;
-
-	DBG("");
 
 	ipconfig = __connman_service_get_ip4config(session->service);
 	index = __connman_ipconfig_get_index(ipconfig);
 	ifname = connman_inet_ifname(index);
 	addr = __connman_ipconfig_get_local(ipconfig);
 
-	id = __connman_firewall_add_rule(session->fw, "nat", "POSTROUTING",
-				"-o %s -j SNAT --to-source %s",
-				ifname, addr);
-	g_free(ifname);
-	if (id < 0) {
-		DBG("failed to add SNAT rule");
+	if (!addr)
+		return;
+
+	session->snat_enabled = true;
+	fw_snat = fw_snat_lookup(index);
+	if (fw_snat) {
+		fw_snat_ref(session, fw_snat);
 		return;
 	}
 
-	err = __connman_firewall_enable_rule(session->fw, id);
+	err = fw_snat_create(session, index, ifname, addr);
 	if (err < 0) {
-		DBG("could not enable SNAT rule");
-		__connman_firewall_remove_rule(session->fw, id);
-		return;
+		DBG("failed to add SNAT rule");
+		session->snat_enabled = false;
 	}
 
-	session->snat_id = id;
+	g_free(ifname);
 }
 
 static void cleanup_routing_table(struct connman_session *session)
@@ -439,16 +458,22 @@ static void cleanup_routing_table(struct connman_session *session)
 	del_default_route(session);
 }
 
+static void update_firewall(struct connman_session *session)
+{
+	cleanup_firewall_session(session);
+	init_firewall_session(session);
+}
+
 static void update_routing_table(struct connman_session *session)
 {
-	del_default_route(session);
+	cleanup_routing_table(session);
+	init_routing_table(session);
 	add_default_route(session);
 }
 
-static void update_nat_rules(struct connman_session *session)
+static void cleanup_nat_rules(struct connman_session *session)
 {
 	del_nat_rules(session);
-	add_nat_rules(session);
 }
 
 static void destroy_policy_config(struct connman_session *session)
@@ -471,6 +496,7 @@ static void free_session(struct connman_session *session)
 
 	destroy_policy_config(session);
 	g_slist_free(session->info->config.allowed_bearers);
+	g_free(session->info->config.allowed_interface);
 	g_free(session->owner);
 	g_free(session->session_path);
 	g_free(session->notify_path);
@@ -498,6 +524,7 @@ static void cleanup_session(gpointer user_data)
 
 	DBG("remove %s", session->session_path);
 
+	cleanup_nat_rules(session);
 	cleanup_routing_table(session);
 	cleanup_firewall_session(session);
 
@@ -508,6 +535,7 @@ static void cleanup_session(gpointer user_data)
 	update_session_state(session);
 
 	g_slist_free(session->user_allowed_bearers);
+	g_free(session->user_allowed_interface);
 
 	free_session(session);
 }
@@ -519,6 +547,8 @@ struct creation_data {
 	/* user config */
 	enum connman_session_type type;
 	GSList *allowed_bearers;
+	char *allowed_interface;
+	bool source_ip_rule;
 };
 
 static void cleanup_creation_data(struct creation_data *creation_data)
@@ -530,6 +560,7 @@ static void cleanup_creation_data(struct creation_data *creation_data)
 		dbus_message_unref(creation_data->pending);
 
 	g_slist_free(creation_data->allowed_bearers);
+	g_free(creation_data->allowed_interface);
 	g_free(creation_data);
 }
 
@@ -607,6 +638,7 @@ void connman_session_set_default_config(struct connman_session_config *config)
 	config->ecall = FALSE;
 
 	g_slist_free(config->allowed_bearers);
+	config->allowed_bearers = NULL;
 	add_default_bearer_types(&config->allowed_bearers);
 }
 
@@ -692,18 +724,18 @@ static int parse_bearers(DBusMessageIter *iter, GSList **list)
 	return 0;
 }
 
-static void filter_bearer(GSList *policy_bearers,
-				enum connman_service_type bearer,
+static void filter_bearer(GSList *bearers,
+				enum connman_service_type policy,
 				GSList **list)
 {
-	enum connman_service_type policy;
+	enum connman_service_type bearer;
 	GSList *it;
 
-	if (!policy_bearers)
+	if (!bearers)
 		return;
 
-	for (it = policy_bearers; it; it = it->next) {
-		policy = GPOINTER_TO_INT(it->data);
+	for (it = bearers; it; it = it->next) {
+		bearer = GPOINTER_TO_INT(it->data);
 
 		if (policy != bearer)
 			continue;
@@ -716,16 +748,27 @@ static void filter_bearer(GSList *policy_bearers,
 static void apply_policy_on_bearers(GSList *policy_bearers, GSList *bearers,
 				GSList **list)
 {
-	enum connman_service_type bearer;
+	enum connman_service_type policy_bearer;
 	GSList *it;
 
 	*list = NULL;
 
-	for (it = bearers; it; it = it->next) {
-		bearer = GPOINTER_TO_INT(it->data);
+	for (it = policy_bearers; it; it = it->next) {
+		policy_bearer = GPOINTER_TO_INT(it->data);
 
-		filter_bearer(policy_bearers, bearer, list);
+		filter_bearer(bearers, policy_bearer, list);
 	}
+}
+
+static char * apply_policy_on_interface(const char *policy_interface,
+				const char *user_interface)
+{
+	if (policy_interface)
+		return g_strdup(policy_interface);
+	else if (user_interface)
+		return g_strdup(user_interface);
+	else
+		return NULL;
 }
 
 const char *connman_session_get_owner(struct connman_session *session)
@@ -873,6 +916,28 @@ static void append_notify(DBusMessageIter *dict,
 		info_last->config.allowed_bearers = info->config.allowed_bearers;
 	}
 
+	if (session->append_all ||
+			info->config.allowed_interface != info_last->config.allowed_interface) {
+		char *ifname = info->config.allowed_interface;
+		if (!ifname)
+			ifname = "*";
+		connman_dbus_dict_append_basic(dict, "AllowedInterface",
+						DBUS_TYPE_STRING,
+						&ifname);
+		info_last->config.allowed_interface = info->config.allowed_interface;
+	}
+
+	if (session->append_all ||
+			info->config.source_ip_rule != info_last->config.source_ip_rule) {
+		dbus_bool_t source_ip_rule = FALSE;
+		if (info->config.source_ip_rule)
+			source_ip_rule = TRUE;
+		connman_dbus_dict_append_basic(dict, "SourceIPRule",
+						DBUS_TYPE_BOOLEAN,
+						&source_ip_rule);
+		info_last->config.source_ip_rule = info->config.source_ip_rule;
+	}
+
 	session->append_all = false;
 }
 
@@ -892,7 +957,9 @@ static bool compute_notifiable_changes(struct connman_session *session)
 		return true;
 
 	if (info->config.allowed_bearers != info_last->config.allowed_bearers ||
-			info->config.type != info_last->config.type)
+			info->config.type != info_last->config.type ||
+			info->config.allowed_interface != info_last->config.allowed_interface ||
+			info->config.source_ip_rule != info_last->config.source_ip_rule)
 		return true;
 
 	return false;
@@ -946,6 +1013,7 @@ int connman_session_config_update(struct connman_session *session)
 {
 	struct session_info *info = session->info;
 	GSList *allowed_bearers;
+	char *allowed_interface;
 	int err;
 
 	DBG("session %p", session);
@@ -971,6 +1039,10 @@ int connman_session_config_update(struct connman_session *session)
 		session->user_allowed_bearers,
 		&allowed_bearers);
 
+	allowed_interface = apply_policy_on_interface(
+		session->policy_config->allowed_interface,
+		session->user_allowed_interface);
+
 	if (session->active)
 		set_active_session(session, false);
 
@@ -979,6 +1051,9 @@ int connman_session_config_update(struct connman_session *session)
 
 	g_slist_free(info->config.allowed_bearers);
 	info->config.allowed_bearers = allowed_bearers;
+
+	g_free(info->config.allowed_interface);
+	info->config.allowed_interface = allowed_interface;
 
 	session_activate(session);
 
@@ -1088,6 +1163,7 @@ static DBusMessage *change_session(DBusConnection *conn,
 
 			session->active = false;
 			session_deactivate(session);
+			update_session_state(session);
 
 			g_slist_free(info->config.allowed_bearers);
 			session->user_allowed_bearers = allowed_bearers;
@@ -1108,6 +1184,38 @@ static DBusMessage *change_session(DBusConnection *conn,
 			info->config.type = apply_policy_on_type(
 				session->policy_config->type,
 				connman_session_parse_connection_type(val));
+		} else if (g_str_equal(name, "AllowedInterface")) {
+			dbus_message_iter_get_basic(&value, &val);
+			if (session->active)
+				set_active_session(session, false);
+
+			session->active = false;
+			session_deactivate(session);
+			update_session_state(session);
+
+			g_free(session->user_allowed_interface);
+			/* empty string means allow any interface */
+			if (!g_strcmp0(val, ""))
+				session->user_allowed_interface = NULL;
+			else
+				session->user_allowed_interface = g_strdup(val);
+
+			info->config.allowed_interface = apply_policy_on_interface(
+				session->policy_config->allowed_interface,
+				session->user_allowed_interface);
+
+			session_activate(session);
+		} else {
+			goto err;
+		}
+		break;
+	case DBUS_TYPE_BOOLEAN:
+		if (g_str_equal(name, "SourceIPRule")) {
+			dbus_bool_t source_ip_rule;
+			dbus_message_iter_get_basic(&value, &source_ip_rule);
+
+			info->config.source_ip_rule = source_ip_rule;
+			update_session_state(session);
 		} else {
 			goto err;
 		}
@@ -1213,6 +1321,7 @@ static int session_policy_config_cb(struct connman_session *session,
 		goto err;
 
 	session->policy_config = config;
+	session->info->config.source_ip_rule = creation_data->source_ip_rule;
 
 	session->mark = session_mark++;
 	session->index = -1;
@@ -1241,10 +1350,17 @@ static int session_policy_config_cb(struct connman_session *session,
 	session->user_allowed_bearers = creation_data->allowed_bearers;
 	creation_data->allowed_bearers = NULL;
 
+	session->user_allowed_interface = creation_data->allowed_interface;
+	creation_data->allowed_interface = NULL;
+
 	apply_policy_on_bearers(
 			session->policy_config->allowed_bearers,
 			session->user_allowed_bearers,
 			&info->config.allowed_bearers);
+
+	info->config.allowed_interface = apply_policy_on_interface(
+		session->policy_config->allowed_interface,
+		session->user_allowed_interface);
 
 	g_hash_table_replace(session_hash, session->session_path, session);
 
@@ -1270,6 +1386,8 @@ static int session_policy_config_cb(struct connman_session *session,
 	info_last->config.priority = info->config.priority;
 	info_last->config.roaming_policy = info->config.roaming_policy;
 	info_last->config.allowed_bearers = info->config.allowed_bearers;
+	info_last->config.allowed_interface = info->config.allowed_interface;
+	info_last->config.source_ip_rule = info->config.source_ip_rule;
 
 	session->append_all = true;
 
@@ -1357,11 +1475,29 @@ int __connman_session_create(DBusMessage *msg)
 					connman_session_parse_connection_type(val);
 
 				user_connection_type = true;
+			} else if (g_str_equal(key, "AllowedInterface")) {
+				dbus_message_iter_get_basic(&value, &val);
+				creation_data->allowed_interface = g_strdup(val);
 			} else {
 				err = -EINVAL;
 				goto err;
 			}
+			break;
+		case DBUS_TYPE_BOOLEAN:
+			if (g_str_equal(key, "SourceIPRule")) {
+				dbus_bool_t source_ip_rule;
+				dbus_message_iter_get_basic(&value, &source_ip_rule);
+				creation_data->source_ip_rule = source_ip_rule;
+			} else {
+				err = -EINVAL;
+				goto err;
+			}
+			break;
+		default:
+			err = -EINVAL;
+			goto err;
 		}
+
 		dbus_message_iter_next(&array);
 	}
 
@@ -1545,8 +1681,10 @@ static void update_session_state(struct connman_session *session)
 
 	DBG("session %p state %s", session, state2string(state));
 
+	update_firewall(session);
+	del_nat_rules(session);
 	update_routing_table(session);
-	update_nat_rules(session);
+	add_nat_rules(session);
 	session_notify(session);
 }
 
@@ -1555,17 +1693,31 @@ static bool session_match_service(struct connman_session *session,
 {
 	enum connman_service_type bearer_type;
 	enum connman_service_type service_type;
+	enum connman_service_type current_service_type;
 	GSList *list;
+	char *ifname;
 
 	if (policy && policy->allowed)
 		return policy->allowed(session, service);
 
+	current_service_type = connman_service_get_type(session->service);
+
 	for (list = session->info->config.allowed_bearers; list; list = list->next) {
 		bearer_type = GPOINTER_TO_INT(list->data);
 		service_type = connman_service_get_type(service);
+		ifname = connman_service_get_interface(service);
 
-		if (bearer_type == service_type)
-			return true;
+		if (bearer_type == current_service_type)
+			return false;
+
+		if (bearer_type == service_type &&
+			(session->info->config.allowed_interface == NULL ||
+			!g_strcmp0(session->info->config.allowed_interface, "*") ||
+			!g_strcmp0(session->info->config.allowed_interface, ifname))) {
+				g_free(ifname);
+				return true;
+		}
+		g_free(ifname);
 	}
 
 	return false;
@@ -1695,9 +1847,9 @@ static void handle_service_state_offline(struct connman_service *service,
 
 		session->service = NULL;
 		update_session_state(session);
+		session_activate(session);
 	}
 }
-
 
 static void service_state_changed(struct connman_service *service,
 				enum connman_service_state state)
@@ -1758,7 +1910,7 @@ static void ipconfig_changed(struct connman_service *service,
 			continue;
 
 		if (session->service && session->service == service) {
-			update_routing_table(session);
+			update_session_state(session);
 
 			if (type == CONNMAN_IPCONFIG_TYPE_IPV4)
 				ipconfig_ipv4_changed(session);
@@ -1795,12 +1947,6 @@ int __connman_session_init(void)
 
 	service_hash = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 						NULL, cleanup_service);
-	if (__connman_firewall_is_up()) {
-		err = init_firewall();
-		if (err < 0)
-			return err;
-	}
-
 	return 0;
 }
 
@@ -1810,8 +1956,6 @@ void __connman_session_cleanup(void)
 
 	if (!connection)
 		return;
-
-	cleanup_firewall();
 
 	connman_notifier_unregister(&session_notifier);
 

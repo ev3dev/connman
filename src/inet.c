@@ -1252,13 +1252,12 @@ static gboolean rs_timeout_cb(gpointer user_data)
 	return FALSE;
 }
 
-static int icmpv6_recv(int fd, gpointer user_data)
+static int icmpv6_recv(int fd, struct xs_cb_data *data)
 {
 	struct msghdr mhdr;
 	struct iovec iov;
 	unsigned char chdr[CMSG_BUF_LEN];
 	unsigned char buf[1540];
-	struct xs_cb_data *data = user_data;
 	struct nd_router_advert *hdr;
 	struct sockaddr_in6 saddr;
 	ssize_t len;
@@ -1280,7 +1279,6 @@ static int icmpv6_recv(int fd, gpointer user_data)
 	len = recvmsg(fd, &mhdr, 0);
 	if (len < 0) {
 		cb(NULL, 0, data->user_data);
-		xs_cleanup(data);
 		return -errno;
 	}
 
@@ -1291,7 +1289,6 @@ static int icmpv6_recv(int fd, gpointer user_data)
 		return 0;
 
 	cb(hdr, len, data->user_data);
-	xs_cleanup(data);
 
 	return len;
 }
@@ -1299,18 +1296,21 @@ static int icmpv6_recv(int fd, gpointer user_data)
 static gboolean icmpv6_event(GIOChannel *chan, GIOCondition cond, gpointer data)
 {
 	int fd, ret;
+	struct xs_cb_data *xs_data = data;
 
 	DBG("");
 
 	if (cond & (G_IO_NVAL | G_IO_HUP | G_IO_ERR))
-		return FALSE;
+		goto cleanup;
 
 	fd = g_io_channel_unix_get_fd(chan);
-	ret = icmpv6_recv(fd, data);
+	ret = icmpv6_recv(fd, xs_data);
 	if (ret == 0)
 		return TRUE;
 
-	return FALSE;
+cleanup:
+	xs_cleanup(xs_data);
+	return TRUE;
 }
 
 /* Adapted from RFC 1071 "C" Implementation Example */
@@ -1667,13 +1667,12 @@ void __connman_inet_ipv6_stop_recv_rs(void *context)
 	xs_cleanup(context);
 }
 
-static int icmpv6_rs_recv(int fd, gpointer user_data)
+static int icmpv6_rs_recv(int fd, struct xs_cb_data *data)
 {
 	struct msghdr mhdr;
 	struct iovec iov;
 	unsigned char chdr[CMSG_BUF_LEN];
 	unsigned char buf[1540];
-	struct xs_cb_data *data = user_data;
 	struct nd_router_solicit *hdr;
 	struct sockaddr_in6 saddr;
 	ssize_t len;
@@ -1712,17 +1711,20 @@ static gboolean icmpv6_rs_event(GIOChannel *chan, GIOCondition cond,
 								gpointer data)
 {
 	int fd, ret;
+	struct xs_cb_data *xs_data = data;
 
 	DBG("");
 
 	if (cond & (G_IO_NVAL | G_IO_HUP | G_IO_ERR))
-		return FALSE;
+		goto cleanup;
 
 	fd = g_io_channel_unix_get_fd(chan);
-	ret = icmpv6_rs_recv(fd, data);
+	ret = icmpv6_rs_recv(fd, xs_data);
 	if (ret == 0)
 		return TRUE;
 
+cleanup:
+	xs_data->watch_id = 0;
 	return FALSE;
 }
 
@@ -1797,13 +1799,12 @@ static gboolean ns_timeout_cb(gpointer user_data)
 	return FALSE;
 }
 
-static int icmpv6_nd_recv(int fd, gpointer user_data)
+static int icmpv6_nd_recv(int fd, struct xs_cb_data *data)
 {
 	struct msghdr mhdr;
 	struct iovec iov;
 	unsigned char chdr[CMSG_BUF_LEN];
 	unsigned char buf[1540];
-	struct xs_cb_data *data = user_data;
 	struct nd_neighbor_advert *hdr;
 	struct sockaddr_in6 saddr;
 	ssize_t len;
@@ -1825,7 +1826,6 @@ static int icmpv6_nd_recv(int fd, gpointer user_data)
 	len = recvmsg(fd, &mhdr, 0);
 	if (len < 0) {
 		cb(NULL, 0, &data->addr.sin6_addr, data->user_data);
-		xs_cleanup(data);
 		return -errno;
 	}
 
@@ -1844,7 +1844,6 @@ static int icmpv6_nd_recv(int fd, gpointer user_data)
 		return 0;
 
 	cb(hdr, len, &data->addr.sin6_addr, data->user_data);
-	xs_cleanup(data);
 
 	return len;
 }
@@ -1853,18 +1852,21 @@ static gboolean icmpv6_nd_event(GIOChannel *chan, GIOCondition cond,
 								gpointer data)
 {
 	int fd, ret;
+	struct xs_cb_data *xs_data = data;
 
 	DBG("");
 
 	if (cond & (G_IO_NVAL | G_IO_HUP | G_IO_ERR))
-		return FALSE;
+		goto cleanup;
 
 	fd = g_io_channel_unix_get_fd(chan);
-	ret = icmpv6_nd_recv(fd, data);
+	ret = icmpv6_nd_recv(fd, xs_data);
 	if (ret == 0)
 		return TRUE;
 
-	return FALSE;
+cleanup:
+	xs_cleanup(xs_data);
+	return TRUE;
 }
 
 int __connman_inet_ipv6_do_dad(int index, int timeout_ms,
@@ -2188,9 +2190,8 @@ static gboolean inet_rtnl_timeout_cb(gpointer user_data)
 	return FALSE;
 }
 
-static int inet_rtnl_recv(GIOChannel *chan, gpointer user_data)
+static int inet_rtnl_recv(GIOChannel *chan, struct inet_rtnl_cb_data *rtnl_data)
 {
-	struct inet_rtnl_cb_data *rtnl_data = user_data;
 	struct __connman_inet_rtnl_handle *rth = rtnl_data->rtnl;
 	struct nlmsghdr *h = NULL;
 	struct sockaddr_nl nladdr;
@@ -2272,17 +2273,20 @@ static gboolean inet_rtnl_event(GIOChannel *chan, GIOCondition cond,
 							gpointer user_data)
 {
 	int ret;
+	struct inet_rtnl_cb_data *rtnl_data = user_data;
 
 	DBG("");
 
 	if (cond & (G_IO_NVAL | G_IO_HUP | G_IO_ERR))
-		return FALSE;
+		goto cleanup;
 
-	ret = inet_rtnl_recv(chan, user_data);
-	if (ret != 0)
+	ret = inet_rtnl_recv(chan, rtnl_data);
+	if (ret == 0)
 		return TRUE;
 
-	return FALSE;
+cleanup:
+	inet_rtnl_cleanup(rtnl_data);
+	return TRUE;
 }
 
 int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
@@ -2310,7 +2314,6 @@ int __connman_inet_rtnl_talk(struct __connman_inet_rtnl_handle *rtnl,
 						inet_rtnl_timeout_cb, data);
 
 		data->channel = g_io_channel_unix_new(rtnl->fd);
-		g_io_channel_set_close_on_unref(data->channel, TRUE);
 
 		g_io_channel_set_encoding(data->channel, NULL, NULL);
 		g_io_channel_set_buffered(data->channel, FALSE);
@@ -2653,7 +2656,7 @@ char **__connman_inet_get_running_interfaces(void)
 		result = g_try_realloc(result, (count + 1) * sizeof(char *));
 		if (!result) {
 			g_free(prev_result);
-			goto error;
+			return NULL;
 		}
 	}
 
@@ -2963,4 +2966,299 @@ int __connman_inet_get_address_netmask(int ifindex,
 out:
 	close(sk);
 	return ret;
+}
+
+static int get_nfs_server_ip(const char *cmdline_file, const char *pnp_file,
+				struct in_addr *addr)
+{
+	char *s, *nfsargs;
+	size_t len;
+	char addrstr[INET_ADDRSTRLEN];
+	struct in_addr taddr;
+	GError *error = NULL;
+	char *cmdline = NULL;
+	char *pnp = NULL;
+	char **args = NULL;
+	char **pnpent = NULL;
+	char **pp = NULL;
+	int err = -1;
+
+	if (!cmdline_file)
+		cmdline_file = "/proc/cmdline";
+	if (!pnp_file)
+		pnp_file = "/proc/net/pnp";
+	if (!addr)
+		addr = &taddr;
+	addr->s_addr = INADDR_NONE;
+
+	if (!g_file_get_contents(cmdline_file, &cmdline, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				cmdline_file, error->message);
+		goto out;
+	}
+
+	if (g_file_test(pnp_file, G_FILE_TEST_EXISTS) &&
+			!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				pnp_file, error->message);
+		goto out;
+	}
+
+	len = strlen(cmdline);
+	if (len <= 1) {
+		/* too short */
+		goto out;
+	}
+	/* remove newline */
+	if (cmdline[len - 1] == '\n')
+		cmdline[--len] = '\0';
+
+	/* split in arguments (seperated by space) */
+	args = g_strsplit(cmdline, " ", 0);
+	if (!args) {
+		connman_error("%s: Cannot split cmdline \"%s\"\n", __func__,
+				cmdline);
+		goto out;
+	}
+
+	/* split in entries (by newlines) */
+	pnpent = g_strsplit(pnp, "\n", 0);
+	if (!pnpent) {
+		connman_error("%s: Cannot split pnp at file \"%s\"\n", __func__,
+				pnp_file);
+		goto out;
+	}
+
+	/* first find root argument */
+	for (pp = args; *pp; pp++) {
+		if (!strcmp(*pp, "root=/dev/nfs"))
+			break;
+	}
+	/* no rootnfs found */
+	if (!*pp)
+		goto out;
+
+	/* locate nfsroot argument */
+	for (pp = args; *pp; pp++) {
+		if (!strncmp(*pp, "nfsroot=", strlen("nfsroot=")))
+			break;
+	}
+	/* no nfsroot argument found */
+	if (!*pp)
+		goto out;
+
+	/* determine if nfsroot server is provided */
+	nfsargs = strchr(*pp, '=');
+	if (!nfsargs)
+		goto out;
+	nfsargs++;
+
+	/* find whether serverip is present */
+	s = strchr(nfsargs, ':');
+	if (s) {
+		len = s - nfsargs;
+		s = nfsargs;
+	} else {
+		/* no serverip, use bootserver */
+		for (pp = pnpent; *pp; pp++) {
+			if (!strncmp(*pp, "bootserver ", strlen("bootserver ")))
+				break;
+		}
+		/* no bootserver found */
+		if (!*pp)
+			goto out;
+		s = *pp + strlen("bootserver ");
+		len = strlen(s);
+	}
+
+	/* copy to addr string buffer */
+	if (len >= sizeof(addrstr)) {
+		connman_error("%s: Bad server\n", __func__);
+		goto out;
+	}
+	memcpy(addrstr, s, len);
+	addrstr[len] = '\0';
+
+	err = inet_pton(AF_INET, addrstr, addr);
+	if (err <= 0) {
+		connman_error("%s: Cannot convert to numeric addr \"%s\"\n",
+				__func__, addrstr);
+		err = -1;
+		goto out;
+	}
+
+	/* all done */
+	err = 0;
+out:
+	g_strfreev(pnpent);
+	g_strfreev(args);
+	if (error)
+		g_error_free(error);
+	g_free(pnp);
+	g_free(cmdline);
+
+	return err;
+}
+
+/* get interface out of which peer is reachable (IPv4 only) */
+static int get_peer_iface(struct in_addr *addr, char *ifname)
+{
+	struct ifaddrs *ifaddr, *ifa;
+	struct sockaddr_in saddr, *ifsaddr;
+	socklen_t socklen;
+	int s;
+	int err = -1;
+
+	/* Obtain address(es) matching host/port */
+	err = getifaddrs(&ifaddr);
+	if (err < 0) {
+		connman_error("%s: getifaddrs() failed %d (%s)\n",
+				__func__, errno, strerror(errno));
+		return -1;
+	}
+
+	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (s < 0) {
+		connman_error("%s: socket() failed %d (%s)\n",
+				__func__, errno, strerror(errno));
+		return -1;
+	}
+
+	memset(&saddr, 0, sizeof(saddr));
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = 0;	/* any port */
+	saddr.sin_addr = *addr;
+
+	/* no need to bind, connect will select iface */
+	err = connect(s, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
+	if (err < 0) {
+		connman_error("%s: connect() failed: %d (%s)\n",
+				__func__, errno, strerror(errno));
+		goto out;
+	}
+
+	socklen = sizeof(saddr);
+	err = getsockname(s, (struct sockaddr *)&saddr, &socklen);
+	if (err < 0) {
+		connman_error("%s: getsockname() failed: %d (%s)\n",
+				__func__, errno, strerror(errno));
+		goto out;
+	}
+
+	err = -1;
+	for (ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
+		if (!ifa->ifa_addr)
+			continue;
+
+		/* only IPv4 address */
+		if (ifa->ifa_addr->sa_family != AF_INET)
+			continue;
+
+		ifsaddr = (struct sockaddr_in *)ifa->ifa_addr;
+
+		/* match address? */
+		if (ifsaddr->sin_addr.s_addr == saddr.sin_addr.s_addr)
+			break;
+	}
+
+	if (ifa) {
+		err = 0;
+		if (ifname)
+			strcpy(ifname, ifa->ifa_name);
+	}
+
+out:
+	close(s);
+
+	freeifaddrs(ifaddr);
+
+	return err;
+}
+
+bool __connman_inet_isrootnfs_device(const char *devname)
+{
+	struct in_addr addr;
+	char ifname[IFNAMSIZ];
+
+	return get_nfs_server_ip(NULL, NULL, &addr) == 0 &&
+	       get_peer_iface(&addr, ifname) == 0 &&
+	       strcmp(devname, ifname) == 0;
+}
+
+char **__connman_inet_get_pnp_nameservers(const char *pnp_file)
+{
+	char **pp;
+	char *s;
+	int pass, count;
+	GError *error = NULL;
+	char *pnp = NULL;
+	char **pnpent = NULL;
+	char **nameservers = NULL;
+
+	if (!pnp_file)
+		pnp_file = "/proc/net/pnp";
+
+	if (!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
+		connman_error("%s: Cannot read %s %s\n", __func__,
+				pnp_file, error->message);
+		goto out;
+	}
+
+	/* split in entries (by newlines) */
+	pnpent = g_strsplit(pnp, "\n", 0);
+	if (!pnpent) {
+		connman_error("%s: Cannot split pnp \"%s\"\n", __func__,
+				pnp_file);
+		goto out;
+	}
+
+	/*
+	 * Perform two passes to retreive a char ** array of
+	 * nameservers that are not 0.0.0.0
+	 *
+	 * The first pass counts them, the second fills in the
+	 * array.
+	 */
+	count = 0;
+	nameservers = NULL;
+	for (pass = 1; pass <= 2; pass++) {
+
+		/* at the start of the second pass allocate */
+		if (pass == 2)
+			nameservers = g_new(char *, count + 1);
+
+		count = 0;
+		for (pp = pnpent; *pp; pp++) {
+			/* match 'nameserver ' at the start of each line */
+			if (strncmp(*pp, "nameserver ", strlen("nameserver ")))
+				continue;
+
+			/* compare it against 0.0.0.0 */
+			s = *pp + strlen("nameserver ");
+			if (!strcmp(s, "0.0.0.0"))
+				continue;
+
+			/* on second pass fill in array */
+			if (pass == 2)
+				nameservers[count] = g_strdup(s);
+			count++;
+		}
+
+		/* no nameservers? */
+		if (count == 0)
+			goto out;
+
+		/* and terminate char ** array with NULL */
+		if (pass == 2)
+			nameservers[count] = NULL;
+
+	}
+
+out:
+	g_strfreev(pnpent);
+	g_free(pnp);
+	if (error)
+		g_error_free(error);
+
+	return nameservers;
 }

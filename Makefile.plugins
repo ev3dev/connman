@@ -26,6 +26,11 @@ builtin_modules += wifi
 builtin_sources += plugins/wifi.c $(gsupplicant_sources)
 endif
 
+if IWD
+builtin_modules += iwd
+builtin_sources += plugins/iwd.c
+endif
+
 if BLUETOOTH
 builtin_modules += bluetooth
 builtin_sources += plugins/bluetooth.c

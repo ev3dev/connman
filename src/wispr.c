@@ -832,8 +832,8 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context)
 	int err = 0;
 	int i;
 
-	DBG("wispr/portal context %p", wp_context);
-	DBG("service %p", wp_context->service);
+	DBG("wispr/portal context %p service %p", wp_context,
+		wp_context->service);
 
 	service_type = connman_service_get_type(wp_context->service);
 
@@ -906,8 +906,7 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context)
 			free_connman_wispr_portal_context(wp_context);
 		}
 	} else if (wp_context->timeout == 0) {
-		wp_context->timeout =
-			g_timeout_add_seconds(0, no_proxy_callback, wp_context);
+		wp_context->timeout = g_idle_add(no_proxy_callback, wp_context);
 	}
 
 done:

@@ -72,7 +72,7 @@ int ipv4ll_send_arp_packet(uint8_t* source_eth, uint32_t source_ip,
 	uint32_t ip_target;
 	int fd, n;
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ARP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return -errno;
 
@@ -85,8 +85,9 @@ int ipv4ll_send_arp_packet(uint8_t* source_eth, uint32_t source_ip,
 	dest.sll_halen = ETH_ALEN;
 	memset(dest.sll_addr, 0xFF, ETH_ALEN);
 	if (bind(fd, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
+		int err = errno;
 		close(fd);
-		return -errno;
+		return -err;
 	}
 
 	ip_source = htonl(source_ip);
@@ -116,7 +117,7 @@ int ipv4ll_arp_socket(int ifindex)
 	int fd;
 	struct sockaddr_ll sock;
 
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_ARP));
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (fd < 0)
 		return fd;
 
@@ -127,8 +128,9 @@ int ipv4ll_arp_socket(int ifindex)
 	sock.sll_ifindex = ifindex;
 
 	if (bind(fd, (struct sockaddr *) &sock, sizeof(sock)) != 0) {
+		int err = errno;
 		close(fd);
-		return -errno;
+		return -err;
 	}
 
 	return fd;

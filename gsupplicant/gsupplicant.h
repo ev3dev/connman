@@ -144,6 +144,10 @@ struct _GSupplicantSSID {
 	const char *identity;
 	const char *anonymous_identity;
 	const char *ca_cert_path;
+	const char *subject_match;
+	const char *altsubject_match;
+	const char *domain_suffix_match;
+	const char *domain_match;
 	const char *client_cert_path;
 	const char *private_key_path;
 	const char *private_key_passphrase;

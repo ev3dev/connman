@@ -182,3 +182,26 @@ Settings	string State [readonly]
 			(This setting will be removed when the unique process
 			identification problem is solved.)
 
+		string AllowedInterface [readwrite] [experimental]
+
+			This field is used to bind a session to a specific
+			network interface. If this field is empty, the first
+			interface from a list of available ones will be used.
+			Also "*" string matches any interface.
+
+			Only one interface may be specified.
+
+			If a specified network interface is not available
+			(e.g. because AllowedBearers filters it out), the
+			session will not go online.
+
+		boolean SourceIPRule [readwrite] [experimental]
+
+			If set to true the session will create source IP
+			address rule in the firewall, which redirects traffic
+			to that session's routing table.
+
+			Each session maintains a dedicated routing table, with
+			a default route. When the source IP rule is enabled,
+			an application can select which session/interface to
+			send traffic on, using bind-before-connect mechanism.

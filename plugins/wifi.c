@@ -88,6 +88,10 @@ struct hidden_params {
 	unsigned int ssid_len;
 	char *identity;
 	char *anonymous_identity;
+	char *subject_match;
+	char *altsubject_match;
+	char *domain_suffix_match;
+	char *domain_match;
 	char *passphrase;
 	char *security;
 	GSupplicantScanParams *scan_params;
@@ -1798,13 +1802,13 @@ static int wifi_scan(enum connman_service_type type,
 	if (wifi->p2p_device)
 		return 0;
 
+	if (wifi->tethering)
+		return -EBUSY;
+
 	if (type == CONNMAN_SERVICE_TYPE_P2P)
 		return p2p_find(device);
 
 	DBG("device %p wifi %p hidden ssid %s", device, wifi->interface, ssid);
-
-	if (wifi->tethering)
-		return 0;
 
 	scanning = connman_device_get_scanning(device);
 
@@ -2058,6 +2062,14 @@ static void ssid_init(GSupplicantSSID *ssid, struct connman_network *network)
 						"WiFi.AnonymousIdentity");
 	ssid->ca_cert_path = connman_network_get_string(network,
 							"WiFi.CACertFile");
+	ssid->subject_match = connman_network_get_string(network,
+							"WiFi.SubjectMatch");
+	ssid->altsubject_match = connman_network_get_string(network,
+							"WiFi.AltSubjectMatch");
+	ssid->domain_suffix_match = connman_network_get_string(network,
+							"WiFi.DomainSuffixMatch");
+	ssid->domain_match = connman_network_get_string(network,
+							"WiFi.DomainMatch");
 	ssid->client_cert_path = connman_network_get_string(network,
 							"WiFi.ClientCertFile");
 	ssid->private_key_path = connman_network_get_string(network,
@@ -2145,6 +2157,7 @@ static void disconnect_callback(int result, GSupplicantInterface *interface,
 	}
 
 	wifi->disconnecting = false;
+	wifi->connected = false;
 
 	if (wifi->pending_network) {
 		network_connect(wifi->pending_network);
@@ -2448,6 +2461,19 @@ static void interface_state(GSupplicantInterface *interface)
 						network, wifi))
 			break;
 
+		/* See table 8-36 Reason codes in IEEE Std 802.11 */
+		switch (wifi->disconnect_code) {
+		case 1: /* Unspecified reason */
+			/* Let's assume it's because we got blocked */
+
+		case 6: /* Class 2 frame received from nonauthenticated STA */
+			connman_network_set_error(network,
+						CONNMAN_NETWORK_ERROR_BLOCKED);
+			break;
+
+		default:
+			break;
+		}
 		connman_network_set_connected(network, false);
 		connman_network_set_associating(network, false);
 		wifi->disconnecting = false;
@@ -2490,8 +2516,6 @@ static void interface_state(GSupplicantInterface *interface)
 		if (wifi->connected)
 			connman_warn("Probably roaming right now!"
 						" Staying connected...");
-		else
-			wifi->connected = false;
 		break;
 	case G_SUPPLICANT_STATE_SCANNING:
 		wifi->connected = false;
@@ -3139,13 +3163,14 @@ static void sta_remove_callback(int result,
 	DBG("ifname %s result %d ", info->ifname, result);
 
 	if ((result < 0) || (info->wifi->ap_supported != WIFI_AP_SUPPORTED)) {
-		info->wifi->tethering = true;
+		info->wifi->tethering = false;
+		connman_technology_tethering_notify(info->technology, false);
 
 		g_free(info->ifname);
 		g_free(info->ssid);
 		g_free(info);
 
-		if (info->wifi->ap_supported == WIFI_AP_SUPPORTED){
+		if (info->wifi->ap_supported == WIFI_AP_SUPPORTED) {
 			g_free(info->wifi->tethering_param->ssid);
 			g_free(info->wifi->tethering_param);
 			info->wifi->tethering_param = NULL;
@@ -3154,8 +3179,6 @@ static void sta_remove_callback(int result,
 	}
 
 	info->wifi->interface = NULL;
-
-	connman_technology_tethering_notify(info->technology, true);
 
 	g_supplicant_interface_create(info->ifname, driver, info->wifi->bridge,
 						ap_create_callback,
@@ -3172,7 +3195,7 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 	struct wifi_tethering_info *info;
 	const char *ifname;
 	unsigned int mode;
-	int err;
+	int err, berr = 0;
 
 	for (list = iface_list; list; list = list->next) {
 		wifi = list->data;
@@ -3231,6 +3254,10 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 		info->wifi->tethering = true;
 		info->wifi->ap_supported = WIFI_AP_SUPPORTED;
 
+		berr = connman_technology_tethering_notify(technology, true);
+		if (berr < 0)
+			goto failed;
+
 		err = g_supplicant_interface_remove(interface,
 						sta_remove_callback,
 							info);
@@ -3245,6 +3272,17 @@ static int enable_wifi_tethering(struct connman_technology *technology,
 		g_free(info);
 		g_free(wifi->tethering_param);
 		wifi->tethering_param = NULL;
+
+		/*
+		 * Remove bridge if it was correctly created but remove
+		 * operation failed. Instead, if bridge creation failed then
+		 * break out and do not try again on another interface,
+		 * bridge set-up does not depend on it.
+		 */
+		if (berr == 0)
+			connman_technology_tethering_notify(technology, false);
+		else
+			break;
 	}
 
 	return -EOPNOTSUPP;
