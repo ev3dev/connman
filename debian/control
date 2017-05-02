@@ -1,8 +1,5 @@
 Source: connman
-Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>,
-           Shawn Landden <shawn@churchofgit.com>,
-           Alf Gaida <agaida@siduction.org>
+Maintainer: David Lechner <david@lechnology.com>
 Section: net
 Priority: optional
 Build-Depends: debhelper (>= 10),
@@ -20,8 +17,8 @@ Build-Depends: debhelper (>= 10),
                dh-systemd,
                dh-autoreconf
 Standards-Version: 3.9.8
-Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/connman.git
-Vcs-Git: https://anonscm.debian.org/git/collab-maint/connman.git
+Vcs-Browser: https://github.com/ev3dev/connman
+Vcs-Git: https://github.com/ev3dev/connman.git
 Homepage: https://01.org/connman
 
 Package: connman
