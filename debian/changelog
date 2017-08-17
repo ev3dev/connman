@@ -1,3 +1,9 @@
+connman (1.35-1ev3dev1) testing; urgency=medium
+
+  * Imported Upstream version 1.35
+
+ -- David Lechner <david@lechnology.com>  Thu, 17 Aug 2017 11:35:26 -0500
+
 connman (1.34-1ev3dev1) testing; urgency=medium
 
   * Install connmanctl in /usr/bin/
