@@ -2997,10 +2997,14 @@ static int get_nfs_server_ip(const char *cmdline_file, const char *pnp_file,
 		goto out;
 	}
 
-	if (g_file_test(pnp_file, G_FILE_TEST_EXISTS) &&
-			!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
-		connman_error("%s: Cannot read %s %s\n", __func__,
-				pnp_file, error->message);
+	if (g_file_test(pnp_file, G_FILE_TEST_EXISTS)) {
+		if (!g_file_get_contents(pnp_file, &pnp, NULL, &error)) {
+			connman_error("%s: Cannot read %s %s\n", __func__,
+						  pnp_file, error->message);
+			goto out;
+		}
+	} else {
+		connman_error("%s: File %s doesn't exist\n", __func__, pnp_file);
 		goto out;
 	}
 

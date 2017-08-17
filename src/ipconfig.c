@@ -1762,13 +1762,13 @@ void __connman_ipconfig_append_ipv4(struct connman_ipconfig *ipconfig,
 	switch (ipconfig->method) {
 	case CONNMAN_IPCONFIG_METHOD_UNKNOWN:
 	case CONNMAN_IPCONFIG_METHOD_OFF:
-	case CONNMAN_IPCONFIG_METHOD_AUTO:
 		return;
 
 	case CONNMAN_IPCONFIG_METHOD_FIXED:
 		append_addr = ipconfig->address;
 		break;
 
+	case CONNMAN_IPCONFIG_METHOD_AUTO:
 	case CONNMAN_IPCONFIG_METHOD_MANUAL:
 	case CONNMAN_IPCONFIG_METHOD_DHCP:
 		append_addr = ipconfig->system;
@@ -2222,6 +2222,20 @@ int __connman_ipconfig_load(struct connman_ipconfig *ipconfig,
 		g_free(key);
 		break;
 
+	case CONNMAN_IPCONFIG_METHOD_AUTO:
+
+		if (ipconfig->type != CONNMAN_IPCONFIG_TYPE_IPV4)
+			break;
+
+		/*
+		 * If the last used method for IPv4 was AUTO then we
+		 * try first DHCP. We will try also to use the last
+		 * used DHCP address, if exits.
+		 */
+		__connman_ipconfig_set_method(ipconfig,
+					CONNMAN_IPCONFIG_METHOD_DHCP);
+		/* fall through */
+
 	case CONNMAN_IPCONFIG_METHOD_DHCP:
 
 		key = g_strdup_printf("%sDHCP.LastAddress", prefix);
@@ -2232,9 +2246,6 @@ int __connman_ipconfig_load(struct connman_ipconfig *ipconfig,
 		}
 		g_free(key);
 
-		break;
-
-	case CONNMAN_IPCONFIG_METHOD_AUTO:
 		break;
 	}
 

@@ -758,7 +758,7 @@ void connman_peer_set_name(struct connman_peer *peer, const char *name)
 void connman_peer_set_iface_address(struct connman_peer *peer,
 					const unsigned char *iface_address)
 {
-	memset(peer->iface_address, 0, ETH_ALEN);
+	memset(peer->iface_address, 0, sizeof(peer->iface_address));
 	memcpy(peer->iface_address, iface_address, ETH_ALEN);
 }
 

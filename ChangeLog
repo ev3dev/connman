@@ -1,3 +1,10 @@
+ver 1.35:
+	Fix issue with malformed DNS response handling.
+	Fix issue with routing and disabled online check.
+	Fix issue with handling IPv4 configuration methods.
+	Fix issue with multiple link-local connections.
+	Fix issue with proxy domain configuration.
+
 ver 1.34:
 	Fix issue with recognizing bonding interfaces.
 	Fix issue with adjtimex usage for kernel clock tuning.

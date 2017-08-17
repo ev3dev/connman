@@ -308,8 +308,14 @@ Properties	string State [readonly]
 
 			string Method [readonly]
 
-				Possible values are "dhcp", "manual"
+				Possible values are "dhcp", "manual", "auto"
 				and "off".
+
+				It could be "auto" in case address was got
+				through IPv4LL after DHCP failed. In this
+				case also IPv4.Configuration will become
+				"auto" to allow user to ask for a DHCP
+				address at any time.
 
 				The value "fixed" indicates an IP address
 				that can not be modified. For example

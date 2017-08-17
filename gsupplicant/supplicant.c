@@ -189,6 +189,7 @@ struct _GSupplicantInterface {
 	GHashTable *bss_mapping;
 	void *data;
 	const char *pending_peer_path;
+	GSupplicantNetwork *current_network;
 	struct added_network_information network_info;
 };
 
@@ -600,6 +601,17 @@ static void callback_network_changed(GSupplicantNetwork *network,
 		return;
 
 	callbacks_pointer->network_changed(network, property);
+}
+
+static void callback_network_associated(GSupplicantNetwork *network)
+{
+	if (!callbacks_pointer)
+		return;
+
+	if (!callbacks_pointer->network_associated)
+		return;
+
+	callbacks_pointer->network_associated(network);
 }
 
 static void callback_peer_found(GSupplicantPeer *peer)
@@ -1617,7 +1629,12 @@ done:
 		network->wps_capabilities |= bss->wps_capabilities;
 	}
 
-	if (bss->signal > network->signal) {
+	/*
+	 * Do not change best BSS if we are connected. It will be done through
+	 * CurrentBSS property in case of misalignment with wpa_s or roaming.
+	 */
+	if (network != interface->current_network &&
+				bss->signal > network->signal) {
 		network->signal = bss->signal;
 		network->best_bss = bss;
 		callback_network_changed(network, "Signal");
@@ -2077,6 +2094,75 @@ static void update_network_signal(GSupplicantNetwork *network)
 	SUPPLICANT_DBG("New network signal %d", network->signal);
 }
 
+static void interface_current_bss(GSupplicantInterface *interface,
+						DBusMessageIter *iter)
+{
+	GSupplicantNetwork *network;
+	struct g_supplicant_bss *bss;
+	const char *path;
+
+	dbus_message_iter_get_basic(iter, &path);
+	if (g_strcmp0(path, "/") == 0) {
+		interface->current_network = NULL;
+		return;
+	}
+
+	interface_bss_added_without_keys(iter, interface);
+
+	network = g_hash_table_lookup(interface->bss_mapping, path);
+	if (!network)
+		return;
+
+	bss = g_hash_table_lookup(network->bss_table, path);
+	if (!bss)
+		return;
+
+	interface->current_network = network;
+
+	if (bss != network->best_bss) {
+		/*
+		 * This is the case where either wpa_s got associated
+		 * to a BSS different than the one ConnMan considers
+		 * the best, or we are roaming.
+		 */
+		SUPPLICANT_DBG("Update best BSS for %s", network->name);
+
+		network->best_bss = bss;
+
+		if (network->signal != bss->signal) {
+			SUPPLICANT_DBG("New network signal %d dBm",
+						bss->signal);
+
+			network->signal = bss->signal;
+			callback_network_changed(network, "Signal");
+		}
+	}
+
+	/*
+	 * wpa_s could notify about CurrentBSS in any state once
+	 * it got associated. It is not sure such notification will
+	 * arrive together with transition to ASSOCIATED state.
+	 * In fact, for networks with security WEP or OPEN, it
+	 * always arrives together with transition to COMPLETED.
+	 */
+	switch (interface->state) {
+	case G_SUPPLICANT_STATE_UNKNOWN:
+	case G_SUPPLICANT_STATE_DISABLED:
+	case G_SUPPLICANT_STATE_DISCONNECTED:
+	case G_SUPPLICANT_STATE_INACTIVE:
+	case G_SUPPLICANT_STATE_SCANNING:
+	case G_SUPPLICANT_STATE_AUTHENTICATING:
+	case G_SUPPLICANT_STATE_ASSOCIATING:
+		return;
+	case G_SUPPLICANT_STATE_ASSOCIATED:
+	case G_SUPPLICANT_STATE_4WAY_HANDSHAKE:
+	case G_SUPPLICANT_STATE_GROUP_HANDSHAKE:
+	case G_SUPPLICANT_STATE_COMPLETED:
+		callback_network_associated(network);
+		break;
+	}
+}
+
 static void interface_bss_removed(DBusMessageIter *iter, void *user_data)
 {
 	GSupplicantInterface *interface = user_data;
@@ -2259,7 +2345,7 @@ static void interface_property(const char *key, DBusMessageIter *iter,
 				g_strdup(interface->ifname), g_strdup(str));
 		}
 	} else if (g_strcmp0(key, "CurrentBSS") == 0) {
-		interface_bss_added_without_keys(iter, interface);
+		interface_current_bss(interface, iter);
 	} else if (g_strcmp0(key, "CurrentNetwork") == 0) {
 		interface_network_added(iter, interface);
 	} else if (g_strcmp0(key, "BSSs") == 0) {
@@ -2694,6 +2780,10 @@ static void signal_bss_changed(const char *path, DBusMessageIter *iter)
 
 		return;
 	}
+
+	/* Consider only property changes of the connected BSS */
+	if (network == interface->current_network && bss != network->best_bss)
+		return;
 
 	if (bss->signal == network->signal)
 		return;
@@ -4846,6 +4936,8 @@ int g_supplicant_interface_connect(GSupplicantInterface *interface,
 	struct interface_connect_data *data;
 	struct interface_data *intf_data;
 	int ret = 0;
+
+	SUPPLICANT_DBG("");
 
 	if (!interface)
 		return -EINVAL;

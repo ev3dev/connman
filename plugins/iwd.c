@@ -203,7 +203,6 @@ static void update_network_connected(struct iwd_network *iwdn)
 static void update_network_disconnected(struct iwd_network *iwdn)
 {
 	DBG("interface name %s", iwdn->name);
-	connman_network_set_connectable(iwdn->network, false);
 	connman_network_set_connected(iwdn->network, false);
 }
 
@@ -243,7 +242,6 @@ static int cm_network_connect(struct connman_network *network)
 			g_strdup(iwdn->path), g_free))
 		return -EIO;
 
-	connman_network_set_connectable(iwdn->network, true);
 	connman_network_set_associating(iwdn->network, true);
 
 	return -EINPROGRESS;
