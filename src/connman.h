@@ -680,6 +680,8 @@ struct connman_ipconfig *__connman_service_get_ip6config(
 				struct connman_service *service);
 struct connman_ipconfig *__connman_service_get_ipconfig(
 				struct connman_service *service, int family);
+void __connman_service_notify_ipv4_configuration(
+				struct connman_service *service);
 bool __connman_service_is_connected_state(struct connman_service *service,
 					enum connman_ipconfig_type type);
 const char *__connman_service_get_ident(struct connman_service *service);

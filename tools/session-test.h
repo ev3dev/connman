@@ -68,12 +68,6 @@ void util_session_cleanup(struct test_session *session);
 
 typedef void (* notify_func_t) (struct test_session *session);
 
-enum connman_session_state {
-	CONNMAN_SESSION_STATE_DISCONNECTED   = 0,
-	CONNMAN_SESSION_STATE_CONNECTED      = 1,
-	CONNMAN_SESSION_STATE_ONLINE         = 2,
-};
-
 struct test_session_info {
 	enum connman_session_state state;
 	char *name;

@@ -38,12 +38,6 @@ static GHashTable *service_hash;
 static struct connman_session *ecall_session;
 static uint32_t session_mark = 256;
 
-enum connman_session_state {
-	CONNMAN_SESSION_STATE_DISCONNECTED   = 0,
-	CONNMAN_SESSION_STATE_CONNECTED      = 1,
-	CONNMAN_SESSION_STATE_ONLINE         = 2,
-};
-
 struct session_info {
 	struct connman_session_config config;
 	enum connman_session_state state;
@@ -440,6 +434,11 @@ static void add_nat_rules(struct connman_session *session)
 	}
 
 	g_free(ifname);
+}
+
+uint32_t connman_session_firewall_get_fwmark(struct connman_session *session)
+{
+	return session->mark;
 }
 
 static void cleanup_routing_table(struct connman_session *session)
@@ -1685,6 +1684,10 @@ static void update_session_state(struct connman_session *session)
 	del_nat_rules(session);
 	update_routing_table(session);
 	add_nat_rules(session);
+
+	if (policy && policy->update_session_state)
+		policy->update_session_state(session, state);
+
 	session_notify(session);
 }
 
@@ -1738,6 +1741,7 @@ static bool is_session_connected(struct connman_session *session,
 	case CONNMAN_SERVICE_STATE_READY:
 		if (session->info->config.type == CONNMAN_SESSION_TYPE_INTERNET)
 			return false;
+		/* fall through */
 	case CONNMAN_SERVICE_STATE_ONLINE:
 		return true;
 	}
@@ -1752,6 +1756,40 @@ static void session_activate(struct connman_session *session)
 
 	if (!service_hash)
 		return;
+
+	if (policy && policy->get_service_for_session) {
+		struct connman_service *service;
+		struct connman_service_info *info;
+		GSList *service_list = NULL;
+		enum connman_service_state state = CONNMAN_SESSION_STATE_DISCONNECTED;
+
+		g_hash_table_iter_init(&iter, service_hash);
+
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			struct connman_service_info *info = value;
+			state = __connman_service_get_state(info->service);
+
+			if (is_session_connected(session, state))
+				service_list = g_slist_prepend(service_list,
+							       info->service);
+		}
+
+		service_list = g_slist_reverse(service_list);
+		service = policy->get_service_for_session(session, service_list);
+
+		if (service) {
+			info = g_hash_table_lookup(service_hash, service);
+			DBG("session %p add service %p", session, info->service);
+
+			info->sessions = g_slist_prepend(info->sessions,
+							session);
+			session->service = info->service;
+			update_session_state(session);
+		}
+
+		g_slist_free(service_list);
+		return;
+	}
 
 	g_hash_table_iter_init(&iter, service_hash);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {

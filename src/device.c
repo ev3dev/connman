@@ -384,6 +384,9 @@ static void device_destruct(struct connman_device *device)
 
 	clear_pending_trigger(device);
 
+	g_hash_table_destroy(device->networks);
+	device->networks = NULL;
+
 	g_free(device->ident);
 	g_free(device->node);
 	g_free(device->name);
@@ -392,9 +395,6 @@ static void device_destruct(struct connman_device *device)
 	g_free(device->path);
 
 	g_free(device->last_network);
-
-	g_hash_table_destroy(device->networks);
-	device->networks = NULL;
 
 	g_free(device);
 }
@@ -671,8 +671,7 @@ static void mark_network_unavailable(gpointer key, gpointer value,
 	struct connman_network *network = value;
 
 	if (connman_network_get_connected(network) ||
-			connman_network_get_connecting(network) ||
-			connman_network_get_connectable(network))
+			connman_network_get_connecting(network))
 		return;
 
 	connman_network_set_available(network, false);
@@ -687,9 +686,6 @@ static gboolean remove_unavailable_network(gpointer key, gpointer value,
 		return FALSE;
 
 	if (connman_network_get_available(network))
-		return FALSE;
-
-	if (connman_network_get_connectable(network))
 		return FALSE;
 
 	return TRUE;

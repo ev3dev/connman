@@ -384,9 +384,9 @@ static int add_cmp(struct nftnl_rule *rule, uint32_t sreg, uint32_t op,
         if (!expr)
                 return -ENOMEM;
 
-        nftnl_expr_set_u32(expr, NFT_EXPR_CMP_SREG, sreg);
-        nftnl_expr_set_u32(expr, NFT_EXPR_CMP_OP, op);
-        nftnl_expr_set(expr, NFT_EXPR_CMP_DATA, data, data_len);
+        nftnl_expr_set_u32(expr, NFTNL_EXPR_CMP_SREG, sreg);
+        nftnl_expr_set_u32(expr, NFTNL_EXPR_CMP_OP, op);
+        nftnl_expr_set(expr, NFTNL_EXPR_CMP_DATA, data, data_len);
 
         nftnl_rule_add_expr(rule, expr);
 
@@ -572,8 +572,8 @@ static int build_rule_nat(const char *address, unsigned char prefixlen,
 	expr = nftnl_expr_alloc("meta");
 	if (!expr)
 		goto err;
-	nftnl_expr_set_u32(expr, NFT_EXPR_META_KEY, NFT_META_OIFNAME);
-	nftnl_expr_set_u32(expr, NFT_EXPR_META_DREG, NFT_REG_1);
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_KEY, NFT_META_OIFNAME);
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_DREG, NFT_REG_1);
 	nftnl_rule_add_expr(rule, expr);
 	err = add_cmp(rule, NFT_REG_1, NFT_CMP_EQ, interface,
 			strlen(interface) + 1);
@@ -674,8 +674,8 @@ static int build_rule_snat(int index, const char *address,
 	expr = nftnl_expr_alloc("meta");
 	if (!expr)
 		goto err;
-	nftnl_expr_set_u32(expr, NFT_EXPR_META_KEY, NFT_META_OIF);
-	nftnl_expr_set_u32(expr, NFT_EXPR_META_DREG, NFT_REG_1);
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_KEY, NFT_META_OIF);
+	nftnl_expr_set_u32(expr, NFTNL_EXPR_META_DREG, NFT_REG_1);
 	nftnl_rule_add_expr(rule, expr);
 	err = add_cmp(rule, NFT_REG_1, NFT_CMP_EQ, &index, sizeof(index));
 	if (err < 0)

@@ -838,7 +838,7 @@ static struct cache_entry *cache_check(gpointer request, int *qtype, int proto)
 static int get_name(int counter,
 		unsigned char *pkt, unsigned char *start, unsigned char *max,
 		unsigned char *output, int output_max, int *output_len,
-		unsigned char **end, char *name, int *name_len)
+		unsigned char **end, char *name, size_t max_name, int *name_len)
 {
 	unsigned char *p;
 
@@ -859,7 +859,7 @@ static int get_name(int counter,
 
 			return get_name(counter + 1, pkt, pkt + offset, max,
 					output, output_max, output_len, end,
-					name, name_len);
+					name, max_name, name_len);
 		} else {
 			unsigned label_len = *p;
 
@@ -867,6 +867,9 @@ static int get_name(int counter,
 				return -ENOBUFS;
 
 			if (*output_len > output_max)
+				return -ENOBUFS;
+
+			if ((*name_len + 1 + label_len + 1) > max_name)
 				return -ENOBUFS;
 
 			/*
@@ -900,14 +903,14 @@ static int parse_rr(unsigned char *buf, unsigned char *start,
 			unsigned char *response, unsigned int *response_size,
 			uint16_t *type, uint16_t *class, int *ttl, int *rdlen,
 			unsigned char **end,
-			char *name)
+			char *name, size_t max_name)
 {
 	struct domain_rr *rr;
 	int err, offset;
 	int name_len = 0, output_len = 0, max_rsp = *response_size;
 
 	err = get_name(0, buf, start, max, response, max_rsp,
-		&output_len, end, name, &name_len);
+			&output_len, end, name, max_name, &name_len);
 	if (err < 0)
 		return err;
 
@@ -1033,7 +1036,8 @@ static int parse_response(unsigned char *buf, int buflen,
 		memset(rsp, 0, sizeof(rsp));
 
 		ret = parse_rr(buf, ptr, buf + buflen, rsp, &rsp_len,
-			type, class, ttl, &rdlen, &next, name);
+			type, class, ttl, &rdlen, &next, name,
+			sizeof(name) - 1);
 		if (ret != 0) {
 			err = ret;
 			goto out;
@@ -1099,7 +1103,7 @@ static int parse_response(unsigned char *buf, int buflen,
 			 */
 			ret = get_name(0, buf, next - rdlen, buf + buflen,
 					rsp, rsp_len, &output_len, &end,
-					name, &name_len);
+					name, sizeof(name) - 1, &name_len);
 			if (ret != 0) {
 				/* just ignore the error at this point */
 				ptr = next;
