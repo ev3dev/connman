@@ -57,6 +57,13 @@ enum vpn_provider_error {
 	VPN_PROVIDER_ERROR_AUTH_FAILED	= 3,
 };
 
+enum vpn_provider_route_type {
+	VPN_PROVIDER_ROUTE_TYPE_NONE = 0,
+	VPN_PROVIDER_ROUTE_TYPE_MASK = 1,
+	VPN_PROVIDER_ROUTE_TYPE_ADDR = 2,
+	VPN_PROVIDER_ROUTE_TYPE_GW   = 3,
+};
+
 struct vpn_provider;
 struct connman_ipaddress;
 
@@ -134,6 +141,9 @@ struct vpn_provider_driver {
 	int (*save) (struct vpn_provider *provider, GKeyFile *keyfile);
 	int (*set_state)(struct vpn_provider *provider,
 						enum vpn_provider_state state);
+	int (*route_env_parse) (struct vpn_provider *provider, const char *key,
+			int *family, unsigned long *idx,
+			enum vpn_provider_route_type *type);
 };
 
 int vpn_provider_driver_register(struct vpn_provider_driver *driver);

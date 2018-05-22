@@ -63,6 +63,8 @@ static const char *status2str(GResolvResultStatus status)
 		return "not implemented";
 	case G_RESOLV_RESULT_STATUS_REFUSED:
 		return "refused";
+	case G_RESOLV_RESULT_STATUS_NO_ANSWER:
+		return "no answer";
 	}
 
 	return NULL;

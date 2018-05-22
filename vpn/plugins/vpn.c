@@ -133,6 +133,10 @@ void vpn_died(struct connman_task *task, int exit_code, void *user_data)
 	if (!data)
 		goto vpn_exit;
 
+	/* The task may die after we have already started the new one */
+	if (data->task != task)
+		goto done;
+
 	state = data->state;
 
 	stop_vpn(provider);
@@ -172,6 +176,7 @@ vpn_exit:
 		g_free(data);
 	}
 
+done:
 	connman_task_destroy(task);
 }
 
@@ -585,6 +590,26 @@ static int vpn_save(struct vpn_provider *provider, GKeyFile *keyfile)
 	return 0;
 }
 
+static int vpn_route_env_parse(struct vpn_provider *provider, const char *key,
+			int *family, unsigned long *idx,
+			enum vpn_provider_route_type *type)
+{
+	struct vpn_driver_data *vpn_driver_data = NULL;
+	const char *name = NULL;
+
+	if (!provider)
+		return -EINVAL;
+
+	name = vpn_provider_get_driver_name(provider);
+	vpn_driver_data = g_hash_table_lookup(driver_hash, name);
+
+	if (vpn_driver_data && vpn_driver_data->vpn_driver->route_env_parse)
+		return vpn_driver_data->vpn_driver->route_env_parse(provider, key,
+			family, idx, type);
+
+	return 0;
+}
+
 int vpn_register(const char *name, struct vpn_driver *vpn_driver,
 			const char *program)
 {
@@ -606,6 +631,7 @@ int vpn_register(const char *name, struct vpn_driver *vpn_driver,
 	data->provider_driver.remove = vpn_remove;
 	data->provider_driver.save = vpn_save;
 	data->provider_driver.set_state = vpn_set_state;
+	data->provider_driver.route_env_parse = vpn_route_env_parse;
 
 	if (!driver_hash)
 		driver_hash = g_hash_table_new_full(g_str_hash,

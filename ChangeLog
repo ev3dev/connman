@@ -1,3 +1,20 @@
+ver 1.36:
+	Fix issue with DNS short response on error handling.
+	Fix issue with handling incoming DNS requests.
+	Fix issue with handling empty timeserver list.
+	Fix issue with incorrect DHCP byte order.
+	Fix issue with AllowDomainnameUpdates handling.
+	Fix issue with IPv4 link-local IP conflict error.
+	Fix issue with handling WISPr over TLS connections.
+	Fix issue with WiFi background scanning handling.
+	Fix issue with WiFi disconnect+connect race condition.
+	Fix issue with WiFi scanning and tethering operation.
+	Fix issue with WiFi security change handling.
+	Fix issue with missing signal for WPS changes.
+	Fix issue with online check retry handling.
+	Add support for systemd-resolved backend.
+	Add support for mDNS configuration setup.
+
 ver 1.35:
 	Fix issue with malformed DNS response handling.
 	Fix issue with routing and disabled online check.

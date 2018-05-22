@@ -1301,10 +1301,13 @@ static void remove_all_contexts(struct modem_data *modem)
 	if (modem->context_list == NULL)
 		return;
 
-	for (list = modem->context_list; list; list = list->next) {
+	list = modem->context_list;
+	while (list) {
 		struct network_context *context = list->data;
 
 		remove_cm_context(modem, context);
+
+		list = modem->context_list;
 	}
 	g_slist_free(modem->context_list);
 	modem->context_list = NULL;

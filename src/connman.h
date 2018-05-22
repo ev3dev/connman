@@ -240,7 +240,11 @@ int __connman_inet_rtnl_addattr32(struct nlmsghdr *n, size_t maxlen,
 int __connman_inet_add_fwmark_rule(uint32_t table_id, int family, uint32_t fwmark);
 int __connman_inet_del_fwmark_rule(uint32_t table_id, int family, uint32_t fwmark);
 int __connman_inet_add_default_to_table(uint32_t table_id, int ifindex, const char *gateway);
+int __connman_inet_add_subnet_to_table(uint32_t table_id, int ifindex,
+			const char *gateway, unsigned char prefixlen);
 int __connman_inet_del_default_from_table(uint32_t table_id, int ifindex, const char *gateway);
+int __connman_inet_del_subnet_from_table(uint32_t table_id, int ifindex,
+			const char *gateway, unsigned char prefixlen);
 int __connman_inet_get_address_netmask(int ifindex,
 		struct sockaddr_in *address, struct sockaddr_in *netmask);
 
@@ -255,6 +259,7 @@ void __connman_resolver_append_fallback_nameservers(void);
 int __connman_resolvfile_append(int index, const char *domain, const char *server);
 int __connman_resolvfile_remove(int index, const char *domain, const char *server);
 int __connman_resolver_redo_servers(int index);
+int __connman_resolver_set_mdns(int index, bool enabled);
 
 GKeyFile *__connman_storage_open_global(void);
 GKeyFile *__connman_storage_load_global(void);
@@ -443,7 +448,6 @@ GSList *__connman_timeserver_add_list(GSList *server_list,
 		const char *timeserver);
 GSList *__connman_timeserver_get_all(struct connman_service *service);
 int __connman_timeserver_sync(struct connman_service *service);
-void __connman_timeserver_sync_next();
 
 enum __connman_dhcpv6_status {
 	CONNMAN_DHCPV6_STATUS_FAIL     = 0,
@@ -498,7 +502,9 @@ int __connman_connection_get_vpn_index(int phy_index);
 
 bool __connman_connection_update_gateway(void);
 
-int __connman_ntp_start(char *server);
+typedef void (*__connman_ntp_cb_t) (bool success, void *user_data);
+int __connman_ntp_start(char *server, __connman_ntp_cb_t callback,
+			void *user_data);
 void __connman_ntp_stop();
 
 int __connman_wpad_init(void);
@@ -560,6 +566,7 @@ int __connman_device_request_hidden_scan(struct connman_device *device,
 				const char *ssid, unsigned int ssid_len,
 				const char *identity, const char *passphrase,
 				const char *security, void *user_data);
+void __connman_device_stop_scan(enum connman_service_type type);
 
 bool __connman_device_isfiltered(const char *devname);
 
@@ -682,6 +689,8 @@ struct connman_ipconfig *__connman_service_get_ipconfig(
 				struct connman_service *service, int family);
 void __connman_service_notify_ipv4_configuration(
 				struct connman_service *service);
+void __connman_service_wispr_start(struct connman_service *service,
+                                enum connman_ipconfig_type type);
 bool __connman_service_is_connected_state(struct connman_service *service,
 					enum connman_ipconfig_type type);
 const char *__connman_service_get_ident(struct connman_service *service);
@@ -704,6 +713,8 @@ int __connman_service_set_ignore(struct connman_service *service,
 						bool ignore);
 void __connman_service_set_search_domains(struct connman_service *service,
 					char **domains);
+int __connman_service_set_mdns(struct connman_service *service,
+					bool enabled);
 
 void __connman_service_set_string(struct connman_service *service,
 					const char *key, const char *value);
@@ -948,6 +959,7 @@ int __connman_dnsproxy_add_listener(int index);
 void __connman_dnsproxy_remove_listener(int index);
 int __connman_dnsproxy_append(int index, const char *domain, const char *server);
 int __connman_dnsproxy_remove(int index, const char *domain, const char *server);
+int __connman_dnsproxy_set_mdns(int index, bool enabled);
 
 int __connman_6to4_probe(struct connman_service *service);
 void __connman_6to4_remove(struct connman_ipconfig *ipconfig);

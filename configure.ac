@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(connman, 1.35)
+AC_INIT(connman, 1.36)
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -230,9 +230,9 @@ AC_SUBST(DBUS_LIBS)
 
 AC_ARG_WITH(dbusconfdir, AC_HELP_STRING([--with-dbusconfdir=PATH],
 	[path to D-Bus config directory]), [path_dbusconf=${withval}],
-		[path_dbusconf="`$PKG_CONFIG --variable=sysconfdir dbus-1`"])
+		[path_dbusconf="`$PKG_CONFIG --variable=datadir dbus-1`"])
 if (test -z "${path_dbusconf}"); then
-	DBUS_CONFDIR="${sysconfdir}/dbus-1/system.d"
+	DBUS_CONFDIR="${datadir}/dbus-1/system.d"
 else
 	DBUS_CONFDIR="${path_dbusconf}/dbus-1/system.d"
 fi
@@ -380,6 +380,11 @@ AC_ARG_ENABLE(tools, AC_HELP_STRING([--disable-tools],
 					[enable_tools=${enableval}])
 AM_CONDITIONAL(TOOLS, test "${enable_tools}" != "no")
 
+AC_ARG_ENABLE(stats, AC_HELP_STRING([--disable-stats],
+				[disable statistics round robin file generation]),
+					[enable_stats=${enableval}])
+AM_CONDITIONAL(STATS, test "${enable_stats}" != "no")
+
 if (test "${enable_tools}" != "no"); then
 	AC_PATH_PROGS(IPTABLES_SAVE, [iptables-save], [],
 						$PATH:/sbin:/usr/sbin)
@@ -432,5 +437,19 @@ AM_CONDITIONAL(VPN, test "${enable_openconnect}" != "no" -o \
 			"${enable_vpnc}" != "no" -o \
 			"${enable_l2tp}" != "no" -o \
 			"${enable_pptp}" != "no")
+
+AC_MSG_CHECKING(which DNS backend to use)
+AC_ARG_WITH(dns-backend, AC_HELP_STRING([--with-dns-backend=TYPE],
+            [specify which DNS backend to use: internal or systemd-resolved [default=internal]]),
+		[dns_backend=${withval}],
+		[dns_backend="internal"])
+
+if (test "${dns_backend}" != "internal" -a \
+		"${dns_backend}" != "systemd-resolved"); then
+	AC_MSG_ERROR(no suitable DNS backend defined)
+fi
+AM_CONDITIONAL(INTERNAL_DNS_BACKEND, test "${dns_backend}" = "internal")
+AM_CONDITIONAL(SYSTEMD_RESOLVED_DNS_BACKEND, test "${dns_backend}" = "systemd-resolved")
+AC_MSG_RESULT(${dns_backend})
 
 AC_OUTPUT(Makefile include/version.h connman.pc)

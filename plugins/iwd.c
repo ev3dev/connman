@@ -484,17 +484,53 @@ static void update_signal_strength(struct iwd_device *iwdd)
 		DBG("GetOrderedNetworks() failed");
 }
 
+static const char *security_remap(const char *security)
+{
+	if (!g_strcmp0(security, "open"))
+		return "none";
+	else if (!g_strcmp0(security, "psk"))
+		return "psk";
+	else if (!g_strcmp0(security, "8021x"))
+		return "ieee8021x";
+
+	return "unknown";
+}
+
+static char *create_identifier(const char *path, const char *security)
+{
+	char *start, *end, *identifier;
+	char *_path = g_strdup(path);
+
+	/*
+	 * _path is something like
+	 *     /0/4/5363686970686f6c5f427573696e6573735f454150_8021x
+	 */
+	start = strrchr(_path, '/');
+	start++;
+	end = strchr(start, '_');
+	*end = '\0';
+
+	/*
+	 * Create an ident which is identical to the corresponding
+	 * wpa_supplicant identifier.
+	 */
+	identifier = g_strdup_printf("%s_managed_%s", start,
+				security_remap(security));
+	g_free(_path);
+
+	return identifier;
+}
+
 static void add_network(const char *path, struct iwd_network *iwdn)
 {
 	struct iwd_device *iwdd;
-	const char *identifier;
+	char *identifier;
 
 	iwdd = g_hash_table_lookup(devices, iwdn->device);
 	if (!iwdd)
 		return;
 
-	identifier = strrchr(path, '/');
-	identifier++; /* strip leading slash as well */
+	identifier = create_identifier(path, iwdn->type);
 	iwdn->network = connman_network_create(identifier,
 					CONNMAN_NETWORK_TYPE_WIFI);
 	connman_network_set_data(iwdn->network, iwdn);
@@ -504,6 +540,7 @@ static void add_network(const char *path, struct iwd_network *iwdn)
 					strlen(iwdn->name));
 	connman_network_set_string(iwdn->network, "WiFi.Security",
 					iwdn->type);
+	connman_network_set_string(iwdn->network, "WiFi.Mode", "managed");
 
 	if (connman_device_add_network(iwdd->device, iwdn->network) < 0) {
 		connman_network_unref(iwdn->network);
@@ -514,6 +551,8 @@ static void add_network(const char *path, struct iwd_network *iwdn)
 
 	connman_network_set_available(iwdn->network, true);
 	connman_network_set_group(iwdn->network, identifier);
+
+	g_free(identifier);
 }
 
 static void remove_network(struct iwd_network *iwdn)

@@ -1,2 +1,2 @@
 d	@runstatedir@/connman	- - - -
-L+	/etc/resolv.conf	- - - -	@runstatedir@/connman/resolv.conf
+L	/etc/resolv.conf	- - - -	@runstatedir@/connman/resolv.conf

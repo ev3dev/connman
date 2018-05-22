@@ -343,16 +343,8 @@ static void firewall_add_rule(struct firewall_context *ctx,
 
 static void firewall_remove_rules(struct firewall_context *ctx)
 {
-	struct fw_rule *rule;
-	GList *list;
-
-	for (list = g_list_last(ctx->rules); list;
-			list = g_list_previous(list)) {
-		rule = list->data;
-
-		ctx->rules = g_list_remove(ctx->rules, rule);
-		cleanup_fw_rule(rule);
-	}
+	g_list_free_full(ctx->rules, cleanup_fw_rule);
+	ctx->rules = NULL;
 }
 
 static int firewall_enable_rules(struct firewall_context *ctx)
@@ -399,14 +391,12 @@ int __connman_firewall_enable_nat(struct firewall_context *ctx,
 				char *address, unsigned char prefixlen,
 				char *interface)
 {
-	char *cmd;
 	int err;
 
-	cmd = g_strdup_printf("-s %s/%d -o %s -j MASQUERADE",
-					address, prefixlen, interface);
+	firewall_add_rule(ctx, "nat", "POSTROUTING",
+				"-s %s/%d -o %s -j MASQUERADE",
+				address, prefixlen, interface);
 
-	firewall_add_rule(ctx, "nat", "POSTROUTING", cmd);
-	g_free(cmd);
 	err = firewall_enable_rules(ctx);
 	if (err)
 		firewall_remove_rules(ctx);

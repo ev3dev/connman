@@ -470,11 +470,36 @@ static int ov_device_flags(struct vpn_provider *provider)
 	return IFF_TUN;
 }
 
+static int ov_route_env_parse(struct vpn_provider *provider, const char *key,
+		int *family, unsigned long *idx, enum vpn_provider_route_type *type)
+{
+	char *end;
+	const char *start;
+
+	if (g_str_has_prefix(key, "route_network_")) {
+		start = key + strlen("route_network_");
+		*type = VPN_PROVIDER_ROUTE_TYPE_ADDR;
+	} else if (g_str_has_prefix(key, "route_netmask_")) {
+		start = key + strlen("route_netmask_");
+		*type = VPN_PROVIDER_ROUTE_TYPE_MASK;
+	} else if (g_str_has_prefix(key, "route_gateway_")) {
+		start = key + strlen("route_gateway_");
+		*type = VPN_PROVIDER_ROUTE_TYPE_GW;
+	} else
+		return -EINVAL;
+
+	*family = AF_INET;
+	*idx = g_ascii_strtoull(start, &end, 10);
+
+	return 0;
+}
+
 static struct vpn_driver vpn_driver = {
 	.notify	= ov_notify,
 	.connect	= ov_connect,
 	.save		= ov_save,
 	.device_flags = ov_device_flags,
+	.route_env_parse = ov_route_env_parse,
 };
 
 static int openvpn_init(void)

@@ -1423,6 +1423,9 @@ static int ipv4ll_recv_arp_packet(GDHCPClient *dhcp_client)
 			arp.arp_op != htons(ARPOP_REQUEST))
 		return -EINVAL;
 
+	if (memcmp(arp.arp_sha, dhcp_client->mac_address, ETH_ALEN) == 0)
+		return 0;
+
 	ip_requested = htonl(dhcp_client->requested_ip);
 	source_conflict = !memcmp(arp.arp_spa, &ip_requested,
 						sizeof(ip_requested));

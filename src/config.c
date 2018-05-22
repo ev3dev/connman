@@ -72,6 +72,7 @@ struct connman_config_service {
 	char *ipv6_gateway;
 	char *ipv6_privacy;
 	char *mac;
+	bool mdns;
 	char **nameservers;
 	char **search_domains;
 	char **timeservers;
@@ -112,6 +113,7 @@ static bool cleanup = false;
 #define SERVICE_KEY_PASSPHRASE         "Passphrase"
 #define SERVICE_KEY_SECURITY           "Security"
 #define SERVICE_KEY_HIDDEN             "Hidden"
+#define SERVICE_KEY_MDNS               "mDNS"
 
 #define SERVICE_KEY_IPv4               "IPv4"
 #define SERVICE_KEY_IPv6               "IPv6"
@@ -152,6 +154,7 @@ static const char *service_possible_keys[] = {
 	SERVICE_KEY_IPv6,
 	SERVICE_KEY_IPv6_PRIVACY,
 	SERVICE_KEY_MAC,
+	SERVICE_KEY_MDNS,
 	SERVICE_KEY_NAMESERVERS,
 	SERVICE_KEY_SEARCH_DOMAINS,
 	SERVICE_KEY_TIMESERVERS,
@@ -514,6 +517,9 @@ static bool load_service_generic(GKeyFile *keyfile,
 			g_strfreev(strlist);
 	}
 
+	service->mdns = __connman_config_get_bool(keyfile, group,
+						SERVICE_KEY_MDNS, NULL);
+
 	return true;
 
 err:
@@ -564,8 +570,8 @@ static bool load_service(GKeyFile *keyfile, const char *group,
 		g_free(service->type);
 		service->type = str;
 	} else {
-		DBG("Type of the configured service is missing for group %s",
-									group);
+		connman_warn("Type of the configured service is missing "
+			"for group %s",	group);
 		goto err;
 	}
 
@@ -802,8 +808,11 @@ static bool load_service_from_keyfile(GKeyFile *keyfile,
 	groups = g_key_file_get_groups(keyfile, NULL);
 
 	for (i = 0; groups[i]; i++) {
-		if (!g_str_has_prefix(groups[i], "service_"))
+		if (!g_str_has_prefix(groups[i], "service_")) {
+			connman_warn("Ignore group named '%s' because prefix "
+				"is not 'service_'", groups[i]);
 			continue;
+		}
 		if (load_service(keyfile, groups[i], config))
 			found = true;
 	}
@@ -1209,10 +1218,8 @@ static int try_provision_service(struct connman_config_service *config,
 
 		ssid = connman_network_get_blob(network, "WiFi.SSID",
 						&ssid_len);
-		if (!ssid) {
-			connman_error("Network SSID not set");
-			return -EINVAL;
-		}
+		if (!ssid)
+			return -ENOENT;
 
 		if (!config->ssid || ssid_len != config->ssid_len)
 			return -ENOENT;
@@ -1376,6 +1383,8 @@ static int try_provision_service(struct connman_config_service *config,
 	if (config->search_domains)
 		__connman_service_set_search_domains(service,
 						config->search_domains);
+
+	__connman_service_set_mdns(service, config->mdns);
 
 	if (config->timeservers)
 		__connman_service_set_timeservers(service,

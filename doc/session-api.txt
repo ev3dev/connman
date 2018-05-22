@@ -205,3 +205,14 @@ Settings	string State [readonly]
 			a default route. When the source IP rule is enabled,
 			an application can select which session/interface to
 			send traffic on, using bind-before-connect mechanism.
+
+		string ContextIdentifier [readwrite] [experimental]
+
+			The application can provide an identifier for a
+			session. If an application runs several session
+			at the same time, the additional information
+			can be used by ConnMan to assign different
+			bearers according the identifier. For example
+			a web browser creates per tab a session. For
+			each session a different should bearer be
+			assigned.

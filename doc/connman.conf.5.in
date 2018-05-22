@@ -16,8 +16,7 @@ behavior. The location of the file may be changed through use of
 the \fB\-\-config= \fRargument for \fBconnman\fP(8).
 .SH "FILE FORMAT"
 .P
-The configuration file format is key file format.
-It consists of sections (groups) of key-value pairs.
+The configuration file consists of sections (groups) of key-value pairs.
 Lines beginning with a '#' and blank lines are considered comments.
 Sections are started by a header line containing the section enclosed
 in '[' and ']', and ended implicitly by the start of the next section
@@ -43,9 +42,15 @@ user interface designs.
 .TP
 .BI BackgroundScanning=true\ \fR|\fB\ false
 Enable background scanning. Default is true.
-Background scanning will start every 5 minutes unless
-the scan list is empty. In that case, a simple backoff
-mechanism starting from 10s up to 5 minutes will run.
+If wifi is disconnected, the background scanning will follow a simple
+backoff mechanism from 3s up to 5 minutes. Then, it will stay in 5
+minutes unless user specifically asks for scanning through a D-Bus
+call. If so, the mechanism will start again from 3s. This feature
+activates also the background scanning while being connected, which
+is required for roaming on wifi.
+When BackgroundScanning is false, ConnMan will not perform any scan
+regardless of wifi is connected or not, unless it is requested by
+the user through a D-Bus call.
 .TP
 .BI FallbackTimeservers= server\fR[,...]
 List of Fallback timeservers separated by ",".
@@ -98,6 +103,11 @@ Allow connman to change the system hostname. This can
 happen for example if we receive DHCP hostname option.
 Default value is true.
 .TP
+.BI AllowDomainnameUpdates=true\ \fR|\fB\ false
+Allow connman to change the system domainname. This can
+happen for example if we receive DHCP domainname option.
+Default value is true.
+.TP
 .BI SingleConnectedTechnology=true\ \fR|\fB\ false
 Keep only a single connected technology at any time. When a new
 service is connected by the user or a better one is found according
@@ -145,6 +155,11 @@ connectivity is successful. Only then the service will be
 transitioned to ONLINE state.
 If this setting is false, the default service will remain in READY state.
 Default value is true.
+.TP
+.BI AutoConnectRoamingServices=true\ \fR|\fB\ false
+Automatically connect roaming services. This is not recommended unless you know
+you won't have any billing problem.
+Default value is false.
 .SH "EXAMPLE"
 The following example configuration disables hostname updates and enables
 ethernet tethering.
@@ -152,6 +167,7 @@ ethernet tethering.
 .nf
 [General]
 AllowHostnameUpdates = false
+AllowDomainnameUpdates = false
 TetheringTechnologies = ethernet,wifi,bluetooth,gadget
 .fi
 .SH "SEE ALSO"

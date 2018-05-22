@@ -73,12 +73,14 @@ static struct {
 	unsigned int timeout_browserlaunch;
 	char **blacklisted_interfaces;
 	bool allow_hostname_updates;
+	bool allow_domainname_updates;
 	bool single_tech;
 	char **tethering_technologies;
 	bool persistent_tethering_mode;
 	bool enable_6to4;
 	char *vendor_class_id;
 	bool enable_online_check;
+	bool auto_connect_roaming_services;
 } connman_settings  = {
 	.bg_scan = true,
 	.pref_timeservers = NULL,
@@ -90,12 +92,14 @@ static struct {
 	.timeout_browserlaunch = DEFAULT_BROWSER_LAUNCH_TIMEOUT,
 	.blacklisted_interfaces = NULL,
 	.allow_hostname_updates = true,
+	.allow_domainname_updates = true,
 	.single_tech = false,
 	.tethering_technologies = NULL,
 	.persistent_tethering_mode = false,
 	.enable_6to4 = false,
 	.vendor_class_id = NULL,
 	.enable_online_check = true,
+	.auto_connect_roaming_services = false,
 };
 
 #define CONF_BG_SCAN                    "BackgroundScanning"
@@ -108,12 +112,14 @@ static struct {
 #define CONF_TIMEOUT_BROWSERLAUNCH      "BrowserLaunchTimeout"
 #define CONF_BLACKLISTED_INTERFACES     "NetworkInterfaceBlacklist"
 #define CONF_ALLOW_HOSTNAME_UPDATES     "AllowHostnameUpdates"
+#define CONF_ALLOW_DOMAINNAME_UPDATES   "AllowDomainnameUpdates"
 #define CONF_SINGLE_TECH                "SingleConnectedTechnology"
 #define CONF_TETHERING_TECHNOLOGIES      "TetheringTechnologies"
 #define CONF_PERSISTENT_TETHERING_MODE  "PersistentTetheringMode"
 #define CONF_ENABLE_6TO4                "Enable6to4"
 #define CONF_VENDOR_CLASS_ID            "VendorClassID"
 #define CONF_ENABLE_ONLINE_CHECK        "EnableOnlineCheck"
+#define CONF_AUTO_CONNECT_ROAMING_SERVICES "AutoConnectRoamingServices"
 
 static const char *supported_options[] = {
 	CONF_BG_SCAN,
@@ -126,12 +132,14 @@ static const char *supported_options[] = {
 	CONF_TIMEOUT_BROWSERLAUNCH,
 	CONF_BLACKLISTED_INTERFACES,
 	CONF_ALLOW_HOSTNAME_UPDATES,
+	CONF_ALLOW_DOMAINNAME_UPDATES,
 	CONF_SINGLE_TECH,
 	CONF_TETHERING_TECHNOLOGIES,
 	CONF_PERSISTENT_TETHERING_MODE,
 	CONF_ENABLE_6TO4,
 	CONF_VENDOR_CLASS_ID,
 	CONF_ENABLE_ONLINE_CHECK,
+	CONF_AUTO_CONNECT_ROAMING_SERVICES,
 	NULL
 };
 
@@ -363,6 +371,14 @@ static void parse_config(GKeyFile *config)
 	g_clear_error(&error);
 
 	boolean = __connman_config_get_bool(config, "General",
+					CONF_ALLOW_DOMAINNAME_UPDATES,
+					&error);
+	if (!error)
+		connman_settings.allow_domainname_updates = boolean;
+
+	g_clear_error(&error);
+
+	boolean = __connman_config_get_bool(config, "General",
 			CONF_SINGLE_TECH, &error);
 	if (!error)
 		connman_settings.single_tech = boolean;
@@ -406,6 +422,13 @@ static void parse_config(GKeyFile *config)
 		if (!boolean)
 			connman_info("Online check disabled by main config.");
 	}
+
+	g_clear_error(&error);
+
+	boolean = __connman_config_get_bool(config, "General",
+				CONF_AUTO_CONNECT_ROAMING_SERVICES, &error);
+	if (!error)
+		connman_settings.auto_connect_roaming_services = boolean;
 
 	g_clear_error(&error);
 }
@@ -571,7 +594,7 @@ static GOptionEntry options[] = {
 				"Don't fork daemon to background" },
 	{ "nodnsproxy", 'r', G_OPTION_FLAG_REVERSE,
 				G_OPTION_ARG_NONE, &option_dnsproxy,
-				"Don't enable DNS Proxy" },
+				"Don't support DNS resolving" },
 	{ "nobacktrace", 0, G_OPTION_FLAG_REVERSE,
 				G_OPTION_ARG_NONE, &option_backtrace,
 				"Don't print out backtrace information" },
@@ -603,6 +626,9 @@ bool connman_setting_get_bool(const char *key)
 	if (g_str_equal(key, CONF_ALLOW_HOSTNAME_UPDATES))
 		return connman_settings.allow_hostname_updates;
 
+	if (g_str_equal(key, CONF_ALLOW_DOMAINNAME_UPDATES))
+		return connman_settings.allow_domainname_updates;
+
 	if (g_str_equal(key, CONF_SINGLE_TECH))
 		return connman_settings.single_tech;
 
@@ -614,6 +640,9 @@ bool connman_setting_get_bool(const char *key)
 
 	if (g_str_equal(key, CONF_ENABLE_ONLINE_CHECK))
 		return connman_settings.enable_online_check;
+
+	if (g_str_equal(key, CONF_AUTO_CONNECT_ROAMING_SERVICES))
+		return connman_settings.auto_connect_roaming_services;
 
 	return false;
 }

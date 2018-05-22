@@ -41,7 +41,6 @@ static guint timer_uplink;
 static guint timer_ra;
 static char *default_interface;
 static GSList *prefixes;
-static GHashTable *timer_hash;
 static void *rs_context;
 
 static int setup_prefix_delegation(struct connman_service *service);
@@ -165,11 +164,6 @@ static void cleanup(void)
 		timer_uplink = 0;
 	}
 
-	if (timer_hash) {
-		g_hash_table_destroy(timer_hash);
-		timer_hash = NULL;
-	}
-
 	if (prefixes) {
 		g_slist_free_full(prefixes, g_free);
 		prefixes = NULL;
@@ -260,13 +254,6 @@ static int setup_prefix_delegation(struct connman_service *service)
 	return err;
 }
 
-static void cleanup_timer(gpointer user_data)
-{
-	guint timer = GPOINTER_TO_UINT(user_data);
-
-	g_source_remove(timer);
-}
-
 static void update_default_interface(struct connman_service *service)
 {
 	setup_prefix_delegation(service);
@@ -332,9 +319,6 @@ int __connman_ipv6pd_setup(const char *bridge)
 		return err;
 
 	bridge_index = connman_inet_ifindex(bridge);
-
-	timer_hash = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-						NULL, cleanup_timer);
 
 	err = __connman_inet_ipv6_start_recv_rs(bridge_index, rs_received,
 						NULL, &rs_context);

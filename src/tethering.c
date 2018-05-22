@@ -31,11 +31,11 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
-#include <linux/sockios.h>
 #include <string.h>
 #include <fcntl.h>
-#include <linux/if_tun.h>
 #include <netinet/in.h>
+#include <linux/sockios.h>
+#include <linux/if_tun.h>
 #include <linux/if_bridge.h>
 
 #include "connman.h"

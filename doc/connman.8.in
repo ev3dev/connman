@@ -88,13 +88,15 @@ Do not daemonize. This is useful for debugging, and directs log output to
 the controlling terminal in addition to syslog.
 .TP
 .BR \-r ", " \-\-nodnsproxy
-Do not act as a DNS proxy. By default ConnMan will direct all DNS traffic
-to itself by setting nameserver to 127.0.0.1 in \fBresolv.conf\fP(5) file.
-If this is not desired and you want that all programs call directly some
-DNS server, then you can use the \fB--nodnsproxy\fP option.
-If this option is used, then ConnMan is not able to cache the DNS queries
-because the DNS traffic is not going through ConnMan and that can cause
-some extra network traffic.
+Do not act as a DNS proxy or support external DNS resolving. Depending
+on how ConnMan is compiled, it will by default direct all DNS traffic
+to itself by setting nameserver to 127.0.0.1 in \fBresolv.conf\fP(5)
+file or leave DNS management to an external entity, such as
+systemd-resolved. If this is not desired and you want that all programs
+call directly some DNS server, then you can use the \fB--nodnsproxy\fP
+option. If this option is used, then ConnMan is not able to cache the
+DNS queries because the DNS traffic is not going through ConnMan and that
+can cause some extra network traffic.
 .SH SEE ALSO
 .BR connmanctl (1), \ connman.conf (5), \ connman-service.config (5), \c
 .BR \ connman-vpn (8)

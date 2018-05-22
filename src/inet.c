@@ -2796,12 +2796,15 @@ int __connman_inet_del_fwmark_rule(uint32_t table_id, int family, uint32_t fwmar
 }
 
 static int iproute_default_modify(int cmd, uint32_t table_id, int ifindex,
-			const char *gateway)
+			const char *gateway, unsigned char prefixlen)
 {
 	struct __connman_inet_rtnl_handle rth;
 	unsigned char buf[sizeof(struct in6_addr)];
 	int ret, len;
 	int family = connman_inet_check_ipaddress(gateway);
+	char *dst = NULL;
+
+	DBG("gateway %s/%u table %u", gateway, prefixlen, table_id);
 
 	switch (family) {
 	case AF_INET:
@@ -2814,7 +2817,19 @@ static int iproute_default_modify(int cmd, uint32_t table_id, int ifindex,
 		return -EINVAL;
 	}
 
-	ret = inet_pton(family, gateway, buf);
+	if (prefixlen) {
+		struct in_addr ipv4_subnet_addr, ipv4_mask;
+
+		memset(&ipv4_subnet_addr, 0, sizeof(ipv4_subnet_addr));
+		ipv4_mask.s_addr = htonl((0xffffffff << (32 - prefixlen)) & 0xffffffff);
+		ipv4_subnet_addr.s_addr = inet_addr(gateway);
+		ipv4_subnet_addr.s_addr &= ipv4_mask.s_addr;
+
+		dst = g_strdup(inet_ntoa(ipv4_subnet_addr));
+	}
+
+	ret = inet_pton(family, dst ? dst : gateway, buf);
+	g_free(dst);
 	if (ret <= 0)
 		return -EINVAL;
 
@@ -2829,9 +2844,11 @@ static int iproute_default_modify(int cmd, uint32_t table_id, int ifindex,
 	rth.req.u.r.rt.rtm_protocol = RTPROT_BOOT;
 	rth.req.u.r.rt.rtm_scope = RT_SCOPE_UNIVERSE;
 	rth.req.u.r.rt.rtm_type = RTN_UNICAST;
+	rth.req.u.r.rt.rtm_dst_len = prefixlen;
 
-	__connman_inet_rtnl_addattr_l(&rth.req.n, sizeof(rth.req), RTA_GATEWAY,
-								buf, len);
+	__connman_inet_rtnl_addattr_l(&rth.req.n, sizeof(rth.req),
+		prefixlen > 0 ? RTA_DST : RTA_GATEWAY, buf, len);
+
 	if (table_id < 256) {
 		rth.req.u.r.rt.rtm_table = table_id;
 	} else {
@@ -2860,7 +2877,14 @@ int __connman_inet_add_default_to_table(uint32_t table_id, int ifindex,
 {
 	/* ip route add default via 1.2.3.4 dev wlan0 table 1234 */
 
-	return iproute_default_modify(RTM_NEWROUTE, table_id, ifindex, gateway);
+	return iproute_default_modify(RTM_NEWROUTE, table_id, ifindex, gateway, 0);
+}
+
+int __connman_inet_add_subnet_to_table(uint32_t table_id, int ifindex,
+						const char *gateway, unsigned char prefixlen)
+{
+	/* ip route add 1.2.3.4/24 dev eth0 table 1234 */
+	return iproute_default_modify(RTM_NEWROUTE, table_id, ifindex, gateway, prefixlen);
 }
 
 int __connman_inet_del_default_from_table(uint32_t table_id, int ifindex,
@@ -2868,7 +2892,14 @@ int __connman_inet_del_default_from_table(uint32_t table_id, int ifindex,
 {
 	/* ip route del default via 1.2.3.4 dev wlan0 table 1234 */
 
-	return iproute_default_modify(RTM_DELROUTE, table_id, ifindex, gateway);
+	return iproute_default_modify(RTM_DELROUTE, table_id, ifindex, gateway, 0);
+}
+
+int __connman_inet_del_subnet_from_table(uint32_t table_id, int ifindex,
+						const char *gateway, unsigned char prefixlen)
+{
+	/* ip route del 1.2.3.4/24 dev eth0 table 1234 */
+	return iproute_default_modify(RTM_DELROUTE, table_id, ifindex, gateway, prefixlen);
 }
 
 int __connman_inet_get_interface_ll_address(int index, int family,
@@ -3003,10 +3034,8 @@ static int get_nfs_server_ip(const char *cmdline_file, const char *pnp_file,
 						  pnp_file, error->message);
 			goto out;
 		}
-	} else {
-		connman_error("%s: File %s doesn't exist\n", __func__, pnp_file);
+	} else
 		goto out;
-	}
 
 	len = strlen(cmdline);
 	if (len <= 1) {

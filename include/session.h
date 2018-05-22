@@ -74,6 +74,7 @@ struct connman_session_config {
 	GSList *allowed_bearers;
 	char *allowed_interface;
 	bool source_ip_rule;
+	char *context_identifier;
 };
 
 typedef int (* connman_session_config_func_t) (struct connman_session *session,

@@ -17,8 +17,7 @@ must end with \fB.config\fP. Each VPN connection requires a provisioning
 file, but multiple connections can be specified in the same file.
 .SH "FILE FORMAT"
 .P
-The configuration file format is key file format.
-It consists of sections (groups) of key-value pairs.
+The configuration file consists of sections (groups) of key-value pairs.
 Lines beginning with a '#' and blank lines are considered comments.
 Sections are started by a header line containing the section enclosed
 in '[' and ']', and ended implicitly by the start of the next section
