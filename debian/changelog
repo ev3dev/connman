@@ -1,3 +1,9 @@
+connman (1.36-1ev3dev1) stable; urgency=medium
+
+  * New upstream version 1.36
+
+ -- David Lechner <david@lechnology.com>  Tue, 22 May 2018 15:10:09 -0500
+
 connman (1.35-1ev3dev1) testing; urgency=medium
 
   * Imported Upstream version 1.35
