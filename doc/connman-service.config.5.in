@@ -18,8 +18,7 @@ eduroam, or for static IPs and so on. Each provisioning file can be
 used for multiple services at once.
 .SH "FILE FORMAT"
 .P
-The configuration file format is key file format.
-It consists of sections (groups) of key-value pairs.
+The configuration file consists of sections (groups) of key-value pairs.
 Lines beginning with a '#' and blank lines are considered comments.
 Sections are started by a header line containing the section enclosed
 in '[' and ']', and ended implicitly by the start of the next section
@@ -96,6 +95,8 @@ configured, \fBpsk\fP if a passphrase is present and \fBnone\fP otherwise.
 If set to \fBtrue\fP, then this AP is hidden. If missing or set to
 \fBfalse\fP, then AP is not hidden.
 .TP
+The following keys are used for WPA EAP (when \fBSecurity=ieee8021x\fP):
+.TP
 .B EAP=tls \fR|\fB ttls \fR|\fB peap
 EAP type to use. Only \fBtls\fP, \fBttls\fP and \fBpeap\fP are supported.
 .TP
@@ -117,6 +118,22 @@ Identity string for EAP.
 .TP
 .BI AnonymousIdentity= identity
 Anonymous identity string for EAP.
+.TP
+.BI SubjectMatch= substring
+Substring to be matched against the subject of the
+authentication server certificate for EAP.
+.TP
+.BI AltSubjectMatch= substring
+Semicolon separated string of entries to be matched against the alternative
+subject name of the authentication server certificate for EAP.
+.TP
+.BI DomainSuffixMatch= domain
+Constraint for server domain name. If set, this FQDN is used as a suffix match
+requirement for the authentication server certificate for EAP.
+.TP
+.BI DomainMatch= domain
+This FQDN is used as a full match requirement for the
+authentication server certificate for EAP.
 .TP
 .BI Phase2= type
 Inner authentication type with for \fBEAP=tls\fP or \fBEAP=ttls\fP. Prefix

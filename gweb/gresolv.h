@@ -44,6 +44,7 @@ typedef enum {
 	G_RESOLV_RESULT_STATUS_NAME_ERROR,
 	G_RESOLV_RESULT_STATUS_NOT_IMPLEMENTED,
 	G_RESOLV_RESULT_STATUS_REFUSED,
+	G_RESOLV_RESULT_STATUS_NO_ANSWER,
 } GResolvResultStatus;
 
 typedef void (*GResolvResultFunc)(GResolvResultStatus status,

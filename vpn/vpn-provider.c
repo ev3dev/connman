@@ -37,6 +37,7 @@
 #include "connman/vpn-dbus.h"
 #include "vpn-provider.h"
 #include "vpn.h"
+#include "plugins/vpn.h"
 
 static DBusConnection *connection;
 static GHashTable *provider_hash;
@@ -2423,61 +2424,18 @@ int vpn_provider_set_nameservers(struct vpn_provider *provider,
 	return 0;
 }
 
-enum provider_route_type {
-	PROVIDER_ROUTE_TYPE_NONE = 0,
-	PROVIDER_ROUTE_TYPE_MASK = 1,
-	PROVIDER_ROUTE_TYPE_ADDR = 2,
-	PROVIDER_ROUTE_TYPE_GW   = 3,
-};
-
 static int route_env_parse(struct vpn_provider *provider, const char *key,
 				int *family, unsigned long *idx,
-				enum provider_route_type *type)
+				enum vpn_provider_route_type *type)
 {
-	char *end;
-	const char *start;
+	if (!provider)
+		return -EINVAL;
 
 	DBG("name %s", provider->name);
 
-	if (!strcmp(provider->type, "openvpn")) {
-		if (g_str_has_prefix(key, "route_network_")) {
-			start = key + strlen("route_network_");
-			*type = PROVIDER_ROUTE_TYPE_ADDR;
-		} else if (g_str_has_prefix(key, "route_netmask_")) {
-			start = key + strlen("route_netmask_");
-			*type = PROVIDER_ROUTE_TYPE_MASK;
-		} else if (g_str_has_prefix(key, "route_gateway_")) {
-			start = key + strlen("route_gateway_");
-			*type = PROVIDER_ROUTE_TYPE_GW;
-		} else
-			return -EINVAL;
-
-		*family = AF_INET;
-		*idx = g_ascii_strtoull(start, &end, 10);
-
-	} else if (!strcmp(provider->type, "openconnect")) {
-		if (g_str_has_prefix(key, "CISCO_SPLIT_INC_")) {
-			*family = AF_INET;
-			start = key + strlen("CISCO_SPLIT_INC_");
-		} else if (g_str_has_prefix(key,
-					"CISCO_IPV6_SPLIT_INC_")) {
-			*family = AF_INET6;
-			start = key + strlen("CISCO_IPV6_SPLIT_INC_");
-		} else
-			return -EINVAL;
-
-		*idx = g_ascii_strtoull(start, &end, 10);
-
-		if (strncmp(end, "_ADDR", 5) == 0)
-			*type = PROVIDER_ROUTE_TYPE_ADDR;
-		else if (strncmp(end, "_MASK", 5) == 0)
-			*type = PROVIDER_ROUTE_TYPE_MASK;
-		else if (strncmp(end, "_MASKLEN", 8) == 0 &&
-				*family == AF_INET6) {
-			*type = PROVIDER_ROUTE_TYPE_MASK;
-		} else
-			return -EINVAL;
-	}
+	if (provider->driver && provider->driver->route_env_parse)
+		return provider->driver->route_env_parse(provider, key, family, idx,
+				type);
 
 	return 0;
 }
@@ -2488,7 +2446,7 @@ int vpn_provider_append_route(struct vpn_provider *provider,
 	struct vpn_route *route;
 	int ret, family = 0;
 	unsigned long idx = 0;
-	enum provider_route_type type = PROVIDER_ROUTE_TYPE_NONE;
+	enum vpn_provider_route_type type = VPN_PROVIDER_ROUTE_TYPE_NONE;
 
 	DBG("key %s value %s", key, value);
 
@@ -2513,15 +2471,15 @@ int vpn_provider_append_route(struct vpn_provider *provider,
 	}
 
 	switch (type) {
-	case PROVIDER_ROUTE_TYPE_NONE:
+	case VPN_PROVIDER_ROUTE_TYPE_NONE:
 		break;
-	case PROVIDER_ROUTE_TYPE_MASK:
+	case VPN_PROVIDER_ROUTE_TYPE_MASK:
 		route->netmask = g_strdup(value);
 		break;
-	case PROVIDER_ROUTE_TYPE_ADDR:
+	case VPN_PROVIDER_ROUTE_TYPE_ADDR:
 		route->network = g_strdup(value);
 		break;
-	case PROVIDER_ROUTE_TYPE_GW:
+	case VPN_PROVIDER_ROUTE_TYPE_GW:
 		route->gateway = g_strdup(value);
 		break;
 	}

@@ -421,7 +421,7 @@ GIOChannel *g_io_channel_gnutls_new(int fd)
 
 	DBG("");
 
-	gnutls_channel = g_new(GIOGnuTLSChannel, 1);
+	gnutls_channel = g_new0(GIOGnuTLSChannel, 1);
 
 	channel = (GIOChannel *) gnutls_channel;
 

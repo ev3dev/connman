@@ -271,10 +271,8 @@ static void get_uid_reply(unsigned int uid, void *user_data, int err)
 
 	DBG("session %p uid %d", policy->session, uid);
 
-	if (err < 0) {
-		cleanup_config(policy);
+	if (err < 0)
 		goto err;
-	}
 
 	pwd = getpwuid((uid_t)uid);
 	if (!pwd) {
@@ -333,7 +331,7 @@ static void get_uid_reply(unsigned int uid, void *user_data, int err)
 	return;
 
 err:
-	failed_create(NULL, cb, cbd->user_data, err);
+	failed_create(policy, cb, cbd->user_data, err);
 	g_free(cbd);
 	g_free(groups);
 }

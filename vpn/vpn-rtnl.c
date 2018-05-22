@@ -879,7 +879,7 @@ static void rtnl_message(void *buf, size_t len)
 		if (!NLMSG_OK(hdr, len))
 			break;
 
-		debug("%s len %d type %d flags 0x%04x seq %d pid %d",
+		debug("%s len %u type %u flags 0x%04x seq %u pid %u",
 					type2string(hdr->nlmsg_type),
 					hdr->nlmsg_len, hdr->nlmsg_type,
 					hdr->nlmsg_flags, hdr->nlmsg_seq,

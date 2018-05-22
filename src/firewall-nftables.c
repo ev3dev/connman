@@ -670,7 +670,7 @@ static int build_rule_snat(int index, const char *address,
 	nftnl_rule_set(rule, NFTNL_RULE_TABLE, CONNMAN_TABLE);
 	nftnl_rule_set(rule, NFTNL_RULE_CHAIN, CONNMAN_CHAIN_NAT_POST);
 
-	/* IOF */
+	/* OIF */
 	expr = nftnl_expr_alloc("meta");
 	if (!expr)
 		goto err;
@@ -1003,7 +1003,7 @@ static int create_table_and_chains(struct nftables_info *nft_info)
 
 	/*
 	 * # nft add chain connman nat-prerouting		\
-	 *	{ type nat hook prerouting priortiy 0 ; }
+	 *	{ type nat hook prerouting priority 0 ; }
 	 */
 	chain = build_chain(CONNMAN_CHAIN_NAT_PRE, CONNMAN_TABLE,
 				"nat", NF_INET_PRE_ROUTING, 0);
@@ -1020,7 +1020,7 @@ static int create_table_and_chains(struct nftables_info *nft_info)
 
 	/*
 	 * # nft add chain connman nat-postrouting		\
-	 *	{ type nat hook postrouting priortiy 0 ; }
+	 *	{ type nat hook postrouting priority 0 ; }
 	 */
 	chain = build_chain(CONNMAN_CHAIN_NAT_POST, CONNMAN_TABLE,
 				"nat", NF_INET_POST_ROUTING, 0);

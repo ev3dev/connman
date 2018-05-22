@@ -63,6 +63,11 @@ Allowed fields:
 - SearchDomains: Comma separated list of DNS search domains
 - Timeservers: Comma separated list of timeservers
 - Domain: Domain name to be used
+- mDNS: Boolean value (true or false). True means that mDNS is enabled.
+  mDNS domains can be resolved and hostname is registered. False means
+  that all mDNS functionality for this service is disabled. Note that
+  not all DNS backends support mDNS: currently systemd-resolved is
+  the only DNS backend with mDNS.
 
 If IPv4 address is missing then DHCP is used. If IPv6 address is missing,
 then SLAAC or DHCPv6 is used.

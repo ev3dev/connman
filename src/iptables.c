@@ -598,6 +598,10 @@ static int iptables_add_chain(struct connman_iptables *table,
 
 	DBG("table %s chain %s", table->name, name);
 
+	/* Do not allow to add duplicate chains */
+	if (find_chain_head(table, name))
+		return -EEXIST;
+
 	last = g_list_last(table->entries);
 
 	/*
@@ -1559,6 +1563,7 @@ static struct option iptables_opts[] = {
 	{.name = "out-interface", .has_arg = 1, .val = 'o'},
 	{.name = "source",        .has_arg = 1, .val = 's'},
 	{.name = "table",         .has_arg = 1, .val = 't'},
+	{.name = "protocol",      .has_arg = 1, .val = 'p'},
 	{NULL},
 };
 
@@ -1721,7 +1726,7 @@ static int parse_ip_and_mask(const char *str, struct in_addr *ip,
 
 	if (tokens[1]) {
 		prefixlength = strtol(tokens[1], NULL, 10);
-		if (prefixlength > 31) {
+		if (prefixlength > 32) {
 			err = -1;
 			goto out;
 		}
@@ -1768,7 +1773,7 @@ struct parse_context {
 	struct xtables_target *xt_t;
 	GList *xt_m;
 	struct xtables_rule_match *xt_rm;
-	int proto;
+	uint16_t proto;
 };
 
 static int prepare_getopt_args(const char *str, struct parse_context *ctx)
@@ -1958,7 +1963,7 @@ static int parse_rule_spec(struct connman_iptables *table,
 	optind = 0;
 
 	while ((c = getopt_long(ctx->argc, ctx->argv,
-					"-:d:i:o:s:m:j:",
+					"-:d:i:o:s:m:j:p:",
 					iptables_globals.opts, NULL)) != -1) {
 		switch (c) {
 		case 's':
@@ -2022,6 +2027,14 @@ static int parse_rule_spec(struct connman_iptables *table,
 			break;
 		case 'p':
 			ctx->proto = xtables_parse_protocol(optarg);
+
+			/*
+			 * If protocol was set add it to ipt_ip.
+			 * xtables_parse_protocol() returns 0 or
+			 * UINT16_MAX (-1) on error
+			 */
+		        if (ctx->proto > 0 && ctx->proto < UINT16_MAX)
+				ctx->ip->proto = ctx->proto;
 			break;
 		case 'j':
 			/* Target */

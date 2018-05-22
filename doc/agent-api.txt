@@ -54,6 +54,8 @@ Methods		void Release()
 			keys are the field names and the values are the
 			actual fields. Alternatively an error indicating that
 			the request got canceled can be returned.
+			OperationAborted will be return on a successfull
+			cancel request.
 
 			Most common return field names are "Name" and of
 			course "Passphrase".

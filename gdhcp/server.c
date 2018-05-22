@@ -396,7 +396,7 @@ GDHCPServer *g_dhcp_server_new(GDHCPType type,
 	dhcp_server->ref_count = 1;
 	dhcp_server->ifindex = ifindex;
 	dhcp_server->listener_sockfd = -1;
-	dhcp_server->listener_watch = -1;
+	dhcp_server->listener_watch = 0;
 	dhcp_server->listener_channel = NULL;
 	dhcp_server->save_lease_func = NULL;
 	dhcp_server->debug_func = NULL;
@@ -691,7 +691,7 @@ static gboolean listener_event(GIOChannel *channel, GIOCondition condition,
 		debug(dhcp_server, "Received REQUEST NIP %d",
 							requested_nip);
 		if (requested_nip == 0) {
-			requested_nip = packet.ciaddr;
+			requested_nip = ntohl(packet.ciaddr);
 			if (requested_nip == 0)
 				break;
 		}

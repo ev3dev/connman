@@ -87,7 +87,7 @@ static void wpad_result(GResolvResultStatus status,
 
 		g_free(url);
 
-		__connman_wispr_start(wpad->service,
+		__connman_service_wispr_start(wpad->service,
 					CONNMAN_IPCONFIG_TYPE_IPV4);
 
 		return;
@@ -119,7 +119,7 @@ failed:
 	connman_service_set_proxy_method(wpad->service,
 				CONNMAN_SERVICE_PROXY_METHOD_DIRECT);
 
-	__connman_wispr_start(wpad->service,
+	__connman_service_wispr_start(wpad->service,
 					CONNMAN_IPCONFIG_TYPE_IPV4);
 }
 

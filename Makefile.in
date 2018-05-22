@@ -91,16 +91,19 @@ noinst_PROGRAMS = unit/test-ippool$(EXEEXT) $(am__EXEEXT_2) \
 bin_PROGRAMS = $(am__EXEEXT_1)
 sbin_PROGRAMS = src/connmand$(EXEEXT) \
 	src/connmand-wait-online$(EXEEXT) $(am__EXEEXT_5)
-@XTABLES_TRUE@am__append_5 = src/iptables.c src/firewall-iptables.c
-@XTABLES_TRUE@am__append_6 = @XTABLES_LIBS@
-@NFTABLES_TRUE@am__append_7 = src/firewall-nftables.c
-@NFTABLES_TRUE@am__append_8 = @NFTABLES_LIBS@
-@VPN_TRUE@am__append_9 = vpn/connman-vpnd
-@VPN_TRUE@am__append_10 = vpn/builtin.h
-@XTABLES_TRUE@am__append_11 = @XTABLES_CFLAGS@
-@XTABLES_TRUE@am__append_12 = @XTABLES_CFLAGS@
-@NFTABLES_TRUE@am__append_13 = @NFTABLES_CFLAGS@
-@NFTABLES_TRUE@am__append_14 = @NFTABLES_CFLAGS@
+@INTERNAL_DNS_BACKEND_TRUE@am__append_5 = src/dnsproxy.c
+@SYSTEMD_RESOLVED_DNS_BACKEND_TRUE@am__append_6 = src/dns-systemd-resolved.c
+@XTABLES_TRUE@am__append_7 = src/iptables.c src/firewall-iptables.c
+@XTABLES_TRUE@am__append_8 = @XTABLES_LIBS@
+@NFTABLES_TRUE@am__append_9 = src/firewall-nftables.c
+@NFTABLES_TRUE@am__append_10 = @NFTABLES_LIBS@
+@VPN_TRUE@am__append_11 = vpn/connman-vpnd
+@INTERNAL_DNS_BACKEND_TRUE@am__append_12 = scripts/connman_resolvconf.conf
+@VPN_TRUE@am__append_13 = vpn/builtin.h
+@XTABLES_TRUE@am__append_14 = @XTABLES_CFLAGS@
+@XTABLES_TRUE@am__append_15 = @XTABLES_CFLAGS@
+@NFTABLES_TRUE@am__append_16 = @NFTABLES_CFLAGS@
+@NFTABLES_TRUE@am__append_17 = @NFTABLES_CFLAGS@
 script_PROGRAMS = $(am__EXEEXT_6) $(am__EXEEXT_7) $(am__EXEEXT_8)
 DIST_COMMON = $(srcdir)/Makefile.plugins $(srcdir)/Makefile.in \
 	$(srcdir)/Makefile.am $(top_srcdir)/configure \
@@ -109,81 +112,81 @@ DIST_COMMON = $(srcdir)/Makefile.plugins $(srcdir)/Makefile.in \
 	depcomp $(include_HEADERS) $(noinst_HEADERS) test-driver \
 	AUTHORS COPYING ChangeLog INSTALL NEWS README TODO compile \
 	config.guess config.sub install-sh missing ltmain.sh
-@LOOPBACK_TRUE@am__append_15 = loopback
-@LOOPBACK_TRUE@am__append_16 = plugins/loopback.c
-@ETHERNET_TRUE@am__append_17 = ethernet
-@ETHERNET_TRUE@am__append_18 = plugins/ethernet.c
-@GADGET_TRUE@am__append_19 = gadget
-@GADGET_TRUE@am__append_20 = plugins/gadget.c
-@WIFI_TRUE@am__append_21 = wifi
-@WIFI_TRUE@am__append_22 = plugins/wifi.c $(gsupplicant_sources)
-@IWD_TRUE@am__append_23 = iwd
-@IWD_TRUE@am__append_24 = plugins/iwd.c
-@BLUETOOTH_TRUE@am__append_25 = bluetooth
-@BLUETOOTH_TRUE@am__append_26 = plugins/bluetooth.c
-@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__append_27 = hh2serial_gps
-@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__append_28 = plugins/hh2serial-gps.c
-@HH2SERIAL_GPS_BUILTIN_FALSE@@HH2SERIAL_GPS_TRUE@am__append_29 = plugins/hh2serial-gps.la
-@HH2SERIAL_GPS_BUILTIN_FALSE@@HH2SERIAL_GPS_TRUE@am__append_30 = $(plugins_hh2serial_gps_la_OBJECTS)
-@OFONO_TRUE@am__append_31 = ofono
-@OFONO_TRUE@am__append_32 = plugins/mcc.h plugins/ofono.c
-@DUNDEE_TRUE@am__append_33 = dundee
-@DUNDEE_TRUE@am__append_34 = plugins/dundee.c
-@VPN_TRUE@am__append_35 = vpn
-@VPN_TRUE@am__append_36 = plugins/vpn.c
-@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_37 = openconnect
-@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_38 = vpn/plugins/openconnect.c
-@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_39 = -DOPENCONNECT=\"@OPENCONNECT@\"
-@OPENCONNECT_BUILTIN_FALSE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_40 = vpn/plugins/openconnect.la
-@OPENCONNECT_BUILTIN_FALSE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_41 = $(plugins_openconnect_la_OBJECTS)
-@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_42 = openvpn
-@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_43 = vpn/plugins/openvpn.c
-@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_44 = -DOPENVPN=\"@OPENVPN@\"
-@OPENVPN_BUILTIN_FALSE@@OPENVPN_TRUE@@VPN_TRUE@am__append_45 = vpn/plugins/openvpn.la
-@OPENVPN_BUILTIN_FALSE@@OPENVPN_TRUE@@VPN_TRUE@am__append_46 = $(plugins_openvpn_la_OBJECTS)
-@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_47 = vpnc
-@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_48 = vpn/plugins/vpnc.c
-@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_49 = -DVPNC=\"@VPNC@\"
-@VPNC_BUILTIN_FALSE@@VPNC_TRUE@@VPN_TRUE@am__append_50 = vpn/plugins/vpnc.la
-@VPNC_BUILTIN_FALSE@@VPNC_TRUE@@VPN_TRUE@am__append_51 = $(plugins_vpnc_la_OBJECTS)
-@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_52 = l2tp
-@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_53 = vpn/plugins/l2tp.c
-@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_54 = -DL2TP=\"@L2TP@\"
-@L2TP_BUILTIN_FALSE@@L2TP_TRUE@@VPN_TRUE@am__append_55 = vpn/plugins/l2tp.la
-@L2TP_BUILTIN_FALSE@@L2TP_TRUE@@VPN_TRUE@am__append_56 = $(plugins_l2tp_la_OBJECTS)
-@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_57 = pptp
-@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_58 = vpn/plugins/pptp.c
-@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_59 = -DPPPD=\"@PPPD@\" -DPPTP=\"@PPTP@\"
-@PPTP_BUILTIN_FALSE@@PPTP_TRUE@@VPN_TRUE@am__append_60 = vpn/plugins/pptp.la
-@PPTP_BUILTIN_FALSE@@PPTP_TRUE@@VPN_TRUE@am__append_61 = $(plugins_pptp_la_OBJECTS)
-@PPTP_TRUE@@VPN_TRUE@am__append_62 = scripts/libppp-plugin.la
-@L2TP_TRUE@@PPTP_FALSE@@VPN_TRUE@am__append_63 = scripts/libppp-plugin.la
-@PACRUNNER_TRUE@am__append_64 = pacrunner
-@PACRUNNER_TRUE@am__append_65 = plugins/pacrunner.c
-@POLKIT_TRUE@am__append_66 = polkit
-@POLKIT_TRUE@am__append_67 = plugins/polkit.c
-@DATAFILES_TRUE@@POLKIT_TRUE@@VPN_TRUE@am__append_68 = vpn/net.connman.vpn.policy
-@IOSPM_TRUE@am__append_69 = plugins/iospm.la
-@IOSPM_TRUE@am__append_70 = $(plugins_iospm_la_OBJECTS)
-@OPENCONNECT_TRUE@am__append_71 = scripts/openconnect-script
-@OPENCONNECT_FALSE@@VPNC_TRUE@am__append_72 = scripts/openconnect-script
-@OPENVPN_TRUE@am__append_73 = scripts/openvpn-script
-@NMCOMPAT_TRUE@am__append_74 = nmcompat
-@NMCOMPAT_TRUE@am__append_75 = plugins/nmcompat.c
-@TIST_BUILTIN_TRUE@@TIST_TRUE@am__append_76 = tist
-@TIST_BUILTIN_TRUE@@TIST_TRUE@am__append_77 = plugins/tist.c
-@TIST_BUILTIN_FALSE@@TIST_TRUE@am__append_78 = plugins/tist.la
-@TIST_BUILTIN_FALSE@@TIST_TRUE@am__append_79 = $(plugins_tist_la_OBJECTS)
-@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__append_80 = session_policy_local
-@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__append_81 = plugins/session_policy_local.c
-@SESSION_POLICY_LOCAL_BUILTIN_FALSE@@SESSION_POLICY_LOCAL_TRUE@am__append_82 = plugins/session_policy_local.la
-@SESSION_POLICY_LOCAL_BUILTIN_FALSE@@SESSION_POLICY_LOCAL_TRUE@am__append_83 = $(plugins_session_policy_local_la_OBJECTS)
-@NEARD_TRUE@am__append_84 = neard
-@NEARD_TRUE@am__append_85 = plugins/neard.c
-@CLIENT_TRUE@am__append_86 = client/connmanctl
+@LOOPBACK_TRUE@am__append_18 = loopback
+@LOOPBACK_TRUE@am__append_19 = plugins/loopback.c
+@ETHERNET_TRUE@am__append_20 = ethernet
+@ETHERNET_TRUE@am__append_21 = plugins/ethernet.c
+@GADGET_TRUE@am__append_22 = gadget
+@GADGET_TRUE@am__append_23 = plugins/gadget.c
+@WIFI_TRUE@am__append_24 = wifi
+@WIFI_TRUE@am__append_25 = plugins/wifi.c $(gsupplicant_sources)
+@IWD_TRUE@am__append_26 = iwd
+@IWD_TRUE@am__append_27 = plugins/iwd.c
+@BLUETOOTH_TRUE@am__append_28 = bluetooth
+@BLUETOOTH_TRUE@am__append_29 = plugins/bluetooth.c
+@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__append_30 = hh2serial_gps
+@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__append_31 = plugins/hh2serial-gps.c
+@HH2SERIAL_GPS_BUILTIN_FALSE@@HH2SERIAL_GPS_TRUE@am__append_32 = plugins/hh2serial-gps.la
+@HH2SERIAL_GPS_BUILTIN_FALSE@@HH2SERIAL_GPS_TRUE@am__append_33 = $(plugins_hh2serial_gps_la_OBJECTS)
+@OFONO_TRUE@am__append_34 = ofono
+@OFONO_TRUE@am__append_35 = plugins/mcc.h plugins/ofono.c
+@DUNDEE_TRUE@am__append_36 = dundee
+@DUNDEE_TRUE@am__append_37 = plugins/dundee.c
+@VPN_TRUE@am__append_38 = vpn
+@VPN_TRUE@am__append_39 = plugins/vpn.c
+@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_40 = openconnect
+@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_41 = vpn/plugins/openconnect.c
+@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_42 = -DOPENCONNECT=\"@OPENCONNECT@\"
+@OPENCONNECT_BUILTIN_FALSE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_43 = vpn/plugins/openconnect.la
+@OPENCONNECT_BUILTIN_FALSE@@OPENCONNECT_TRUE@@VPN_TRUE@am__append_44 = $(plugins_openconnect_la_OBJECTS)
+@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_45 = openvpn
+@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_46 = vpn/plugins/openvpn.c
+@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__append_47 = -DOPENVPN=\"@OPENVPN@\"
+@OPENVPN_BUILTIN_FALSE@@OPENVPN_TRUE@@VPN_TRUE@am__append_48 = vpn/plugins/openvpn.la
+@OPENVPN_BUILTIN_FALSE@@OPENVPN_TRUE@@VPN_TRUE@am__append_49 = $(plugins_openvpn_la_OBJECTS)
+@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_50 = vpnc
+@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_51 = vpn/plugins/vpnc.c
+@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__append_52 = -DVPNC=\"@VPNC@\"
+@VPNC_BUILTIN_FALSE@@VPNC_TRUE@@VPN_TRUE@am__append_53 = vpn/plugins/vpnc.la
+@VPNC_BUILTIN_FALSE@@VPNC_TRUE@@VPN_TRUE@am__append_54 = $(plugins_vpnc_la_OBJECTS)
+@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_55 = l2tp
+@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_56 = vpn/plugins/l2tp.c
+@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__append_57 = -DL2TP=\"@L2TP@\"
+@L2TP_BUILTIN_FALSE@@L2TP_TRUE@@VPN_TRUE@am__append_58 = vpn/plugins/l2tp.la
+@L2TP_BUILTIN_FALSE@@L2TP_TRUE@@VPN_TRUE@am__append_59 = $(plugins_l2tp_la_OBJECTS)
+@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_60 = pptp
+@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_61 = vpn/plugins/pptp.c
+@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__append_62 = -DPPPD=\"@PPPD@\" -DPPTP=\"@PPTP@\"
+@PPTP_BUILTIN_FALSE@@PPTP_TRUE@@VPN_TRUE@am__append_63 = vpn/plugins/pptp.la
+@PPTP_BUILTIN_FALSE@@PPTP_TRUE@@VPN_TRUE@am__append_64 = $(plugins_pptp_la_OBJECTS)
+@PPTP_TRUE@@VPN_TRUE@am__append_65 = scripts/libppp-plugin.la
+@L2TP_TRUE@@PPTP_FALSE@@VPN_TRUE@am__append_66 = scripts/libppp-plugin.la
+@PACRUNNER_TRUE@am__append_67 = pacrunner
+@PACRUNNER_TRUE@am__append_68 = plugins/pacrunner.c
+@POLKIT_TRUE@am__append_69 = polkit
+@POLKIT_TRUE@am__append_70 = plugins/polkit.c
+@DATAFILES_TRUE@@POLKIT_TRUE@@VPN_TRUE@am__append_71 = vpn/net.connman.vpn.policy
+@IOSPM_TRUE@am__append_72 = plugins/iospm.la
+@IOSPM_TRUE@am__append_73 = $(plugins_iospm_la_OBJECTS)
+@OPENCONNECT_TRUE@am__append_74 = scripts/openconnect-script
+@OPENCONNECT_FALSE@@VPNC_TRUE@am__append_75 = scripts/openconnect-script
+@OPENVPN_TRUE@am__append_76 = scripts/openvpn-script
+@NMCOMPAT_TRUE@am__append_77 = nmcompat
+@NMCOMPAT_TRUE@am__append_78 = plugins/nmcompat.c
+@TIST_BUILTIN_TRUE@@TIST_TRUE@am__append_79 = tist
+@TIST_BUILTIN_TRUE@@TIST_TRUE@am__append_80 = plugins/tist.c
+@TIST_BUILTIN_FALSE@@TIST_TRUE@am__append_81 = plugins/tist.la
+@TIST_BUILTIN_FALSE@@TIST_TRUE@am__append_82 = $(plugins_tist_la_OBJECTS)
+@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__append_83 = session_policy_local
+@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__append_84 = plugins/session_policy_local.c
+@SESSION_POLICY_LOCAL_BUILTIN_FALSE@@SESSION_POLICY_LOCAL_TRUE@am__append_85 = plugins/session_policy_local.la
+@SESSION_POLICY_LOCAL_BUILTIN_FALSE@@SESSION_POLICY_LOCAL_TRUE@am__append_86 = $(plugins_session_policy_local_la_OBJECTS)
+@NEARD_TRUE@am__append_87 = neard
+@NEARD_TRUE@am__append_88 = plugins/neard.c
+@CLIENT_TRUE@am__append_89 = client/connmanctl
 TESTS = unit/test-ippool$(EXEEXT)
-@WISPR_TRUE@am__append_87 = tools/wispr
-@TOOLS_TRUE@am__append_88 = tools/supplicant-test \
+@WISPR_TRUE@am__append_90 = tools/wispr
+@TOOLS_TRUE@am__append_91 = tools/supplicant-test \
 @TOOLS_TRUE@			tools/dhcp-test tools/dhcp-server-test \
 @TOOLS_TRUE@			tools/addr-test tools/web-test tools/resolv-test \
 @TOOLS_TRUE@			tools/dbus-test tools/polkit-test \
@@ -192,10 +195,10 @@ TESTS = unit/test-ippool$(EXEEXT)
 @TOOLS_TRUE@			tools/session-test \
 @TOOLS_TRUE@			tools/dnsproxy-test tools/netlink-test
 
-@TOOLS_TRUE@@XTABLES_TRUE@am__append_89 = tools/iptables-test tools/iptables-unit
-@VPN_TRUE@am__append_90 = vpn/connman-vpn-dbus.conf
-@SELINUX_TRUE@@VPN_TRUE@am__append_91 = connman-task.pp
-@SELINUX_TRUE@@VPN_TRUE@am__append_92 = connman-task.pp
+@TOOLS_TRUE@@XTABLES_TRUE@am__append_92 = tools/iptables-test tools/iptables-unit
+@VPN_TRUE@am__append_93 = vpn/connman-vpn-dbus.conf
+@SELINUX_TRUE@@VPN_TRUE@am__append_94 = connman-task.pp
+@SELINUX_TRUE@@VPN_TRUE@am__append_95 = connman-task.pp
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/configmake.m4 \
@@ -424,12 +427,12 @@ am__src_connmand_SOURCES_DIST = gdhcp/gdhcp.h gdhcp/common.h \
 	gdhcp/common.c gdhcp/client.c gdhcp/server.c gdhcp/ipv4ll.h \
 	gdhcp/ipv4ll.c gdhcp/unaligned.h gweb/gweb.h gweb/gweb.c \
 	gweb/gresolv.h gweb/gresolv.c gweb/giognutls.h \
-	gweb/giognutls.c gweb/gionotls.c src/backtrace.c \
-	plugins/loopback.c plugins/ethernet.c plugins/gadget.c \
-	plugins/wifi.c gsupplicant/gsupplicant.h gsupplicant/dbus.h \
-	gsupplicant/supplicant.c gsupplicant/dbus.c plugins/iwd.c \
-	plugins/bluetooth.c plugins/hh2serial-gps.c plugins/mcc.h \
-	plugins/ofono.c plugins/dundee.c plugins/vpn.c \
+	gweb/giognutls.c gweb/gionotls.c src/nostats.c src/stats.c \
+	src/backtrace.c plugins/loopback.c plugins/ethernet.c \
+	plugins/gadget.c plugins/wifi.c gsupplicant/gsupplicant.h \
+	gsupplicant/dbus.h gsupplicant/supplicant.c gsupplicant/dbus.c \
+	plugins/iwd.c plugins/bluetooth.c plugins/hh2serial-gps.c \
+	plugins/mcc.h plugins/ofono.c plugins/dundee.c plugins/vpn.c \
 	plugins/pacrunner.c plugins/polkit.c plugins/nmcompat.c \
 	plugins/tist.c plugins/session_policy_local.c plugins/neard.c \
 	src/shared/util.h src/shared/util.c src/shared/netlink.h \
@@ -442,10 +445,10 @@ am__src_connmand_SOURCES_DIST = gdhcp/gdhcp.h gdhcp/common.h \
 	src/proxy.c src/utsname.c src/timeserver.c src/rfkill.c \
 	src/storage.c src/dbus.c src/config.c src/technology.c \
 	src/counter.c src/ntp.c src/session.c src/tethering.c \
-	src/wpad.c src/wispr.c src/stats.c src/dnsproxy.c src/6to4.c \
-	src/ippool.c src/bridge.c src/nat.c src/ipaddress.c \
-	src/inotify.c src/ipv6pd.c src/peer.c src/peer_service.c \
-	src/machine.c src/util.c src/iptables.c \
+	src/wpad.c src/wispr.c src/6to4.c src/ippool.c src/bridge.c \
+	src/nat.c src/ipaddress.c src/inotify.c src/ipv6pd.c \
+	src/peer.c src/peer_service.c src/machine.c src/util.c \
+	src/dnsproxy.c src/dns-systemd-resolved.c src/iptables.c \
 	src/firewall-iptables.c src/firewall-nftables.c
 am__objects_1 = gdhcp/src_connmand-common.$(OBJEXT) \
 	gdhcp/src_connmand-client.$(OBJEXT) \
@@ -456,46 +459,51 @@ am__objects_1 = gdhcp/src_connmand-common.$(OBJEXT) \
 am__objects_4 = gweb/src_connmand-gweb.$(OBJEXT) \
 	gweb/src_connmand-gresolv.$(OBJEXT) $(am__objects_2) \
 	$(am__objects_3)
-@BACKTRACE_TRUE@am__objects_5 = src/src_connmand-backtrace.$(OBJEXT)
-@LOOPBACK_TRUE@am__objects_6 =  \
+@STATS_FALSE@am__objects_5 = src/src_connmand-nostats.$(OBJEXT)
+@STATS_TRUE@am__objects_5 = src/src_connmand-stats.$(OBJEXT)
+@BACKTRACE_TRUE@am__objects_6 = src/src_connmand-backtrace.$(OBJEXT)
+@LOOPBACK_TRUE@am__objects_7 =  \
 @LOOPBACK_TRUE@	plugins/src_connmand-loopback.$(OBJEXT)
-@ETHERNET_TRUE@am__objects_7 =  \
+@ETHERNET_TRUE@am__objects_8 =  \
 @ETHERNET_TRUE@	plugins/src_connmand-ethernet.$(OBJEXT)
-@GADGET_TRUE@am__objects_8 = plugins/src_connmand-gadget.$(OBJEXT)
-am__objects_9 = gsupplicant/src_connmand-supplicant.$(OBJEXT) \
+@GADGET_TRUE@am__objects_9 = plugins/src_connmand-gadget.$(OBJEXT)
+am__objects_10 = gsupplicant/src_connmand-supplicant.$(OBJEXT) \
 	gsupplicant/src_connmand-dbus.$(OBJEXT)
-@WIFI_TRUE@am__objects_10 = plugins/src_connmand-wifi.$(OBJEXT) \
-@WIFI_TRUE@	$(am__objects_9)
-@IWD_TRUE@am__objects_11 = plugins/src_connmand-iwd.$(OBJEXT)
-@BLUETOOTH_TRUE@am__objects_12 =  \
+@WIFI_TRUE@am__objects_11 = plugins/src_connmand-wifi.$(OBJEXT) \
+@WIFI_TRUE@	$(am__objects_10)
+@IWD_TRUE@am__objects_12 = plugins/src_connmand-iwd.$(OBJEXT)
+@BLUETOOTH_TRUE@am__objects_13 =  \
 @BLUETOOTH_TRUE@	plugins/src_connmand-bluetooth.$(OBJEXT)
-@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__objects_13 = plugins/src_connmand-hh2serial-gps.$(OBJEXT)
-@OFONO_TRUE@am__objects_14 = plugins/src_connmand-ofono.$(OBJEXT)
-@DUNDEE_TRUE@am__objects_15 = plugins/src_connmand-dundee.$(OBJEXT)
-@VPN_TRUE@am__objects_16 = plugins/src_connmand-vpn.$(OBJEXT)
-@PACRUNNER_TRUE@am__objects_17 =  \
+@HH2SERIAL_GPS_BUILTIN_TRUE@@HH2SERIAL_GPS_TRUE@am__objects_14 = plugins/src_connmand-hh2serial-gps.$(OBJEXT)
+@OFONO_TRUE@am__objects_15 = plugins/src_connmand-ofono.$(OBJEXT)
+@DUNDEE_TRUE@am__objects_16 = plugins/src_connmand-dundee.$(OBJEXT)
+@VPN_TRUE@am__objects_17 = plugins/src_connmand-vpn.$(OBJEXT)
+@PACRUNNER_TRUE@am__objects_18 =  \
 @PACRUNNER_TRUE@	plugins/src_connmand-pacrunner.$(OBJEXT)
-@POLKIT_TRUE@am__objects_18 = plugins/src_connmand-polkit.$(OBJEXT)
-@NMCOMPAT_TRUE@am__objects_19 =  \
+@POLKIT_TRUE@am__objects_19 = plugins/src_connmand-polkit.$(OBJEXT)
+@NMCOMPAT_TRUE@am__objects_20 =  \
 @NMCOMPAT_TRUE@	plugins/src_connmand-nmcompat.$(OBJEXT)
-@TIST_BUILTIN_TRUE@@TIST_TRUE@am__objects_20 = plugins/src_connmand-tist.$(OBJEXT)
-@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__objects_21 = plugins/src_connmand-session_policy_local.$(OBJEXT)
-@NEARD_TRUE@am__objects_22 = plugins/src_connmand-neard.$(OBJEXT)
-am__objects_23 = $(am__objects_6) $(am__objects_7) $(am__objects_8) \
-	$(am__objects_10) $(am__objects_11) $(am__objects_12) \
-	$(am__objects_13) $(am__objects_14) $(am__objects_15) \
-	$(am__objects_16) $(am__objects_17) $(am__objects_18) \
-	$(am__objects_19) $(am__objects_20) $(am__objects_21) \
-	$(am__objects_22)
-am__objects_24 = src/shared/src_connmand-util.$(OBJEXT) \
+@TIST_BUILTIN_TRUE@@TIST_TRUE@am__objects_21 = plugins/src_connmand-tist.$(OBJEXT)
+@SESSION_POLICY_LOCAL_BUILTIN_TRUE@@SESSION_POLICY_LOCAL_TRUE@am__objects_22 = plugins/src_connmand-session_policy_local.$(OBJEXT)
+@NEARD_TRUE@am__objects_23 = plugins/src_connmand-neard.$(OBJEXT)
+am__objects_24 = $(am__objects_7) $(am__objects_8) $(am__objects_9) \
+	$(am__objects_11) $(am__objects_12) $(am__objects_13) \
+	$(am__objects_14) $(am__objects_15) $(am__objects_16) \
+	$(am__objects_17) $(am__objects_18) $(am__objects_19) \
+	$(am__objects_20) $(am__objects_21) $(am__objects_22) \
+	$(am__objects_23)
+am__objects_25 = src/shared/src_connmand-util.$(OBJEXT) \
 	src/shared/src_connmand-netlink.$(OBJEXT)
-@XTABLES_TRUE@am__objects_25 = src/src_connmand-iptables.$(OBJEXT) \
+@INTERNAL_DNS_BACKEND_TRUE@am__objects_26 = src/src_connmand-dnsproxy.$(OBJEXT)
+@SYSTEMD_RESOLVED_DNS_BACKEND_TRUE@am__objects_27 = src/src_connmand-dns-systemd-resolved.$(OBJEXT)
+@XTABLES_TRUE@am__objects_28 = src/src_connmand-iptables.$(OBJEXT) \
 @XTABLES_TRUE@	src/src_connmand-firewall-iptables.$(OBJEXT)
-@NFTABLES_TRUE@am__objects_26 =  \
+@NFTABLES_TRUE@am__objects_29 =  \
 @NFTABLES_TRUE@	src/src_connmand-firewall-nftables.$(OBJEXT)
 am_src_connmand_OBJECTS = $(am__objects_1) $(am__objects_4) \
-	$(am__objects_5) $(am__objects_23) $(am__objects_24) \
-	src/src_connmand-main.$(OBJEXT) src/src_connmand-log.$(OBJEXT) \
+	$(am__objects_5) $(am__objects_6) $(am__objects_24) \
+	$(am__objects_25) src/src_connmand-main.$(OBJEXT) \
+	src/src_connmand-log.$(OBJEXT) \
 	src/src_connmand-error.$(OBJEXT) \
 	src/src_connmand-plugin.$(OBJEXT) \
 	src/src_connmand-task.$(OBJEXT) \
@@ -531,8 +539,6 @@ am_src_connmand_OBJECTS = $(am__objects_1) $(am__objects_4) \
 	src/src_connmand-tethering.$(OBJEXT) \
 	src/src_connmand-wpad.$(OBJEXT) \
 	src/src_connmand-wispr.$(OBJEXT) \
-	src/src_connmand-stats.$(OBJEXT) \
-	src/src_connmand-dnsproxy.$(OBJEXT) \
 	src/src_connmand-6to4.$(OBJEXT) \
 	src/src_connmand-ippool.$(OBJEXT) \
 	src/src_connmand-bridge.$(OBJEXT) \
@@ -543,8 +549,8 @@ am_src_connmand_OBJECTS = $(am__objects_1) $(am__objects_4) \
 	src/src_connmand-peer.$(OBJEXT) \
 	src/src_connmand-peer_service.$(OBJEXT) \
 	src/src_connmand-machine.$(OBJEXT) \
-	src/src_connmand-util.$(OBJEXT) $(am__objects_25) \
-	$(am__objects_26)
+	src/src_connmand-util.$(OBJEXT) $(am__objects_26) \
+	$(am__objects_27) $(am__objects_28) $(am__objects_29)
 src_connmand_OBJECTS = $(am_src_connmand_OBJECTS)
 am__DEPENDENCIES_1 =
 src_connmand_DEPENDENCIES = gdbus/libgdbus-internal.la \
@@ -568,16 +574,16 @@ tools_dbus_test_OBJECTS = $(am_tools_dbus_test_OBJECTS)
 am__tools_dhcp_server_test_SOURCES_DIST = gdhcp/gdhcp.h gdhcp/common.h \
 	gdhcp/common.c gdhcp/client.c gdhcp/server.c gdhcp/ipv4ll.h \
 	gdhcp/ipv4ll.c gdhcp/unaligned.h tools/dhcp-server-test.c
-am__objects_27 = gdhcp/common.$(OBJEXT) gdhcp/client.$(OBJEXT) \
+am__objects_30 = gdhcp/common.$(OBJEXT) gdhcp/client.$(OBJEXT) \
 	gdhcp/server.$(OBJEXT) gdhcp/ipv4ll.$(OBJEXT)
-@TOOLS_TRUE@am_tools_dhcp_server_test_OBJECTS = $(am__objects_27) \
+@TOOLS_TRUE@am_tools_dhcp_server_test_OBJECTS = $(am__objects_30) \
 @TOOLS_TRUE@	tools/dhcp-server-test.$(OBJEXT)
 tools_dhcp_server_test_OBJECTS = $(am_tools_dhcp_server_test_OBJECTS)
 tools_dhcp_server_test_DEPENDENCIES =
 am__tools_dhcp_test_SOURCES_DIST = gdhcp/gdhcp.h gdhcp/common.h \
 	gdhcp/common.c gdhcp/client.c gdhcp/server.c gdhcp/ipv4ll.h \
 	gdhcp/ipv4ll.c gdhcp/unaligned.h tools/dhcp-test.c
-@TOOLS_TRUE@am_tools_dhcp_test_OBJECTS = $(am__objects_27) \
+@TOOLS_TRUE@am_tools_dhcp_test_OBJECTS = $(am__objects_30) \
 @TOOLS_TRUE@	tools/dhcp-test.$(OBJEXT)
 tools_dhcp_test_OBJECTS = $(am_tools_dhcp_test_OBJECTS)
 tools_dhcp_test_DEPENDENCIES =
@@ -588,9 +594,9 @@ tools_dnsproxy_test_OBJECTS = $(am_tools_dnsproxy_test_OBJECTS)
 tools_dnsproxy_test_DEPENDENCIES =
 am__tools_iptables_test_SOURCES_DIST = src/backtrace.c src/log.c \
 	src/iptables.c tools/iptables-test.c
-@BACKTRACE_TRUE@am__objects_28 = src/backtrace.$(OBJEXT)
+@BACKTRACE_TRUE@am__objects_31 = src/backtrace.$(OBJEXT)
 @TOOLS_TRUE@@XTABLES_TRUE@am_tools_iptables_test_OBJECTS =  \
-@TOOLS_TRUE@@XTABLES_TRUE@	$(am__objects_28) src/log.$(OBJEXT) \
+@TOOLS_TRUE@@XTABLES_TRUE@	$(am__objects_31) src/log.$(OBJEXT) \
 @TOOLS_TRUE@@XTABLES_TRUE@	src/iptables.$(OBJEXT) \
 @TOOLS_TRUE@@XTABLES_TRUE@	tools/iptables-test.$(OBJEXT)
 tools_iptables_test_OBJECTS = $(am_tools_iptables_test_OBJECTS)
@@ -598,10 +604,10 @@ tools_iptables_test_DEPENDENCIES =
 am__tools_iptables_unit_SOURCES_DIST = src/backtrace.c src/log.c \
 	src/iptables.c src/firewall-iptables.c src/nat.c \
 	tools/iptables-unit.c
-@BACKTRACE_TRUE@am__objects_29 =  \
+@BACKTRACE_TRUE@am__objects_32 =  \
 @BACKTRACE_TRUE@	src/tools_iptables_unit-backtrace.$(OBJEXT)
 @TOOLS_TRUE@@XTABLES_TRUE@am_tools_iptables_unit_OBJECTS =  \
-@TOOLS_TRUE@@XTABLES_TRUE@	$(am__objects_29) \
+@TOOLS_TRUE@@XTABLES_TRUE@	$(am__objects_32) \
 @TOOLS_TRUE@@XTABLES_TRUE@	src/tools_iptables_unit-log.$(OBJEXT) \
 @TOOLS_TRUE@@XTABLES_TRUE@	src/tools_iptables_unit-iptables.$(OBJEXT) \
 @TOOLS_TRUE@@XTABLES_TRUE@	src/tools_iptables_unit-firewall-iptables.$(OBJEXT) \
@@ -617,9 +623,9 @@ tools_iptables_unit_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__tools_netlink_test_SOURCES_DIST = src/shared/util.h \
 	src/shared/util.c src/shared/netlink.h src/shared/netlink.c \
 	tools/netlink-test.c
-am__objects_30 = src/shared/util.$(OBJEXT) \
+am__objects_33 = src/shared/util.$(OBJEXT) \
 	src/shared/netlink.$(OBJEXT)
-@TOOLS_TRUE@am_tools_netlink_test_OBJECTS = $(am__objects_30) \
+@TOOLS_TRUE@am_tools_netlink_test_OBJECTS = $(am__objects_33) \
 @TOOLS_TRUE@	tools/netlink-test.$(OBJEXT)
 tools_netlink_test_OBJECTS = $(am_tools_netlink_test_OBJECTS)
 tools_netlink_test_DEPENDENCIES =
@@ -640,7 +646,7 @@ am__tools_session_test_SOURCES_DIST = src/backtrace.c src/log.c \
 	src/dbus.c src/error.c tools/session-test.c \
 	tools/session-utils.c tools/manager-api.c tools/session-api.c \
 	tools/session-test.h
-@TOOLS_TRUE@am_tools_session_test_OBJECTS = $(am__objects_28) \
+@TOOLS_TRUE@am_tools_session_test_OBJECTS = $(am__objects_31) \
 @TOOLS_TRUE@	src/log.$(OBJEXT) src/dbus.$(OBJEXT) \
 @TOOLS_TRUE@	src/error.$(OBJEXT) tools/session-test.$(OBJEXT) \
 @TOOLS_TRUE@	tools/session-utils.$(OBJEXT) \
@@ -668,18 +674,18 @@ tools_tap_test_LDADD = $(LDADD)
 am__tools_web_test_SOURCES_DIST = gweb/gweb.h gweb/gweb.c \
 	gweb/gresolv.h gweb/gresolv.c gweb/giognutls.h \
 	gweb/giognutls.c gweb/gionotls.c tools/web-test.c
-@WISPR_TRUE@am__objects_31 = gweb/giognutls.$(OBJEXT)
-@WISPR_FALSE@am__objects_32 = gweb/gionotls.$(OBJEXT)
-am__objects_33 = gweb/gweb.$(OBJEXT) gweb/gresolv.$(OBJEXT) \
-	$(am__objects_31) $(am__objects_32)
-@TOOLS_TRUE@am_tools_web_test_OBJECTS = $(am__objects_33) \
+@WISPR_TRUE@am__objects_34 = gweb/giognutls.$(OBJEXT)
+@WISPR_FALSE@am__objects_35 = gweb/gionotls.$(OBJEXT)
+am__objects_36 = gweb/gweb.$(OBJEXT) gweb/gresolv.$(OBJEXT) \
+	$(am__objects_34) $(am__objects_35)
+@TOOLS_TRUE@am_tools_web_test_OBJECTS = $(am__objects_36) \
 @TOOLS_TRUE@	tools/web-test.$(OBJEXT)
 tools_web_test_OBJECTS = $(am_tools_web_test_OBJECTS)
 tools_web_test_DEPENDENCIES =
 am__tools_wispr_SOURCES_DIST = gweb/gweb.h gweb/gweb.c gweb/gresolv.h \
 	gweb/gresolv.c gweb/giognutls.h gweb/giognutls.c \
 	gweb/gionotls.c tools/wispr.c
-@WISPR_TRUE@am_tools_wispr_OBJECTS = $(am__objects_33) \
+@WISPR_TRUE@am_tools_wispr_OBJECTS = $(am__objects_36) \
 @WISPR_TRUE@	tools/wispr.$(OBJEXT)
 tools_wispr_OBJECTS = $(am_tools_wispr_OBJECTS)
 tools_wispr_DEPENDENCIES =
@@ -691,7 +697,7 @@ tools_wpad_test_OBJECTS = $(am_tools_wpad_test_OBJECTS)
 tools_wpad_test_DEPENDENCIES =
 am__unit_test_ippool_SOURCES_DIST = src/backtrace.c src/log.c \
 	src/dbus.c src/error.c src/ippool.c unit/test-ippool.c
-am_unit_test_ippool_OBJECTS = $(am__objects_28) src/log.$(OBJEXT) \
+am_unit_test_ippool_OBJECTS = $(am__objects_31) src/log.$(OBJEXT) \
 	src/dbus.$(OBJEXT) src/error.$(OBJEXT) src/ippool.$(OBJEXT) \
 	unit/test-ippool.$(OBJEXT)
 unit_test_ippool_OBJECTS = $(am_unit_test_ippool_OBJECTS)
@@ -707,56 +713,56 @@ am__vpn_connman_vpnd_SOURCES_DIST = vpn/plugins/openconnect.c \
 	vpn/vpn-ipconfig.c src/inet.c vpn/vpn-rtnl.c src/dbus.c \
 	src/storage.c src/ipaddress.c src/agent.c vpn/vpn-agent.c \
 	vpn/vpn-agent.h src/inotify.c vpn/vpn-config.c
-@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_34 = vpn/plugins/vpn_connman_vpnd-openconnect.$(OBJEXT)
-@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_35 = vpn/plugins/vpn_connman_vpnd-openvpn.$(OBJEXT)
-@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_36 = vpn/plugins/vpn_connman_vpnd-vpnc.$(OBJEXT)
-@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__objects_37 = vpn/plugins/vpn_connman_vpnd-l2tp.$(OBJEXT)
-@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_38 = vpn/plugins/vpn_connman_vpnd-pptp.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
-@VPN_TRUE@am__objects_40 = $(am__objects_34) $(am__objects_35) \
-@VPN_TRUE@	$(am__objects_36) $(am__objects_37) \
-@VPN_TRUE@	$(am__objects_38) $(am__objects_39)
-@BACKTRACE_TRUE@am__objects_41 =  \
+@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_37 = vpn/plugins/vpn_connman_vpnd-openconnect.$(OBJEXT)
+@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_38 = vpn/plugins/vpn_connman_vpnd-openvpn.$(OBJEXT)
+@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_39 = vpn/plugins/vpn_connman_vpnd-vpnc.$(OBJEXT)
+@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__objects_40 = vpn/plugins/vpn_connman_vpnd-l2tp.$(OBJEXT)
+@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_41 = vpn/plugins/vpn_connman_vpnd-pptp.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_BUILTIN_TRUE@@L2TP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_BUILTIN_TRUE@@OPENCONNECT_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_BUILTIN_TRUE@@OPENVPN_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_BUILTIN_TRUE@@PPTP_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@L2TP_FALSE@@OPENCONNECT_FALSE@@OPENVPN_FALSE@@PPTP_FALSE@@VPNC_BUILTIN_TRUE@@VPNC_TRUE@@VPN_TRUE@am__objects_42 = vpn/plugins/vpn_connman_vpnd-vpn.$(OBJEXT)
+@VPN_TRUE@am__objects_43 = $(am__objects_37) $(am__objects_38) \
+@VPN_TRUE@	$(am__objects_39) $(am__objects_40) \
+@VPN_TRUE@	$(am__objects_41) $(am__objects_42)
+@BACKTRACE_TRUE@am__objects_44 =  \
 @BACKTRACE_TRUE@	src/vpn_connman_vpnd-backtrace.$(OBJEXT)
-@WISPR_TRUE@am__objects_42 =  \
+@WISPR_TRUE@am__objects_45 =  \
 @WISPR_TRUE@	gweb/vpn_connman_vpnd-giognutls.$(OBJEXT)
-@WISPR_FALSE@am__objects_43 =  \
+@WISPR_FALSE@am__objects_46 =  \
 @WISPR_FALSE@	gweb/vpn_connman_vpnd-gionotls.$(OBJEXT)
-am__objects_44 = gweb/vpn_connman_vpnd-gweb.$(OBJEXT) \
-	gweb/vpn_connman_vpnd-gresolv.$(OBJEXT) $(am__objects_42) \
-	$(am__objects_43)
-@VPN_TRUE@am_vpn_connman_vpnd_OBJECTS = $(am__objects_40) \
-@VPN_TRUE@	$(am__objects_41) $(am__objects_44) \
+am__objects_47 = gweb/vpn_connman_vpnd-gweb.$(OBJEXT) \
+	gweb/vpn_connman_vpnd-gresolv.$(OBJEXT) $(am__objects_45) \
+	$(am__objects_46)
+@VPN_TRUE@am_vpn_connman_vpnd_OBJECTS = $(am__objects_43) \
+@VPN_TRUE@	$(am__objects_44) $(am__objects_47) \
 @VPN_TRUE@	vpn/vpn_connman_vpnd-main.$(OBJEXT) \
 @VPN_TRUE@	src/vpn_connman_vpnd-log.$(OBJEXT) \
 @VPN_TRUE@	src/vpn_connman_vpnd-error.$(OBJEXT) \
@@ -1267,6 +1273,8 @@ gdhcp_sources = gdhcp/gdhcp.h gdhcp/common.h gdhcp/common.c gdhcp/client.c \
 
 gweb_sources = gweb/gweb.h gweb/gweb.c gweb/gresolv.h gweb/gresolv.c \
 	$(am__append_1) $(am__append_2)
+@STATS_FALSE@stats_sources = src/nostats.c
+@STATS_TRUE@stats_sources = src/stats.c
 @BACKTRACE_TRUE@backtrace_sources = src/backtrace.c
 shared_sources = src/shared/util.h src/shared/util.c \
 		src/shared/netlink.h src/shared/netlink.c
@@ -1293,22 +1301,22 @@ service_files = src/connman.service src/net.connman.service \
 				vpn/net.connman.vpn.service \
 				src/connman-wait-online.service
 
-plugin_LTLIBRARIES = $(am__append_29) $(am__append_69) \
-	$(am__append_78) $(am__append_82)
-plugin_objects = $(am__append_30) $(am__append_70) $(am__append_79) \
-	$(am__append_83)
-builtin_modules = $(am__append_15) $(am__append_17) $(am__append_19) \
-	$(am__append_21) $(am__append_23) $(am__append_25) \
-	$(am__append_27) $(am__append_31) $(am__append_33) \
-	$(am__append_35) $(am__append_64) $(am__append_66) \
-	$(am__append_74) $(am__append_76) $(am__append_80) \
-	$(am__append_84)
-builtin_sources = $(am__append_16) $(am__append_18) $(am__append_20) \
-	$(am__append_22) $(am__append_24) $(am__append_26) \
-	$(am__append_28) $(am__append_32) $(am__append_34) \
-	$(am__append_36) $(am__append_65) $(am__append_67) \
-	$(am__append_75) $(am__append_77) $(am__append_81) \
-	$(am__append_85)
+plugin_LTLIBRARIES = $(am__append_32) $(am__append_72) \
+	$(am__append_81) $(am__append_85)
+plugin_objects = $(am__append_33) $(am__append_73) $(am__append_82) \
+	$(am__append_86)
+builtin_modules = $(am__append_18) $(am__append_20) $(am__append_22) \
+	$(am__append_24) $(am__append_26) $(am__append_28) \
+	$(am__append_30) $(am__append_34) $(am__append_36) \
+	$(am__append_38) $(am__append_67) $(am__append_69) \
+	$(am__append_77) $(am__append_79) $(am__append_83) \
+	$(am__append_87)
+builtin_sources = $(am__append_19) $(am__append_21) $(am__append_23) \
+	$(am__append_25) $(am__append_27) $(am__append_29) \
+	$(am__append_31) $(am__append_35) $(am__append_37) \
+	$(am__append_39) $(am__append_68) $(am__append_70) \
+	$(am__append_78) $(am__append_80) $(am__append_84) \
+	$(am__append_88)
 builtin_libadd = 
 builtin_cflags = 
 unit_objects = 
@@ -1317,23 +1325,24 @@ MANUAL_PAGES = doc/connmanctl.1 doc/connman.conf.5 \
 	doc/connman-vpn-provider.config.5 doc/connman.8 \
 	doc/connman-vpn.8
 src_connmand_SOURCES = $(gdhcp_sources) $(gweb_sources) \
-	$(backtrace_sources) $(builtin_sources) $(shared_sources) \
-	src/connman.ver src/main.c src/connman.h src/log.c src/error.c \
-	src/plugin.c src/task.c src/device.c src/network.c \
-	src/connection.c src/manager.c src/service.c src/clock.c \
-	src/timezone.c src/agent-connman.c src/agent.c src/notifier.c \
-	src/provider.c src/resolver.c src/ipconfig.c src/detect.c \
-	src/inet.c src/dhcp.c src/dhcpv6.c src/rtnl.c src/proxy.c \
-	src/utsname.c src/timeserver.c src/rfkill.c src/storage.c \
-	src/dbus.c src/config.c src/technology.c src/counter.c \
-	src/ntp.c src/session.c src/tethering.c src/wpad.c src/wispr.c \
-	src/stats.c src/dnsproxy.c src/6to4.c src/ippool.c \
-	src/bridge.c src/nat.c src/ipaddress.c src/inotify.c \
-	src/ipv6pd.c src/peer.c src/peer_service.c src/machine.c \
-	src/util.c $(am__append_5) $(am__append_7)
+	$(stats_sources) $(backtrace_sources) $(builtin_sources) \
+	$(shared_sources) src/connman.ver src/main.c src/connman.h \
+	src/log.c src/error.c src/plugin.c src/task.c src/device.c \
+	src/network.c src/connection.c src/manager.c src/service.c \
+	src/clock.c src/timezone.c src/agent-connman.c src/agent.c \
+	src/notifier.c src/provider.c src/resolver.c src/ipconfig.c \
+	src/detect.c src/inet.c src/dhcp.c src/dhcpv6.c src/rtnl.c \
+	src/proxy.c src/utsname.c src/timeserver.c src/rfkill.c \
+	src/storage.c src/dbus.c src/config.c src/technology.c \
+	src/counter.c src/ntp.c src/session.c src/tethering.c \
+	src/wpad.c src/wispr.c src/6to4.c src/ippool.c src/bridge.c \
+	src/nat.c src/ipaddress.c src/inotify.c src/ipv6pd.c \
+	src/peer.c src/peer_service.c src/machine.c src/util.c \
+	$(am__append_5) $(am__append_6) $(am__append_7) \
+	$(am__append_9)
 src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 	@GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ -lresolv -ldl -lrt \
-	$(am__append_6) $(am__append_8)
+	$(am__append_8) $(am__append_10)
 src_connmand_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/src/connman.ver
 
@@ -1341,18 +1350,18 @@ src_connmand_wait_online_SOURCES = src/connmand-wait-online.c
 src_connmand_wait_online_LDADD = gdbus/libgdbus-internal.la \
 			@GLIB_LIBS@ @DBUS_LIBS@
 
-@VPN_TRUE@vpn_plugin_LTLIBRARIES = $(am__append_40) $(am__append_45) \
+@VPN_TRUE@vpn_plugin_LTLIBRARIES = $(am__append_43) $(am__append_48) \
+@VPN_TRUE@	$(am__append_53) $(am__append_58) $(am__append_63)
+@VPN_TRUE@vpn_plugin_objects = $(am__append_44) $(am__append_49) \
+@VPN_TRUE@	$(am__append_54) $(am__append_59) $(am__append_64)
+@VPN_TRUE@builtin_vpn_modules = $(am__append_40) $(am__append_45) \
 @VPN_TRUE@	$(am__append_50) $(am__append_55) $(am__append_60)
-@VPN_TRUE@vpn_plugin_objects = $(am__append_41) $(am__append_46) \
-@VPN_TRUE@	$(am__append_51) $(am__append_56) $(am__append_61)
-@VPN_TRUE@builtin_vpn_modules = $(am__append_37) $(am__append_42) \
-@VPN_TRUE@	$(am__append_47) $(am__append_52) $(am__append_57)
-@VPN_TRUE@builtin_vpn_sources = $(am__append_38) $(am__append_43) \
-@VPN_TRUE@	$(am__append_48) $(am__append_53) $(am__append_58) \
+@VPN_TRUE@builtin_vpn_sources = $(am__append_41) $(am__append_46) \
+@VPN_TRUE@	$(am__append_51) $(am__append_56) $(am__append_61) \
 @VPN_TRUE@	$(builtin_vpn_source)
 @VPN_TRUE@builtin_vpn_libadd = 
-@VPN_TRUE@builtin_vpn_cflags = $(am__append_39) $(am__append_44) \
-@VPN_TRUE@	$(am__append_49) $(am__append_54) $(am__append_59)
+@VPN_TRUE@builtin_vpn_cflags = $(am__append_42) $(am__append_47) \
+@VPN_TRUE@	$(am__append_52) $(am__append_57) $(am__append_62)
 @VPN_TRUE@vpn_connman_vpnd_SOURCES = $(builtin_vpn_sources) $(backtrace_sources) \
 @VPN_TRUE@			$(gweb_sources) vpn/vpn.ver vpn/main.c vpn/vpn.h \
 @VPN_TRUE@			src/log.c src/error.c src/plugin.c src/task.c \
@@ -1371,10 +1380,9 @@ src_connmand_wait_online_LDADD = gdbus/libgdbus-internal.la \
 @VPN_TRUE@				-Wl,--version-script=$(srcdir)/vpn/vpn.ver
 
 BUILT_SOURCES = $(local_headers) src/builtin.h $(service_files) \
-	scripts/connman scripts/connman_resolvconf.conf \
-	$(am__append_10)
+	scripts/connman $(am__append_12) $(am__append_13)
 CLEANFILES = src/connman.conf $(BUILT_SOURCES) $(service_files) \
-	$(am__append_90) $(am__append_92)
+	$(am__append_93) $(am__append_95)
 statedir = $(runstatedir)/connman
 vpn_statedir = $(runstatedir)/connman-vpn
 @VPN_TRUE@vpn_plugindir = $(libdir)/connman/plugins-vpn
@@ -1397,8 +1405,8 @@ AM_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @GNUTLS_CFLAGS@ \
 	-DSCRIPTDIR=\""$(build_scriptdir)"\" \
 	-DSTORAGEDIR=\""$(storagedir)\"" \
 	-DVPN_STORAGEDIR=\""$(vpn_storagedir)\"" \
-	-DCONFIGDIR=\""$(configdir)\"" $(am__append_11) \
-	$(am__append_13)
+	-DCONFIGDIR=\""$(configdir)\"" $(am__append_14) \
+	$(am__append_16)
 @VPN_FALSE@AM_CPPFLAGS = -I$(builddir)/include -I$(builddir)/src -I$(srcdir)/gdbus
 @VPN_TRUE@AM_CPPFLAGS = -I$(builddir)/include -I$(srcdir)/gdbus
 src_connmand_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @GNUTLS_CFLAGS@ \
@@ -1409,7 +1417,7 @@ src_connmand_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ @GNUTLS_CFLAGS@ \
 	-DSTORAGEDIR=\""$(storagedir)\"" \
 	-DVPN_STORAGEDIR=\""$(vpn_storagedir)\"" \
 	-DCONFIGDIR=\""$(configdir)\"" -I$(builddir)/src \
-	$(am__append_12) $(am__append_14)
+	$(am__append_15) $(am__append_17)
 EXTRA_DIST = src/genbuiltin src/connman-dbus.conf \
 	src/connman-polkit.conf plugins/connman-nmcompat.conf \
 	$(service_files_sources) scripts/connman.in vpn/vpn-dbus.conf \
@@ -1429,7 +1437,7 @@ EXTRA_DIST = src/genbuiltin src/connman-dbus.conf \
 	doc/connman-service.config.5.in doc/connman-vpn.conf.5.in \
 	doc/connman-vpn-provider.config.5.in doc/connman.8.in \
 	doc/connman-vpn.8.in src/main.conf src/eduroam.config \
-	scripts/connman_resolvconf.conf.in $(am__append_91) \
+	scripts/connman_resolvconf.conf.in $(am__append_94) \
 	vpn/connman-task.te
 @VPN_TRUE@vpn_connman_vpnd_CFLAGS = @DBUS_CFLAGS@ @GLIB_CFLAGS@ \
 @VPN_TRUE@				$(builtin_vpn_cflags) \
@@ -1443,7 +1451,7 @@ EXTRA_DIST = src/genbuiltin src/connman-dbus.conf \
 @VPN_TRUE@				-I$(builddir)/vpn
 
 script_DATA = 
-script_LTLIBRARIES = $(am__append_62) $(am__append_63)
+script_LTLIBRARIES = $(am__append_65) $(am__append_66)
 plugin_cflags = -fvisibility=hidden -I$(srcdir)/gdbus \
 					@DBUS_CFLAGS@ @GLIB_CFLAGS@
 
@@ -1506,7 +1514,7 @@ gsupplicant_sources = gsupplicant/gsupplicant.h gsupplicant/dbus.h \
 @PPTP_TRUE@@VPN_TRUE@scripts_libppp_plugin_la_LIBADD = @DBUS_LIBS@
 @DATAFILES_TRUE@@POLKIT_TRUE@policydir = @POLKIT_DATADIR@
 @DATAFILES_TRUE@@POLKIT_TRUE@policy_DATA = plugins/net.connman.policy \
-@DATAFILES_TRUE@@POLKIT_TRUE@	$(am__append_68)
+@DATAFILES_TRUE@@POLKIT_TRUE@	$(am__append_71)
 @IOSPM_TRUE@plugins_iospm_la_CFLAGS = $(plugin_cflags)
 @IOSPM_TRUE@plugins_iospm_la_LDFLAGS = $(plugin_ldflags)
 @OPENCONNECT_FALSE@@VPNC_TRUE@scripts_openconnect_script_LDADD = @DBUS_LIBS@
@@ -2127,6 +2135,10 @@ src/$(am__dirstamp):
 src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
+src/src_connmand-nostats.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/src_connmand-stats.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-backtrace.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 plugins/src_connmand-loopback.$(OBJEXT): plugins/$(am__dirstamp) \
@@ -2256,10 +2268,6 @@ src/src_connmand-wpad.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-wispr.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/src_connmand-stats.$(OBJEXT): src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/src_connmand-dnsproxy.$(OBJEXT): src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-6to4.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-ippool.$(OBJEXT): src/$(am__dirstamp) \
@@ -2281,6 +2289,10 @@ src/src_connmand-peer_service.$(OBJEXT): src/$(am__dirstamp) \
 src/src_connmand-machine.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-util.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/src_connmand-dnsproxy.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/src_connmand-dns-systemd-resolved.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/src_connmand-iptables.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -2683,6 +2695,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-device.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-dhcp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-dhcpv6.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-dnsproxy.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-error.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-firewall-iptables.Po@am__quote@
@@ -2700,6 +2713,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-manager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-nat.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-network.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-nostats.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-notifier.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-ntp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/src_connmand-peer.Po@am__quote@
@@ -3024,6 +3038,34 @@ gweb/src_connmand-gionotls.obj: gweb/gionotls.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gweb/gionotls.c' object='gweb/src_connmand-gionotls.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o gweb/src_connmand-gionotls.obj `if test -f 'gweb/gionotls.c'; then $(CYGPATH_W) 'gweb/gionotls.c'; else $(CYGPATH_W) '$(srcdir)/gweb/gionotls.c'; fi`
+
+src/src_connmand-nostats.o: src/nostats.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-nostats.o -MD -MP -MF src/$(DEPDIR)/src_connmand-nostats.Tpo -c -o src/src_connmand-nostats.o `test -f 'src/nostats.c' || echo '$(srcdir)/'`src/nostats.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-nostats.Tpo src/$(DEPDIR)/src_connmand-nostats.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/nostats.c' object='src/src_connmand-nostats.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-nostats.o `test -f 'src/nostats.c' || echo '$(srcdir)/'`src/nostats.c
+
+src/src_connmand-nostats.obj: src/nostats.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-nostats.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-nostats.Tpo -c -o src/src_connmand-nostats.obj `if test -f 'src/nostats.c'; then $(CYGPATH_W) 'src/nostats.c'; else $(CYGPATH_W) '$(srcdir)/src/nostats.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-nostats.Tpo src/$(DEPDIR)/src_connmand-nostats.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/nostats.c' object='src/src_connmand-nostats.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-nostats.obj `if test -f 'src/nostats.c'; then $(CYGPATH_W) 'src/nostats.c'; else $(CYGPATH_W) '$(srcdir)/src/nostats.c'; fi`
+
+src/src_connmand-stats.o: src/stats.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-stats.o -MD -MP -MF src/$(DEPDIR)/src_connmand-stats.Tpo -c -o src/src_connmand-stats.o `test -f 'src/stats.c' || echo '$(srcdir)/'`src/stats.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-stats.Tpo src/$(DEPDIR)/src_connmand-stats.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/stats.c' object='src/src_connmand-stats.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-stats.o `test -f 'src/stats.c' || echo '$(srcdir)/'`src/stats.c
+
+src/src_connmand-stats.obj: src/stats.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-stats.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-stats.Tpo -c -o src/src_connmand-stats.obj `if test -f 'src/stats.c'; then $(CYGPATH_W) 'src/stats.c'; else $(CYGPATH_W) '$(srcdir)/src/stats.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-stats.Tpo src/$(DEPDIR)/src_connmand-stats.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/stats.c' object='src/src_connmand-stats.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-stats.obj `if test -f 'src/stats.c'; then $(CYGPATH_W) 'src/stats.c'; else $(CYGPATH_W) '$(srcdir)/src/stats.c'; fi`
 
 src/src_connmand-backtrace.o: src/backtrace.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-backtrace.o -MD -MP -MF src/$(DEPDIR)/src_connmand-backtrace.Tpo -c -o src/src_connmand-backtrace.o `test -f 'src/backtrace.c' || echo '$(srcdir)/'`src/backtrace.c
@@ -3837,34 +3879,6 @@ src/src_connmand-wispr.obj: src/wispr.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-wispr.obj `if test -f 'src/wispr.c'; then $(CYGPATH_W) 'src/wispr.c'; else $(CYGPATH_W) '$(srcdir)/src/wispr.c'; fi`
 
-src/src_connmand-stats.o: src/stats.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-stats.o -MD -MP -MF src/$(DEPDIR)/src_connmand-stats.Tpo -c -o src/src_connmand-stats.o `test -f 'src/stats.c' || echo '$(srcdir)/'`src/stats.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-stats.Tpo src/$(DEPDIR)/src_connmand-stats.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/stats.c' object='src/src_connmand-stats.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-stats.o `test -f 'src/stats.c' || echo '$(srcdir)/'`src/stats.c
-
-src/src_connmand-stats.obj: src/stats.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-stats.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-stats.Tpo -c -o src/src_connmand-stats.obj `if test -f 'src/stats.c'; then $(CYGPATH_W) 'src/stats.c'; else $(CYGPATH_W) '$(srcdir)/src/stats.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-stats.Tpo src/$(DEPDIR)/src_connmand-stats.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/stats.c' object='src/src_connmand-stats.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-stats.obj `if test -f 'src/stats.c'; then $(CYGPATH_W) 'src/stats.c'; else $(CYGPATH_W) '$(srcdir)/src/stats.c'; fi`
-
-src/src_connmand-dnsproxy.o: src/dnsproxy.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dnsproxy.o -MD -MP -MF src/$(DEPDIR)/src_connmand-dnsproxy.Tpo -c -o src/src_connmand-dnsproxy.o `test -f 'src/dnsproxy.c' || echo '$(srcdir)/'`src/dnsproxy.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dnsproxy.Tpo src/$(DEPDIR)/src_connmand-dnsproxy.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dnsproxy.c' object='src/src_connmand-dnsproxy.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dnsproxy.o `test -f 'src/dnsproxy.c' || echo '$(srcdir)/'`src/dnsproxy.c
-
-src/src_connmand-dnsproxy.obj: src/dnsproxy.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dnsproxy.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-dnsproxy.Tpo -c -o src/src_connmand-dnsproxy.obj `if test -f 'src/dnsproxy.c'; then $(CYGPATH_W) 'src/dnsproxy.c'; else $(CYGPATH_W) '$(srcdir)/src/dnsproxy.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dnsproxy.Tpo src/$(DEPDIR)/src_connmand-dnsproxy.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dnsproxy.c' object='src/src_connmand-dnsproxy.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dnsproxy.obj `if test -f 'src/dnsproxy.c'; then $(CYGPATH_W) 'src/dnsproxy.c'; else $(CYGPATH_W) '$(srcdir)/src/dnsproxy.c'; fi`
-
 src/src_connmand-6to4.o: src/6to4.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-6to4.o -MD -MP -MF src/$(DEPDIR)/src_connmand-6to4.Tpo -c -o src/src_connmand-6to4.o `test -f 'src/6to4.c' || echo '$(srcdir)/'`src/6to4.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-6to4.Tpo src/$(DEPDIR)/src_connmand-6to4.Po
@@ -4018,6 +4032,34 @@ src/src_connmand-util.obj: src/util.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/util.c' object='src/src_connmand-util.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-util.obj `if test -f 'src/util.c'; then $(CYGPATH_W) 'src/util.c'; else $(CYGPATH_W) '$(srcdir)/src/util.c'; fi`
+
+src/src_connmand-dnsproxy.o: src/dnsproxy.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dnsproxy.o -MD -MP -MF src/$(DEPDIR)/src_connmand-dnsproxy.Tpo -c -o src/src_connmand-dnsproxy.o `test -f 'src/dnsproxy.c' || echo '$(srcdir)/'`src/dnsproxy.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dnsproxy.Tpo src/$(DEPDIR)/src_connmand-dnsproxy.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dnsproxy.c' object='src/src_connmand-dnsproxy.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dnsproxy.o `test -f 'src/dnsproxy.c' || echo '$(srcdir)/'`src/dnsproxy.c
+
+src/src_connmand-dnsproxy.obj: src/dnsproxy.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dnsproxy.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-dnsproxy.Tpo -c -o src/src_connmand-dnsproxy.obj `if test -f 'src/dnsproxy.c'; then $(CYGPATH_W) 'src/dnsproxy.c'; else $(CYGPATH_W) '$(srcdir)/src/dnsproxy.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dnsproxy.Tpo src/$(DEPDIR)/src_connmand-dnsproxy.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dnsproxy.c' object='src/src_connmand-dnsproxy.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dnsproxy.obj `if test -f 'src/dnsproxy.c'; then $(CYGPATH_W) 'src/dnsproxy.c'; else $(CYGPATH_W) '$(srcdir)/src/dnsproxy.c'; fi`
+
+src/src_connmand-dns-systemd-resolved.o: src/dns-systemd-resolved.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dns-systemd-resolved.o -MD -MP -MF src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Tpo -c -o src/src_connmand-dns-systemd-resolved.o `test -f 'src/dns-systemd-resolved.c' || echo '$(srcdir)/'`src/dns-systemd-resolved.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Tpo src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dns-systemd-resolved.c' object='src/src_connmand-dns-systemd-resolved.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dns-systemd-resolved.o `test -f 'src/dns-systemd-resolved.c' || echo '$(srcdir)/'`src/dns-systemd-resolved.c
+
+src/src_connmand-dns-systemd-resolved.obj: src/dns-systemd-resolved.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-dns-systemd-resolved.obj -MD -MP -MF src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Tpo -c -o src/src_connmand-dns-systemd-resolved.obj `if test -f 'src/dns-systemd-resolved.c'; then $(CYGPATH_W) 'src/dns-systemd-resolved.c'; else $(CYGPATH_W) '$(srcdir)/src/dns-systemd-resolved.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Tpo src/$(DEPDIR)/src_connmand-dns-systemd-resolved.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/dns-systemd-resolved.c' object='src/src_connmand-dns-systemd-resolved.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -c -o src/src_connmand-dns-systemd-resolved.obj `if test -f 'src/dns-systemd-resolved.c'; then $(CYGPATH_W) 'src/dns-systemd-resolved.c'; else $(CYGPATH_W) '$(srcdir)/src/dns-systemd-resolved.c'; fi`
 
 src/src_connmand-iptables.o: src/iptables.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(src_connmand_CFLAGS) $(CFLAGS) -MT src/src_connmand-iptables.o -MD -MP -MF src/$(DEPDIR)/src_connmand-iptables.Tpo -c -o src/src_connmand-iptables.o `test -f 'src/iptables.c' || echo '$(srcdir)/'`src/iptables.c

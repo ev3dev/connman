@@ -187,6 +187,7 @@ static void add_network(struct connman_device *device,
 
 	if (connman_device_add_network(device, network) < 0) {
 		connman_network_unref(network);
+		g_free(ifname);
 		return;
 	}
 

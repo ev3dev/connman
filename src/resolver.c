@@ -652,6 +652,14 @@ static void free_resolvfile(gpointer data)
 	g_free(entry);
 }
 
+int __connman_resolver_set_mdns(int index, bool enabled)
+{
+	if (!dnsproxy_enabled)
+		return -ENOTSUP;
+
+	return __connman_dnsproxy_set_mdns(index, enabled);
+}
+
 int __connman_resolver_init(gboolean dnsproxy)
 {
 	int i;

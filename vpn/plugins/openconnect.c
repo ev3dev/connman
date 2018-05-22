@@ -561,11 +561,41 @@ static int oc_error_code(struct vpn_provider *provider, int exit_code)
 	}
 }
 
+static int oc_route_env_parse(struct vpn_provider *provider, const char *key,
+		int *family, unsigned long *idx, enum vpn_provider_route_type *type)
+{
+	char *end;
+	const char *start;
+
+	if (g_str_has_prefix(key, "CISCO_SPLIT_INC_")) {
+		*family = AF_INET;
+		start = key + strlen("CISCO_SPLIT_INC_");
+	} else if (g_str_has_prefix(key, "CISCO_IPV6_SPLIT_INC_")) {
+		*family = AF_INET6;
+		start = key + strlen("CISCO_IPV6_SPLIT_INC_");
+	} else
+		return -EINVAL;
+
+	*idx = g_ascii_strtoull(start, &end, 10);
+
+	if (strncmp(end, "_ADDR", 5) == 0)
+		*type = VPN_PROVIDER_ROUTE_TYPE_ADDR;
+	else if (strncmp(end, "_MASK", 5) == 0)
+		*type = VPN_PROVIDER_ROUTE_TYPE_MASK;
+	else if (strncmp(end, "_MASKLEN", 8) == 0 && *family == AF_INET6)
+		*type = VPN_PROVIDER_ROUTE_TYPE_MASK;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 static struct vpn_driver vpn_driver = {
 	.notify         = oc_notify,
 	.connect	= oc_connect,
 	.error_code	= oc_error_code,
 	.save		= oc_save,
+	.route_env_parse = oc_route_env_parse,
 };
 
 static int openconnect_init(void)

@@ -755,6 +755,8 @@ static void remove_bss(gpointer data)
 {
 	struct g_supplicant_bss *bss = data;
 
+	supplicant_dbus_property_call_cancel_all(bss);
+
 	g_free(bss->path);
 	g_free(bss);
 }
@@ -1575,6 +1577,7 @@ static int add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 	GSupplicantInterface *interface = bss->interface;
 	GSupplicantNetwork *network;
 	char *group;
+	bool is_new_network;
 
 	group = create_group(bss);
 	SUPPLICANT_DBG("New group created: %s", group);
@@ -1586,9 +1589,12 @@ static int add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 	if (network) {
 		g_free(group);
 		SUPPLICANT_DBG("Network %s already exist", network->name);
+		is_new_network = false;
 
 		goto done;
 	}
+
+	is_new_network = true;
 
 	network = g_try_new0(GSupplicantNetwork, 1);
 	if (!network) {
@@ -1609,6 +1615,11 @@ static int add_or_replace_bss_to_network(struct g_supplicant_bss *bss)
 	network->frequency = bss->frequency;
 	network->best_bss = bss;
 
+	if ((bss->keymgmt & G_SUPPLICANT_KEYMGMT_WPS) != 0) {
+		network->wps = TRUE;
+		network->wps_capabilities = bss->wps_capabilities;
+	}
+
 	SUPPLICANT_DBG("New network %s created", network->name);
 
 	network->bss_table = g_hash_table_new_full(g_str_hash, g_str_equal,
@@ -1626,7 +1637,10 @@ done:
 	/* We update network's WPS properties if only bss provides WPS. */
 	if ((bss->keymgmt & G_SUPPLICANT_KEYMGMT_WPS) != 0) {
 		network->wps = TRUE;
-		network->wps_capabilities |= bss->wps_capabilities;
+		network->wps_capabilities = bss->wps_capabilities;
+
+		if (!is_new_network)
+			callback_network_changed(network, "WPSCapabilities");
 	}
 
 	/*
@@ -2064,7 +2078,7 @@ static void interface_bss_added_without_keys(DBusMessageIter *iter,
 
 	supplicant_dbus_property_get_all(bss->path,
 					SUPPLICANT_INTERFACE ".BSS",
-					bss_property, bss, NULL);
+					bss_property, bss, bss);
 
 	bss_compute_security(bss);
 	if (add_or_replace_bss_to_network(bss) < 0)
@@ -2723,6 +2737,7 @@ static void signal_bss_changed(const char *path, DBusMessageIter *iter)
 	GSupplicantInterface *interface;
 	GSupplicantNetwork *network;
 	GSupplicantSecurity old_security;
+	unsigned int old_wps_capabilities;
 	struct g_supplicant_bss *bss;
 
 	SUPPLICANT_DBG("");
@@ -2747,18 +2762,18 @@ static void signal_bss_changed(const char *path, DBusMessageIter *iter)
 	if (old_security != bss->security) {
 		struct g_supplicant_bss *new_bss;
 
-		SUPPLICANT_DBG("New network security for %s", bss->ssid);
+		SUPPLICANT_DBG("New network security for %s with path %s",
+			       bss->ssid, bss->path);
 
-		/* Security change policy:
-		 * - we first copy the current bss into a new one with
-		 * its own pointer (path)
-		 * - we remove the current bss related network which will
-		 * tell the plugin about such removal. This is done due
-		 * to the fact that a security change means a group change
-		 * so a complete network change.
-		 * (current bss becomes invalid as well)
-		 * - we add the new bss: it adds new network and tell the
-		 * plugin about it. */
+		/*
+		 * Security change policy:
+		 * - We first copy the current bss into a new one with
+		 *   its own pointer (path)
+		 * - Clear the old bss pointer and remove the network completely
+		 *   if there are no more BSSs in the bss table.
+		 * - The new bss will be added either to an existing network
+		 *   or an additional network will be created
+		 */
 
 		new_bss = g_try_new0(struct g_supplicant_bss, 1);
 		if (!new_bss)
@@ -2767,18 +2782,41 @@ static void signal_bss_changed(const char *path, DBusMessageIter *iter)
 		memcpy(new_bss, bss, sizeof(struct g_supplicant_bss));
 		new_bss->path = g_strdup(bss->path);
 
-		g_hash_table_remove(interface->network_table, network->group);
+		if (network->best_bss == bss) {
+			network->best_bss = NULL;
+			network->signal = BSS_UNKNOWN_STRENGTH;
+		}
+
+		g_hash_table_remove(bss_mapping, path);
+
+		g_hash_table_remove(interface->bss_mapping, path);
+		g_hash_table_remove(network->bss_table, path);
+
+		update_network_signal(network);
+
+		if (g_hash_table_size(network->bss_table) == 0)
+			g_hash_table_remove(interface->network_table,
+					    network->group);
 
 		if (add_or_replace_bss_to_network(new_bss) < 0) {
-			/* Remove entries in hash tables to handle the
-			 * failure in add_or_replace_bss_to_network
+			/*
+			 * Prevent a memory leak on failure in
+			 * add_or_replace_bss_to_network
 			 */
-			g_hash_table_remove(bss_mapping, path);
-			g_hash_table_remove(interface->bss_mapping, path);
-			g_hash_table_remove(network->bss_table, path);
+			SUPPLICANT_DBG("Failed to add bss %s to network table",
+				       new_bss->path);
+			g_free(new_bss->path);
+			g_free(new_bss);
 		}
 
 		return;
+	}
+
+	old_wps_capabilities = network->wps_capabilities;
+
+	if (old_wps_capabilities != bss->wps_capabilities) {
+		network->wps_capabilities = bss->wps_capabilities;
+		callback_network_changed(network, "WPSCapabilities");
 	}
 
 	/* Consider only property changes of the connected BSS */
