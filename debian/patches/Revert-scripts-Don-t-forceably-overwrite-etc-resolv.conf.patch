@@ -1,0 +1,21 @@
+From ca1b1ae06e295e10c394d025e15c91e4450dd329 Mon Sep 17 00:00:00 2001
+From: David Lechner <david@lechnology.com>
+Date: Wed, 13 Jun 2018 15:04:45 -0500
+Subject: [PATCH] Revert "scripts: Don't forceably overwrite /etc/resolv.conf"
+
+This reverts commit 45ccde23a90c49f5f576ab65bdd7144e70f8bbc3.
+---
+ scripts/connman_resolvconf.conf.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/connman_resolvconf.conf.in b/scripts/connman_resolvconf.conf.in
+index a242d7bc..2d61dfe1 100644
+--- a/scripts/connman_resolvconf.conf.in
++++ b/scripts/connman_resolvconf.conf.in
+@@ -1,2 +1,2 @@
+ d	@runstatedir@/connman	- - - -
+-L	/etc/resolv.conf	- - - -	@runstatedir@/connman/resolv.conf
++L+	/etc/resolv.conf	- - - -	@runstatedir@/connman/resolv.conf
+-- 
+2.17.1
+
