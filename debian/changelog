@@ -1,3 +1,9 @@
+connman (1.36-1ev3dev2) stable; urgency=medium
+
+  * Fix connman not symlinking /etc/resolv.conf
+
+ -- David Lechner <david@lechnology.com>  Wed, 13 Jun 2018 15:25:27 -0500
+
 connman (1.36-1ev3dev1) stable; urgency=medium
 
   * New upstream version 1.36
